@@ -1,0 +1,7 @@
+# Dev-файл compose (подключается автоматически после docker-compose.yml).
+# Отличия от базового: php-fpm работает от root (-R), чтобы не было проблем
+# с правами на storage/ и bootstrap/cache при записи с хоста.
+
+services:
+    php:
+        command: ["php-fpm", "-R"]

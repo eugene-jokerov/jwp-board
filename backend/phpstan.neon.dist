@@ -1,0 +1,54 @@
+# Конфигурация PHPStan + Larastan для headless API JWP Board.
+#
+# Запуск: make phpstan (в контейнере php).
+# Локальные переопределения — в phpstan.neon (не коммитится).
+#
+# Larastan — расширение PHPStan для Laravel: поднимает контейнер приложения,
+# типизирует Eloquent-модели по миграциям, фасады, request()->user() и т.п.
+
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+    # Принятые ошибки: новый код обязан проходить анализ без новых записей.
+    - phpstan-baseline.neon
+
+parameters:
+    # 6 — практичный уровень для старта, повышаем постепенно.
+    level: 6
+
+    paths:
+        - app
+        - routes
+        - config
+        - database
+        - tests
+
+    excludePaths:
+        - vendor/*
+        - storage/*
+        - bootstrap/cache/*
+
+    # В проекте нет declare(strict_types=1): не считаем типы из PHPDoc гарантией.
+    treatPhpDocTypesAsCertain: false
+
+    # Не падать, если ignoreErrors в baseline перестал совпадать с кодом.
+    reportUnmatchedIgnoredErrors: false
+
+    # --- Правила Larastan ---
+    # env() разрешён только в config/*.php.
+    noEnvCallsOutsideOfConfig: true
+    # Model::make() -> new Model().
+    noModelMake: true
+    # Лишние вызовы коллекций (collect()->count() и т.п.).
+    noUnnecessaryCollectionCall: true
+    # Octane не используем.
+    checkOctaneCompatibility: false
+    # Понимать типы значений из config/*.php в config()/Config::get().
+    checkConfigTypes: true
+    # Типы кастов из тела метода casts().
+    parseModelCastsMethod: true
+
+    # Миграции для вывода свойств моделей.
+    databaseMigrationsPath:
+        - database/migrations
+    enableMigrationCache: true

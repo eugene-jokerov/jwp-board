@@ -1,0 +1,19 @@
+*.log
+.DS_Store
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+/.idea
+/.vscode
+/.phpunit.cache
+/auth.json
+/node_modules
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+_ide_helper.php
+# локальные переопределения анализаторов/окружения
+/phpstan.neon
+/.env.mysql-test

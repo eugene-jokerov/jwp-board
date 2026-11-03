@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "JWP Board",
+    "slug": "jwp-board",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "jwpboard",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#111827"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jwpboard.mobile"
+    },
+    "android": {
+      "package": "com.jwpboard.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

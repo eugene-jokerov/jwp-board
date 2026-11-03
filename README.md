@@ -1,0 +1,146 @@
+# JWP Board
+
+Монорепозиторий проекта **JWP Board**: headless API на Laravel и мобильный клиент на React Native (Expo).
+
+- **`backend/`** — Laravel 13, только JSON API (`/api/v1/*`), аутентификация по токенам Sanctum.
+- **`mobile/`** — Expo SDK 58 + React Native (TypeScript), сейчас в состоянии заглушки.
+- **Docker** — PHP 8.4 (php-fpm) + nginx + MySQL 8.4 + Node 24.
+
+Подробные правила разработки (архитектура, соглашения, команды, ограничения) — в [`AGENTS.md`](./AGENTS.md).
+
+---
+
+## Требования
+
+- Docker 29+ и Docker Compose v2.30+ (`docker compose`).
+- Свободные порты на хосте: `8080` (API), `8081` (Metro/Expo), `3307` (MySQL), `3308` (MySQL test), `8082` (phpMyAdmin, опционально), `19000–19002` (Expo devtools).
+- Локальные PHP/Node для разработки **не нужны**: на хосте должен быть только `make` и `docker`.
+
+## Первый запуск
+
+Репозиторий содержит только исходный код: образы, PHP-зависимости (`backend/vendor`) и
+npm-зависимости (`mobile/node_modules`) скачиваются при первом запуске.
+
+```bash
+# 1. Файлы окружения
+make init-envs
+
+# 2. Сборка образа php (php:8.4-fpm + расширения + composer + xdebug)
+make build
+
+# 3. Поднять контейнеры (mysql, mysql-test, php, nginx, node)
+make up
+
+# 4. Зависимости бэкенда + ключ приложения + миграции
+make composer cmd="install"
+make artisan cmd="key:generate"
+make migrate
+
+# 5. Зависимости мобильного клиента
+make expo-install
+
+# 6. Проверка
+curl -s http://localhost:8080/api/v1/health
+```
+
+Всё вместе выполняет `make install`.
+
+### Если сеть медленная
+
+Скачивание образов и пакетов можно растянуть по времени — команды идемпотентны:
+
+```bash
+docker pull php:8.4-fpm          # базовый образ, ~150 МБ
+docker pull node:24-alpine       # ~140 МБ
+docker pull mysql:8.4            # ~250 МБ
+docker pull nginx:1.27-alpine    # ~75 МБ
+docker compose build php         # сборка образа php (pecl xdebug, расширения)
+make composer cmd="install"      # ~120 МБ пакетов
+make npm cmd="install"           # зависимости Expo (~500 МБ)
+```
+
+Если `composer install` прервался — просто запустите его снова, кэш
+(`~/.cache/composer`) не потеряется.
+
+Ожидаемый ответ `GET /api/v1/health`:
+
+```json
+{"data":{"status":"ok","environment":"local","timestamp":"2026-11-03T10:00:00+03:00"}}
+```
+
+## Порты
+
+| Сервис | Порт | Адрес |
+| --- | --- | --- |
+| API (nginx) | 8080 | http://localhost:8080 |
+| Expo / Metro | 8081 | http://localhost:8081 |
+| MySQL | 3307 | `127.0.0.1:3307`, БД `jwp_board`, пользователь `jwp`/`jwp` |
+| MySQL (tests) | 3308 | `127.0.0.1:3308`, БД `jwp_board_test` |
+| phpMyAdmin | 8082 | `docker compose --profile tools up -d phpmyadmin` |
+
+## Основные команды
+
+Полный список — `make help`.
+
+```bash
+make up                 # поднять контейнеры
+make down               # остановить и удалить контейнеры
+make sh                 # bash в контейнере php
+make artisan cmd="migrate:status"
+make test               # PHPUnit
+make pint-test          # проверка стиля (Laravel Pint)
+make phpstan            # статический анализ (PHPStan + Larastan)
+make check              # test + pint-test + phpstan
+make typecheck          # проверка типов мобильного приложения
+```
+
+## Работа с мобильным клиентом
+
+Dev-сервер Expo запускается сервисом `node` и доступен на http://localhost:8081.
+
+1. Установите зависимости: `make expo-install` (или `make npm cmd="install"`).
+2. Откройте http://localhost:8081 — QR-код для Expo Go / браузер со списком платформ.
+3. Для запуска на физическом устройстве API должен быть доступен по IP хоста в локальной сети:
+
+```bash
+# в корневом .env
+EXPO_PUBLIC_API_URL=http://192.168.1.10:8080
+```
+
+после чего `make restart`.
+
+> Приложение на Android-эмуляторе обращается к хосту по адресу `10.0.2.2`, поэтому
+> `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080`.
+
+## Конфигурация
+
+Параметры compose — корневой `.env` (шаблон `.env.example`). Переменные Laravel — `backend/.env` (шаблон `backend/.env.example`, создаётся `make init-envs`).
+
+Отладка Xdebug выключена по умолчанию. Чтобы включить:
+
+```env
+PHP_XDEBUG_MODE=debug
+```
+
+и перезапустить: `make restart`.
+
+## Структура репозитория
+
+```
+.
+├── AGENTS.md                     # правила разработки для людей и AI-агентов
+├── Makefile                      # все команды проекта
+├── docker-compose.yml            # базовый состав сервисов
+├── docker-compose.override.yml   # dev-надстройки
+├── docker/php, docker/nginx      # образы и конфиги
+├── backend/                      # Laravel 13 (headless API)
+└── mobile/                       # Expo + React Native
+```
+
+## Статический анализ
+
+PHPStan работает с Larastan 3 на уровне 6 (`backend/phpstan.neon.dist`):
+
+- `make phpstan` — анализ;
+- `make phpstan-baseline` — перегенерация `backend/phpstan-baseline.neon`;
+- `make phpstan-clear` — сброс кэша результатов.

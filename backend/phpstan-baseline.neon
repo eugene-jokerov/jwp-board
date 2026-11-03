@@ -1,0 +1,5 @@
+# Принятые ошибки PHPStan (baseline).
+# Файл создаётся/обновляется командой `make phpstan-baseline`.
+# Новый код должен проходить анализ БЕЗ новых записей здесь.
+parameters:
+    ignoreErrors: []

@@ -1,0 +1,12 @@
+# Общие игнор-правила монорепозитория JWP Board.
+# Правила конкретного приложения (backend/.gitignore, mobile/.gitignore)
+# добавляются скелетами Laravel и Expo — не дублируем их здесь.
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Окружение compose (шаблон .env.example коммитится, .env — только локально)
+/.env
+/.env.local
