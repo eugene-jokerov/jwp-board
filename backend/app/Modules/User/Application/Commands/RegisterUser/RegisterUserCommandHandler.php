@@ -1,19 +1,19 @@
 <?php
 
-namespace App\Modules\User\Application\UseCases;
+namespace App\Modules\User\Application\Commands\RegisterUser;
 
-use App\Modules\User\Application\Commands\RegisterUserCommand;
 use App\Modules\User\Application\Results\RegistrationResult;
 use App\Modules\User\Domain\Exceptions\EmailAlreadyRegistered;
 use App\Modules\User\Domain\Services\UserRegistrar;
 
 /**
- * Сценарий регистрации: создать пользователя.
+ * Хендлер команды регистрации: создать пользователя.
  *
+ * Вызывается шиной команд (CommandBus), которая оборачивает его в транзакцию.
  * Токен не выдаётся: после регистрации мобильный клиент получает Bearer-токен,
  * а веб-клиент — сессионную cookie. Выбор канала делается в auth-адаптерах.
  */
-final readonly class RegisterUserUseCase
+final readonly class RegisterUserCommandHandler
 {
     public function __construct(
         private UserRegistrar $registrar,
@@ -24,7 +24,7 @@ final readonly class RegisterUserUseCase
      *
      * @throws EmailAlreadyRegistered если email уже занят
      */
-    public function execute(RegisterUserCommand $command): RegistrationResult
+    public function handle(RegisterUserCommand $command): RegistrationResult
     {
         $user = $this->registrar->register($command->email, $command->password);
 

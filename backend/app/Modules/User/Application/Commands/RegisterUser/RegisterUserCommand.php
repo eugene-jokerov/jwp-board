@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\User\Application\Commands;
+namespace App\Modules\User\Application\Commands\RegisterUser;
 
 use App\Modules\User\Domain\ValueObjects\Email;
 use App\Modules\User\Domain\ValueObjects\Password;

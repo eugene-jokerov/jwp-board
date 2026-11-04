@@ -23,6 +23,13 @@
 - **Формат ответа:** успех — `{ "data": ... }` для ресурсов; ошибки — стандартный JSON Laravel (`message`, `errors`). Коды: `401` — не аутентифицирован, `403` — нет прав, `404` — не найдено, `422` — ошибка валидации, `201` — создание, `204` — удаление без тела.
 - **Аутентификация:** Sanctum, токены (mobile flow): `POST /api/v1/auth/login` → `{ token }`, далее `Authorization: Bearer <token>`. Защищённые группы — `->middleware('auth:sanctum')`. Пароли — `Hash::make`, сверка — `Hash::check`.
 - **Бизнес-логика** — в `app/Services/` (внедряются в контроллер через DI). Контроллер: приём запроса, валидация, вызов сервиса, преобразование в ресурс. Тяжёлые запросы к БД в контроллере не пишем.
+- **CQRS и шина (`app/Shared/Application/Bus/`).** Все изменяющие сценарии — команды, отправляемые через `CommandBus::dispatch()`. Читающие сценарии — запросы через `QueryBus::ask()`. Контроллер не внедряет хендлеры напрямую: он собирает команду/запрос и вызывает шину. Реализации (`LaravelCommandBus`, `LaravelQueryBus`) построены на встроенной шине Laravel и `Illuminate\Pipeline\Pipeline`; команды дополнительно проходят через пайпы из `BusServiceProvider::COMMAND_PIPES` (сейчас — `TransactionMiddleware`, транзакция на команду). Карта «сообщение → хендлер» хранится в `BusServiceProvider` (`COMMAND_HANDLERS` / `QUERY_HANDLERS`): новый хендлер регистрируется там, конвенций по именам классов нет.
+- **Раскладка use case (модульный слой).** Один сценарий — одна папка:
+  `app/Modules/<Module>/Application/Commands/<UseCaseName>/` содержит `<UseCaseName>Command.php` и `<UseCaseName>CommandHandler.php`;
+  `app/Modules/<Module>/Application/Queries/<UseCaseName>/` — `<UseCaseName>Query.php` и `<UseCaseName>QueryHandler.php`.
+  Пример: `Application/Commands/RegisterUser/RegisterUserCommand.php` + `RegisterUserCommandHandler.php` (метод `handle()`).
+  Общие объекты результата — в `Application/Results/`. Класс `UseCase` с методом `execute()` не заводим: его роль выполняет хендлер.
+- **Очереди.** HTTP-команды выполняются синхронно: `ShouldQueue` для команд, вызываемых из контроллера, не ставим (ответ API ждёт результат хендлера).
 - **Модели** — `app/Models`, с явным `$fillable`/`casts()`, `protected $hidden = ['password']`.
 - **БД** — Eloquent/Query Builder только в моделях, репозиториях и сервисах. Сырой SQL — лишь когда билдер не позволяет (с пояснением в комментарии).
 - **Миграции** — `make artisan cmd="make:migration create_x_table"`, применяются `make migrate`. Применённые миграции не редактируй: изменения схемы — только новой миграцией.
@@ -76,7 +83,15 @@ jwp-board/
 │  │  ├─ Http/Requests/Api/V1/      # FormRequest-валидация
 │  │  ├─ Http/Resources/            # JsonResource-ответы
 │  │  ├─ Models/                    # Eloquent-модели
-│  │  └─ Services/                  # бизнес-логика
+│  │  ├─ Modules/<Module>/          # доменные модули (User, Board, …)
+│  │  │  ├─ Application/            # Commands/<UseCase>/{Command,CommandHandler}, Queries/<UseCase>/{Query,QueryHandler}, Results
+│  │  │  ├─ Domain/                 # сущности, value objects, порты, доменные сервисы/исключения
+│  │  │  ├─ Infrastructure/         # Http (controllers/requests/resources), Persistence, Providers
+│  │  │  └─ routes/api.php          # маршруты модуля (подключаются в bootstrap/app.php)
+│  │  ├─ Shared/                    # общая инфраструктура вне модулей
+│  │  │  ├─ Application/Bus/        # CommandBus/QueryBus, Middleware пайпов
+│  │  │  └─ Infrastructure/Providers # BusServiceProvider (карта сообщений и пайпы)
+│  │  └─ Services/                  # аутентификация/сессии (AuthService, WebSessionService)
 │  ├─ bootstrap/app.php         # регистрация api-роутинга и middleware
 │  ├─ config/                   # конфиги (app, database, cors, sanctum)
 │  ├─ database/{migrations,seeders,factories}

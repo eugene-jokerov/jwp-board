@@ -5,6 +5,7 @@ namespace App\Modules\User\Domain\Contracts;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\Email;
 use App\Modules\User\Domain\ValueObjects\Password;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
  * Порт доступа к хранилищу пользователей.
@@ -18,6 +19,13 @@ interface UserRepository
      * Найти пользователя по email (адрес уже нормализован value object'ом).
      */
     public function findByEmail(Email $email): ?User;
+
+    /**
+     * Найти пользователя по идентификатору.
+     *
+     * @throws ModelNotFoundException если записи нет
+     */
+    public function findById(int $id): User;
 
     /**
      * Проверить, занят ли email.

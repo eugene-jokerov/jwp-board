@@ -17,6 +17,11 @@ final class EloquentUserRepository implements UserRepository
         return User::query()->where('email', $email->value())->first();
     }
 
+    public function findById(int $id): User
+    {
+        return User::query()->findOrFail($id);
+    }
+
     public function emailExists(Email $email): bool
     {
         return User::query()->where('email', $email->value())->exists();

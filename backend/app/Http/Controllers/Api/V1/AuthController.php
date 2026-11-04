@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
+use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\Email;
 use App\Modules\User\Infrastructure\Http\Resources\AuthTokenResource;
 use App\Modules\User\Infrastructure\Http\Resources\UserResource;
 use App\Services\AuthService;
+use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,6 +24,7 @@ final class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $auth,
+        private readonly QueryBus $queries,
     ) {}
 
     /**
@@ -55,7 +58,10 @@ final class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        return new UserResource($user);
+        /** @var User $current */
+        $current = $this->queries->ask(new CurrentUserQuery((int) $user->getKey()));
+
+        return new UserResource($current);
     }
 
     /**

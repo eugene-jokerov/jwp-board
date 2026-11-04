@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Api\V1\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
-use App\Modules\User\Application\Commands\RegisterUserCommand;
-use App\Modules\User\Application\UseCases\RegisterUserUseCase;
+use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
+use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
+use App\Modules\User\Application\Results\RegistrationResult;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\Email;
 use App\Modules\User\Infrastructure\Http\Requests\RegisterRequest;
 use App\Modules\User\Infrastructure\Http\Resources\UserResource;
 use App\Services\AuthService;
 use App\Services\WebSessionService;
+use App\Shared\Application\Bus\CommandBus;
+use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,13 +25,15 @@ use Illuminate\Http\Response;
  * Роуты живут под /api/v1/auth/web. Ответы не содержат токена — входное
  * доказательство едет в HttpOnly-cookie сессии Laravel (Sanctum ставит её
  * для stateful-запросов). Мобильные клиенты используют /api/v1/auth/login
- * и /api/v1/user/register.
+ * и /api/v1/user/register. Запись идёт командой через CommandBus,
+ * чтение — запросом через QueryBus.
  */
 final class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthService $auth,
-        private readonly RegisterUserUseCase $registerUser,
+        private readonly CommandBus $commands,
+        private readonly QueryBus $queries,
         private readonly WebSessionService $sessions,
     ) {}
 
@@ -58,7 +63,8 @@ final class AuthController extends Controller
      */
     public function register(RegisterRequest $request): UserResource
     {
-        $result = $this->registerUser->execute(
+        /** @var RegistrationResult $result */
+        $result = $this->commands->dispatch(
             RegisterUserCommand::fromArray($request->toCommandPayload()),
         );
 
@@ -75,7 +81,10 @@ final class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        return new UserResource($user);
+        /** @var User $current */
+        $current = $this->queries->ask(new CurrentUserQuery((int) $user->getKey()));
+
+        return new UserResource($current);
     }
 
     /**
