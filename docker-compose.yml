@@ -125,20 +125,35 @@ services:
             retries: 3
         restart: on-failure
 
+    # phpMyAdmin для основной и тестовой БД (http://localhost:8082).
+    # Сервис в профиле tools: в обычный `make up` не попадает,
+    # запускается явно — `make phpmyadmin`.
     phpmyadmin:
         image: phpmyadmin:5
         container_name: ${COMPOSE_PROJECT_NAME:-jwp-board}-phpmyadmin
         profiles:
             - tools
         environment:
+            # Автовход под MYSQL_USER; серверы переключаются в левом меню.
             PMA_HOSTS: mysql,mysql-test
+            PMA_VERBOSES: mysql,mysql-test
+            PMA_PORTS: 3306,3306
             PMA_USER: ${MYSQL_USER:-jwp}
             PMA_PASSWORD: ${MYSQL_PASSWORD:-jwp}
             UPLOAD_LIMIT: 512M
+            MEMORY_LIMIT: 512M
         ports:
             - "${PHPMYADMIN_PORT:-8082}:80"
         networks:
             - jwp
+        depends_on:
+            mysql:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD", "curl", "-fsS", "http://127.0.0.1/"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
         restart: on-failure
 
 volumes:

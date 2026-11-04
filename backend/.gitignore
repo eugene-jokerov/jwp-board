@@ -10,6 +10,15 @@
 /auth.json
 /node_modules
 /public/storage
+# Скомпилированные Blade-вью и прочий рантайм-кэш Laravel. IDE может добавлять
+# их в патчи как новые файлы: коммитить такой мусор нельзя.
+/storage/framework/views/*.php
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
 /storage/*.key
 /storage/pail
 /vendor

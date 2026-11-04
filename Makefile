@@ -29,7 +29,7 @@ cmd_node ?=
         pint pint-test phpstan phpstan-baseline phpstan-clear check route-list \
         node-shell npm npx expo-start expo-web expo-install typecheck \
         lint lint-fix format format-check check-mobile \
-        db-shell db-test-shell clean
+        db-shell db-test-shell phpmyadmin phpmyadmin-stop clean
 
 help:
 	@echo "JWP Board — команды разработки"
@@ -75,6 +75,8 @@ help:
 	@echo ""
 	@echo "  make db-shell         mysql-клиент основной БД"
 	@echo "  make db-test-shell    mysql-клиент тестовой БД"
+	@echo "  make phpmyadmin       phpMyAdmin (http://localhost:8082, профиль tools)"
+	@echo "  make phpmyadmin-stop  остановить phpMyAdmin"
 
 init-envs:
 	@test -f .env || cp .env.example .env
@@ -219,6 +221,14 @@ db-shell:
 
 db-test-shell:
 	$(COMPOSE) exec $(mysql_test_service) sh -lc 'mysql -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE"'
+
+# phpMyAdmin живёт в профиле tools: обычный `make up` его не поднимает.
+phpmyadmin: init-envs
+	$(COMPOSE) --profile tools up -d phpmyadmin
+	@echo "phpMyAdmin: http://localhost:$${PHPMYADMIN_PORT:-8082} (сервер mysql) и ?server=2 (mysql-test)"
+
+phpmyadmin-stop:
+	$(COMPOSE) --profile tools stop phpmyadmin
 
 clean:
 	@echo "Удаляет контейнеры и данные БД (volume mysql_data). Файлы проекта не трогаются."

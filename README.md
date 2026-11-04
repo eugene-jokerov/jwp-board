@@ -76,7 +76,7 @@ make npm cmd="install"           # зависимости Expo (~500 МБ)
 | Expo / Metro | 8081 | http://localhost:8081 |
 | MySQL | 3307 | `127.0.0.1:3307`, БД `jwp_board`, пользователь `jwp`/`jwp` |
 | MySQL (tests) | 3308 | `127.0.0.1:3308`, БД `jwp_board_test` |
-| phpMyAdmin | 8082 | `docker compose --profile tools up -d phpmyadmin` |
+| phpMyAdmin | 8082 | http://localhost:8082 — `make phpmyadmin` (профиль `tools`); серверы `mysql` и `mysql-test` (`?server=2`) |
 
 ## Основные команды
 
@@ -86,6 +86,7 @@ make npm cmd="install"           # зависимости Expo (~500 МБ)
 make up                 # поднять контейнеры
 make down               # остановить и удалить контейнеры
 make sh                 # bash в контейнере php
+make phpmyadmin         # phpMyAdmin на http://localhost:8082 (основная и тестовая БД)
 make artisan cmd="migrate:status"
 make test               # PHPUnit
 make pint-test          # проверка стиля (Laravel Pint)
