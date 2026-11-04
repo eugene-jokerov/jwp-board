@@ -1,0 +1,216 @@
+/**
+ * Модалка создания карточки.
+ *
+ * Два режима:
+ * - «с родителем из свимлайна» — родитель предопределён, цвет уже известен;
+ * - «с выбором родителя» — карточку уровня создают кнопкой в шапке уровня,
+ *   родитель обязателен (для тактики/операционного — только из «В работе»),
+ *   у операционного уровня есть опция «Без эпика».
+ */
+
+import { useState } from 'react';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+
+import { TextField } from '../../components/TextField';
+import { EMPTY_COLOR } from '../colors';
+import type { Card, CardKind, ColumnId } from '../types';
+import { KIND_LABEL } from '../types';
+
+export interface CardDraft {
+  kind: CardKind;
+  /** Свимлайн, из которого открыли форму: там родитель предопределён. */
+  laneId: string | null;
+  /** Цвет, который унаследует карточка из свимлайна (null — без цвета). */
+  laneColor: string | null;
+  /** Название свимлайна — показываем в шапке формы. */
+  laneTitle: string | null;
+  /** Допустимые родители (только карточки в работе); null — выбор не нужен. */
+  parentOptions: Card[] | null;
+  /** Можно ли создать карточку без родителя (операционный уровень). */
+  allowNoParent: boolean;
+  columnLabel: string;
+  /** Колонка, в которую попадёт карточка. */
+  columnId: ColumnId;
+  /** Название уровня — для шапки формы. */
+  levelLabel: string;
+}
+
+interface CardFormModalProps {
+  draft: CardDraft | null;
+  onCreate: (draft: CardDraft, title: string, parentId: string | null) => void;
+  onClose: () => void;
+}
+
+interface ParentOptionProps {
+  label: string;
+  color: string | null;
+  selected: boolean;
+  onPress: () => void;
+}
+
+function ParentOption({ label, color, selected, onPress }: ParentOptionProps) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={[
+        'flex-row items-center gap-2 rounded-xl border px-3 py-2',
+        selected ? 'border-app bg-surface' : 'border-border',
+      ].join(' ')}
+    >
+      <View className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: color ?? EMPTY_COLOR }} />
+
+      <Text className="flex-1 text-sm text-app" numberOfLines={1}>
+        {label}
+      </Text>
+
+      {selected ? <Text className="text-xs font-semibold text-app">✓</Text> : null}
+    </Pressable>
+  );
+}
+
+export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) {
+  const [title, setTitle] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [parentError, setParentError] = useState<string | null>(null);
+
+  // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
+  const close = () => {
+    setTitle('');
+    setParentId(null);
+    setTitleError(null);
+    setParentError(null);
+    onClose();
+  };
+
+  if (draft === null) {
+    return null;
+  }
+
+  const parentOptions = draft.parentOptions;
+  const parentRequired = parentOptions !== null && !draft.allowNoParent;
+  const selectedParent = parentOptions?.find((card) => card.id === parentId) ?? null;
+  const previewColor = draft.laneColor ?? selectedParent?.color ?? null;
+
+  const submit = () => {
+    const trimmed = title.trim();
+    const titleInvalid = trimmed === '';
+    const parentInvalid = parentRequired && selectedParent === null;
+
+    if (titleInvalid) {
+      setTitleError('Укажите название.');
+    }
+
+    if (parentInvalid) {
+      setParentError('Выберите родителя (только карточки в колонке «В работе»).');
+    }
+
+    if (titleInvalid || parentInvalid) {
+      return;
+    }
+
+    onCreate(draft, trimmed, draft.laneId ?? parentId);
+    setTitle('');
+    setParentId(null);
+    setTitleError(null);
+    setParentError(null);
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={close}>
+      <View className="flex-1 items-center justify-center bg-black/40 px-4">
+        <View className="w-full max-w-md gap-4 rounded-2xl bg-card p-5">
+          <View className="gap-1">
+            <Text className="text-lg font-bold text-app">Новый {KIND_LABEL[draft.kind].toLowerCase()}</Text>
+            <Text className="text-xs text-muted">
+              {draft.levelLabel} · {draft.columnLabel}
+              {draft.laneTitle ? ` · ${draft.laneTitle}` : ''}
+            </Text>
+          </View>
+
+          <TextField
+            label="Название"
+            value={title}
+            onChangeText={(value) => {
+              setTitle(value);
+              setTitleError(null);
+            }}
+            error={titleError}
+            placeholder="Например: Запуск новой ветки"
+            autoFocus
+          />
+
+          {parentOptions !== null ? (
+            <View className="gap-1.5">
+              <Text className="text-sm font-medium text-app">{draft.kind === 'epic' ? 'Инициатива' : 'Эпик'}</Text>
+
+              <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
+                {draft.allowNoParent ? (
+                  <ParentOption
+                    label="Без эпика (без цвета)"
+                    color={null}
+                    selected={parentId === null}
+                    onPress={() => {
+                      setParentId(null);
+                      setParentError(null);
+                    }}
+                  />
+                ) : null}
+
+                {parentOptions.map((option) => (
+                  <ParentOption
+                    key={option.id}
+                    label={option.title}
+                    color={option.color}
+                    selected={parentId === option.id}
+                    onPress={() => {
+                      setParentId(option.id);
+                      setParentError(null);
+                    }}
+                  />
+                ))}
+              </ScrollView>
+
+              {parentOptions.length === 0 && !draft.allowNoParent ? (
+                <Text className="text-xs text-err-fg">Нет карточек в колонке «В работе» — выбрать нечего.</Text>
+              ) : null}
+
+              {parentError ? <Text className="text-xs text-err-fg">{parentError}</Text> : null}
+            </View>
+          ) : null}
+
+          <View className="flex-row items-center gap-2">
+            <Text className="text-xs text-subtle">Цвет карточки</Text>
+
+            <View
+              className="h-4 w-4 rounded-full border border-border"
+              style={{ backgroundColor: previewColor ?? EMPTY_COLOR }}
+            />
+
+            <Text className="text-xs text-muted">{previewColor === null ? 'без цвета' : 'наследуется'}</Text>
+          </View>
+
+          <View className="flex-row gap-2">
+            <Pressable
+              accessibilityRole="button"
+              onPress={close}
+              className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+            >
+              <Text className="text-sm font-semibold text-app">Отмена</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={submit}
+              className="h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
+            >
+              <Text className="text-sm font-semibold text-white">Создать</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
