@@ -1,22 +1,63 @@
 /**
  * Свимлайн уровня: заголовок (цветная точка, название, счётчик) и колонки.
  *
- * На широком экране колонки идут в ряд и прокручиваются горизонтально, если
- * не помещаются; на телефоне — вертикальный аккордеон колонок.
+ * На телефоне — вертикальный аккордеон колонок, заголовок сверху.
+ * На широком экране заголовок выносится в левую колонку уровня
+ * (`SwimlaneHeader`), а колонки уровня раскладывает `BoardLevel` общей сеткой.
  */
 
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
 import { NEUTRAL_COLOR } from '../colors';
 import { COLUMNS, type Card, type ColumnId, type MoveDirection } from '../types';
+
+interface SwimlaneHeaderProps {
+  title: string;
+  color: string | null;
+  /** Общее число карточек в свимлайне. */
+  count: number;
+  /** Подпись кнопки создания подсказывает тип карточки, например «+ Задача». */
+  addLabel: string;
+  canAdd: boolean;
+  onAddCard: () => void;
+}
+
+/** Заголовок свимлайна для широкой раскладки: слева от сетки колонок. */
+export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCard }: SwimlaneHeaderProps) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <View className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+
+      <Text className="flex-1 text-sm font-semibold text-app" numberOfLines={1}>
+        {title}
+      </Text>
+
+      <Text className="text-[11px] text-subtle">{count}</Text>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${addLabel}: ${title}`}
+        accessibilityState={{ disabled: !canAdd }}
+        disabled={!canAdd}
+        onPress={onAddCard}
+        hitSlop={6}
+        className={[
+          'h-6 w-6 items-center justify-center rounded-lg',
+          canAdd ? 'bg-app active:opacity-90' : 'bg-border opacity-70',
+        ].join(' ')}
+      >
+        <Text className={['text-sm font-semibold leading-6', canAdd ? 'text-white' : 'text-muted'].join(' ')}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 interface SwimlaneProps {
   laneId: string;
   title: string;
   color: string | null;
   cards: readonly Card[];
-  compact: boolean;
   /** Состояние раскрытых колонок аккордеона: ключ — `${laneId}:${columnId}`. */
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
@@ -25,12 +66,12 @@ interface SwimlaneProps {
   onAddCard: (columnId: ColumnId) => void;
 }
 
+/** Свимлайн телефона: заголовок и вертикальный аккордеон колонок. */
 export function Swimlane({
   laneId,
   title,
   color,
   cards,
-  compact,
   expandedColumns,
   onToggleColumn,
   isCardMoveAllowed,
@@ -49,47 +90,26 @@ export function Swimlane({
         <Text className="text-[11px] text-subtle">{cards.length}</Text>
       </View>
 
-      {compact ? (
-        <View className="gap-2">
-          {COLUMNS.map((column) => {
-            const key = `${laneId}:${column.id}`;
+      <View className="gap-2">
+        {COLUMNS.map((column) => {
+          const key = `${laneId}:${column.id}`;
 
-            return (
-              <BoardColumn
-                key={column.id}
-                column={column}
-                cards={cards.filter((card) => card.column === column.id)}
-                variant="accordion"
-                expanded={expandedColumns[key] === true}
-                onToggle={() => onToggleColumn(key)}
-                canCreate
-                addLabel="+ добавить"
-                isCardMoveAllowed={isCardMoveAllowed}
-                onMoveCard={onMoveCard}
-                onAddCard={() => onAddCard(column.id)}
-              />
-            );
-          })}
-        </View>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="flex-row gap-2">
-          {COLUMNS.map((column) => (
+          return (
             <BoardColumn
               key={column.id}
               column={column}
               cards={cards.filter((card) => card.column === column.id)}
-              variant="row"
-              expanded
-              onToggle={() => undefined}
+              expanded={expandedColumns[key] === true}
+              onToggle={() => onToggleColumn(key)}
               canCreate
               addLabel="+ добавить"
               isCardMoveAllowed={isCardMoveAllowed}
               onMoveCard={onMoveCard}
               onAddCard={() => onAddCard(column.id)}
             />
-          ))}
-        </ScrollView>
-      )}
+          );
+        })}
+      </View>
     </View>
   );
 }

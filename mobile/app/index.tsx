@@ -248,7 +248,7 @@ export default function HomeScreen() {
           <View className="flex-1 gap-0.5">
             <Text className="text-base font-bold text-app">Канбан-доска</Text>
             <Text className="text-xs text-muted" numberOfLines={1}>
-              {session?.user.email ?? '—'}
+              {session?.user?.email ?? '—'}
             </Text>
           </View>
 
