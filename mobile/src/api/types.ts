@@ -18,15 +18,28 @@ export interface HealthPayload {
 /** Пользователь в ответах API. */
 export interface User {
   id: number;
-  name: string;
   email: string;
   created_at: string | null;
 }
 
-/** POST /api/v1/auth/login */
-export interface LoginPayload {
+/** Тип токена, который выдаёт API (заголовок Authorization). */
+export type TokenType = 'Bearer';
+
+/** Ответ входа и регистрации: токен доступа и пользователь. */
+export interface AuthPayload {
   token: string;
+  token_type: TokenType;
   user: User;
+}
+
+/** POST /api/v1/auth/login */
+export type LoginPayload = AuthPayload;
+
+/** Данные регистрации: POST /api/v1/user/register */
+export interface RegisterInput {
+  email: string;
+  password: string;
+  password_confirmation: string;
 }
 
 /** Тело ошибки валидации/авторизации. */

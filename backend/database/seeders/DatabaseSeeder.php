@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Modules\User\Domain\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -20,7 +20,6 @@ class DatabaseSeeder extends Seeder
         User::query()->updateOrCreate(
             ['email' => 'demo@jwp-board.local'],
             [
-                'name' => 'Demo User',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
             ],

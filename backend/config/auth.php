@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\User\Domain\User;
+
 return [
     /*
     | Аутентификация. Гвард web используется Sanctum для SPA-режима;
@@ -20,7 +22,8 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
+            // Модель пользователя живёт в доменном слое модуля User.
+            'model' => User::class,
         ],
     ],
 

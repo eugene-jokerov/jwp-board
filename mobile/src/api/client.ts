@@ -4,7 +4,14 @@
  */
 
 import { API_TIMEOUT_MS, API_URL } from '../config/env';
-import type { ApiErrorPayload, DataResponse, HealthPayload, LoginPayload, User } from './types';
+import type {
+  ApiErrorPayload,
+  AuthPayload,
+  DataResponse,
+  HealthPayload,
+  RegisterInput,
+  User,
+} from './types';
 
 /** Ошибка запроса к API с HTTP-статусом и телом ответа. */
 export class ApiError extends Error {
@@ -69,10 +76,20 @@ export async function fetchHealth(): Promise<HealthPayload> {
 }
 
 /** Вход по email и паролю, возвращает токен Sanctum. */
-export async function login(email: string, password: string, deviceName = 'mobile'): Promise<LoginPayload> {
-  const response = await request<DataResponse<LoginPayload>>('/auth/login', {
+export async function login(email: string, password: string, deviceName = 'mobile'): Promise<AuthPayload> {
+  const response = await request<DataResponse<AuthPayload>>('/auth/login', {
     method: 'POST',
     body: { email, password, device_name: deviceName },
+  });
+
+  return response.data;
+}
+
+/** Регистрация по email и паролю (модуль User), возвращает токен Sanctum. */
+export async function register(input: RegisterInput, deviceName = 'mobile'): Promise<AuthPayload> {
+  const response = await request<DataResponse<AuthPayload>>('/user/register', {
+    method: 'POST',
+    body: { ...input, device_name: deviceName },
   });
 
   return response.data;

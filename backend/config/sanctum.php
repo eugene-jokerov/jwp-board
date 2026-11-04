@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
 return [
@@ -13,7 +16,11 @@ return [
         Sanctum::currentApplicationUrlWithPort(),
     ))),
 
-    'guard' => ['web'],
+    /*
+    | Гвард для Sanctum. В проекте нет SPA на сессиях: аутентификация идёт
+    | только по Bearer-токену, поэтому сессионные гварды не подключаются.
+    */
+    'guard' => [],
 
     /*
     | Время жизни токена в минутах. null — токен живёт до явного отзыва (logout).
@@ -23,8 +30,8 @@ return [
     'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
 
     'middleware' => [
-        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
-        'encrypt_cookies' => Illuminate\Cookie\Middleware\EncryptCookies::class,
-        'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        'authenticate_session' => AuthenticateSession::class,
+        'encrypt_cookies' => EncryptCookies::class,
+        'validate_csrf_token' => ValidateCsrfToken::class,
     ],
 ];

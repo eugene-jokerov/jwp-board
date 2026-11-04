@@ -1,14 +1,15 @@
 <?php
 
-namespace App\Http\Resources;
+namespace App\Modules\User\Infrastructure\Http\Resources;
 
+use App\Modules\User\Domain\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Публичное представление пользователя.
+ * Публичное представление пользователя в ответах API.
  *
- * @mixin \App\Models\User
+ * @mixin User
  */
 final class UserResource extends JsonResource
 {
@@ -19,7 +20,6 @@ final class UserResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
             'email' => $this->email,
             'created_at' => $this->created_at?->toIso8601String(),
         ];

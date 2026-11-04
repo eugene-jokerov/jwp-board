@@ -3,6 +3,9 @@
 module.exports = {
   content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
+  // Тёмную тему переключаем классом: при darkMode: 'media' (значение по умолчанию)
+  // react-native-css-interop на web падает с «Cannot manually set color scheme».
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Api;
 
-use App\Models\User;
+use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,12 +26,31 @@ final class AuthTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.user.email', $user->email)
+            ->assertJsonPath('data.token_type', 'Bearer')
             ->assertJsonStructure([
-                'data' => ['token', 'user' => ['id', 'name', 'email', 'created_at']],
+                'data' => [
+                    'token',
+                    'token_type',
+                    'user' => ['id', 'email', 'created_at'],
+                ],
             ]);
 
-        // Пароль в ответе не должен фигурировать.
+        // Пароль в ответе не должен фигурировать; имени у пользователя больше нет.
         self::assertStringNotContainsString('password', (string) $response->getContent());
+        self::assertArrayNotHasKey('name', $response->json('data.user'));
+    }
+
+    public function test_login_is_case_insensitive_for_email(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'mixed@jwp-board.local',
+            'password' => 'secret-password',
+        ]);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'MIXED@jwp-board.local',
+            'password' => 'secret-password',
+        ])->assertOk()->assertJsonPath('data.user.id', $user->id);
     }
 
     public function test_login_with_wrong_password_returns_unauthorized(): void

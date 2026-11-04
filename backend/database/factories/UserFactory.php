@@ -2,16 +2,25 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
+use App\Modules\User\Domain\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
  * @extends Factory<User>
  */
 class UserFactory extends Factory
 {
+    /**
+     * Модель, которую создаёт фабрика.
+     *
+     * Модель живёт в доменном слое модуля User, а не в App\Models, поэтому
+     * путь задаётся явно.
+     *
+     * @var class-string<User>
+     */
+    protected $model = User::class;
+
     /**
      * Текущий пароль, чтобы не хешировать одно и то же значение в каждом вызове.
      */
@@ -23,11 +32,9 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
         ];
     }
 
