@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\ForgetSessionGuards;
 use App\Modules\User\Domain\Exceptions\EmailAlreadyRegistered;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -27,13 +26,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Все запросы — через API-группу: без сессий и CSRF.
-        // Первым делом сбрасываем гварды аутентификации: API принимает
-        // пользователя только по Bearer-токену, а не из сессии.
+        // Allowed headers должны обрабатываться до CSRF, поэтому CORS идёт первым.
         $middleware->api(prepend: [
             HandleCors::class,
-            ForgetSessionGuards::class,
         ]);
+
+        // Два канала аутентификации:
+        //  - stateful (веб-клиент): запросы с Origin/Referer из sanctum.stateful
+        //    получают сессию, cookie и проверку CSRF (X-XSRF-TOKEN);
+        //  - токенный (мобильный клиент): запросы без Origin идут без сессии,
+        //    пользователь определяется по Bearer-токену Sanctum.
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // API всегда отвечает JSON (в том числе на 404/405/500).

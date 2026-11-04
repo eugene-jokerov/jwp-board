@@ -7,7 +7,6 @@
  * ограниченной ширины.
  */
 
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -125,13 +124,13 @@ export default function AuthScreen() {
     setFormError(null);
 
     try {
+      // Переход на главный экран выполняет гвард в app/_layout.tsx:
+      // он следит за сессией и сам уводит с формы после входа или регистрации.
       if (isSignUp) {
         await signUp(email, password, passwordConfirmation);
       } else {
         await signIn(email, password);
       }
-
-      router.replace('/');
     } catch (error) {
       const apiFieldErrors = extractFieldErrors(error);
 

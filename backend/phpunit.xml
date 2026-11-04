@@ -29,6 +29,9 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Веб-флоу (сессия + CSRF) гоняется в тестах на тех же настройках, что и прод. -->
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="SESSION_ENCRYPT" value="false"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:8081"/>
     </php>
 </phpunit>

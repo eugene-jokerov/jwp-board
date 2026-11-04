@@ -8,10 +8,10 @@ use App\Modules\User\Domain\Exceptions\EmailAlreadyRegistered;
 use App\Modules\User\Domain\Services\UserRegistrar;
 
 /**
- * Сценарий регистрации: создать пользователя и сразу выдать ему токен.
+ * Сценарий регистрации: создать пользователя.
  *
- * Токен создаётся через Sanctum на модели User: для мобильного клиента
- * регистрация и вход дают одинаковый результат — Bearer-токен.
+ * Токен не выдаётся: после регистрации мобильный клиент получает Bearer-токен,
+ * а веб-клиент — сессионную cookie. Выбор канала делается в auth-адаптерах.
  */
 final readonly class RegisterUserUseCase
 {
@@ -28,9 +28,6 @@ final readonly class RegisterUserUseCase
     {
         $user = $this->registrar->register($command->email, $command->password);
 
-        return new RegistrationResult(
-            $user,
-            $user->createToken($command->deviceName)->plainTextToken,
-        );
+        return new RegistrationResult($user);
     }
 }

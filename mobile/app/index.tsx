@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 import { fetchHealth } from '../src/api/client';
 import type { HealthPayload } from '../src/api/types';
+import { useAuth } from '../src/auth/AuthContext';
+import { PrimaryButton } from '../src/components/PrimaryButton';
 import { API_URL } from '../src/config/env';
-import { styles } from '../src/styles/home';
 
-// Starter screen stub: checks connectivity with the backend API.
+/**
+ * Главный экран приложения (доступен только авторизованному пользователю —
+ * гостя уводит на форму входа гвард из app/_layout.tsx).
+ *
+ * Сейчас это заглушка: показывает текущего пользователя и проверяет
+ * доступность backend API.
+ */
 export default function HomeScreen() {
+  const { session, signOut } = useAuth();
+
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
 
   const check = useCallback(async () => {
     setLoading(true);
@@ -30,29 +40,58 @@ export default function HomeScreen() {
     void check();
   }, [check]);
 
+  const handleSignOut = async () => {
+    setSigningOut(true);
+
+    try {
+      await signOut();
+    } finally {
+      // Навигацию на экран входа выполнит гвард, состояние формы сбросится при монтировании.
+      setSigningOut(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>JWP Board</Text>
-      <Text style={styles.subtitle}>Mobile client (stub)</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>API</Text>
-        <Text style={styles.value}>{API_URL}</Text>
-
-        {loading ? <ActivityIndicator style={styles.spinner} /> : null}
-
-        {!loading && health ? (
-          <Text style={styles.ok}>Status: {health.status}</Text>
-        ) : null}
-
-        {!loading && !health ? (
-          <Text style={styles.fail}>No connection: {error}</Text>
-        ) : null}
+    <View className="flex-1 bg-surface px-6 py-8">
+      <View className="gap-1">
+        <Text className="text-2xl font-bold text-app">JWP Board</Text>
+        <Text className="text-sm text-muted">Mobile client (stub)</Text>
       </View>
 
-      <Pressable style={styles.button} onPress={() => void check()}>
-        <Text style={styles.buttonText}>Check again</Text>
-      </Pressable>
+      <View className="mt-6 gap-4">
+        <View className="gap-1 rounded-xl bg-card p-4">
+          <Text className="text-xs text-subtle">Вы вошли как</Text>
+          <Text className="text-base font-medium text-app">{session?.user.email ?? '—'}</Text>
+        </View>
+
+        <View className="gap-1 rounded-xl bg-card p-4">
+          <Text className="text-xs text-subtle">API</Text>
+          <Text className="text-sm text-app">{API_URL}</Text>
+
+          {loading ? (
+            <View className="mt-2">
+              <ActivityIndicator />
+            </View>
+          ) : null}
+
+          {!loading && health ? (
+            <Text className="mt-2 rounded-lg bg-ok-bg px-2.5 py-1.5 text-sm text-ok-fg">
+              Status: {health.status}
+            </Text>
+          ) : null}
+
+          {!loading && !health ? (
+            <Text className="mt-2 rounded-lg bg-err-bg px-2.5 py-1.5 text-sm text-err-fg">
+              No connection: {error}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      <View className="mt-6 gap-3">
+        <PrimaryButton label="Проверить снова" onPress={() => void check()} />
+        <PrimaryButton label="Выйти" onPress={() => void handleSignOut()} loading={signingOut} />
+      </View>
     </View>
   );
 }

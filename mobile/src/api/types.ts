@@ -32,6 +32,11 @@ export interface AuthPayload {
   user: User;
 }
 
+/** Ответ веб-аутентификации: только пользователь (доказательство — cookie). */
+export interface UserPayload {
+  user: User;
+}
+
 /** POST /api/v1/auth/login */
 export type LoginPayload = AuthPayload;
 
