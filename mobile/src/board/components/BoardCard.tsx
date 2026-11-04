@@ -1,5 +1,9 @@
 /**
- * Карточка доски: цветная полоса, название и стрелки перевода между колонками.
+ * Карточка доски: белая плитка в рамке, полоса цвета родителя в левом боку,
+ * название и стрелки перевода между колонками.
+ *
+ * Цвет наследуется по иерархии (направление → инициатива → эпик) и живёт только
+ * в полосе слева: заливки у карточки нет, рамка отделяет её от колонки.
  *
  * Стрелки блокируются на краях доски и тогда, когда у карточки есть зависимости
  * в работе (правило проверяет board/derive.ts и передаёт готовый результат).
@@ -9,7 +13,7 @@
 
 import { Pressable, Text, View } from 'react-native';
 
-import { cardTint, NEUTRAL_COLOR } from '../colors';
+import { NEUTRAL_COLOR } from '../colors';
 import type { MoveDirection } from '../types';
 
 interface BoardCardProps {
@@ -32,36 +36,36 @@ export function BoardCard({ title, color, canMovePrev, canMoveNext, onMove, onBl
   };
 
   return (
-    <View
-      className="overflow-hidden rounded-xl border border-border bg-card"
-      style={{ backgroundColor: cardTint(color) }}
-    >
-      <View className="flex-row">
-        <View className="w-1.5" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+    <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
+      {/* Полоса цвета родителя — единственный цветной акцент карточки. */}
+      <View className="w-1" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
 
-        <View className="flex-1 gap-1 px-3 py-2.5">
-          <Text className="text-sm font-medium text-app" numberOfLines={3}>
-            {title}
+      <View className="flex-1 gap-1.5 px-2.5 py-2">
+        <Text className="text-sm font-medium leading-5 text-ink" numberOfLines={3}>
+          {title}
+        </Text>
+
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="flex-1 text-[11px] text-muted" numberOfLines={1}>
+            {color === null ? 'Без эпика' : ''}
           </Text>
 
-          {color === null ? <Text className="text-[11px] text-subtle">Без эпика</Text> : null}
+          <View className="flex-row items-center gap-0.5">
+            <ArrowButton
+              label="←"
+              accessibilityLabel={`Переместить «${title}» в предыдущую колонку`}
+              enabled={canMovePrev}
+              onPress={() => handlePress('prev', canMovePrev)}
+            />
+
+            <ArrowButton
+              label="→"
+              accessibilityLabel={`Переместить «${title}» в следующую колонку`}
+              enabled={canMoveNext}
+              onPress={() => handlePress('next', canMoveNext)}
+            />
+          </View>
         </View>
-      </View>
-
-      <View className="flex-row items-center justify-between border-t border-border px-1.5 py-1">
-        <ArrowButton
-          label="←"
-          accessibilityLabel={`Переместить «${title}» в предыдущую колонку`}
-          enabled={canMovePrev}
-          onPress={() => handlePress('prev', canMovePrev)}
-        />
-
-        <ArrowButton
-          label="→"
-          accessibilityLabel={`Переместить «${title}» в следующую колонку`}
-          enabled={canMoveNext}
-          onPress={() => handlePress('next', canMoveNext)}
-        />
       </View>
     </View>
   );
@@ -82,12 +86,11 @@ function ArrowButton({ label, accessibilityLabel, enabled, onPress }: ArrowButto
       accessibilityState={{ disabled: !enabled }}
       onPress={onPress}
       hitSlop={6}
-      className={[
-        'h-7 w-9 items-center justify-center rounded-lg',
-        enabled ? 'bg-card active:bg-surface' : 'bg-transparent',
-      ].join(' ')}
+      className={['h-6 w-6 items-center justify-center rounded', enabled ? 'active:bg-lane' : 'bg-transparent'].join(
+        ' ',
+      )}
     >
-      <Text className={enabled ? 'text-base font-semibold text-app' : 'text-base font-semibold text-subtle opacity-60'}>
+      <Text className={enabled ? 'text-sm font-semibold text-muted' : 'text-sm font-semibold text-subtle opacity-40'}>
         {label}
       </Text>
     </Pressable>

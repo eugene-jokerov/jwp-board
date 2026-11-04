@@ -21,6 +21,11 @@ module.exports = {
         // Цвета направлений/инициатив/эпиков живут в данных (src/board/data.ts)
         // и применяются inline-стилем — динамические классы Tailwind не собираются.
         border: '#e5e7eb',
+        // Палитра доски в духе Jira (Atlassian Design System):
+        // lane — фон колонки-«лунки», card-line — рамка карточки, ink — основной текст.
+        lane: '#f1f2f4',
+        'card-line': '#dfe1e6',
+        ink: '#172b4d',
       },
     },
   },

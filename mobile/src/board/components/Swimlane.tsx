@@ -23,32 +23,41 @@ interface SwimlaneHeaderProps {
   onAddCard: () => void;
 }
 
-/** Заголовок свимлайна для широкой раскладки: слева от сетки колонок. */
+/**
+ * Заголовок свимлайна для широкой раскладки: слева от сетки колонок.
+ *
+ * В одну строку название обрезалось (панель шириной 160 px), поэтому блок
+ * разложен вертикально: название с цветной точкой сверху, счётчик и «+» — под ним.
+ */
 export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCard }: SwimlaneHeaderProps) {
   return (
-    <View className="flex-row items-center gap-2">
-      <View className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+    <View className="gap-1.5">
+      <View className="flex-row items-start gap-1.5">
+        <View className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
 
-      <Text className="flex-1 text-sm font-semibold text-app" numberOfLines={1}>
-        {title}
-      </Text>
+        <Text className="flex-1 text-[13px] font-semibold leading-4 text-ink" numberOfLines={3}>
+          {title}
+        </Text>
+      </View>
 
-      <Text className="text-[11px] text-subtle">{count}</Text>
+      <View className="flex-row items-center gap-2">
+        <Text className="flex-1 text-[11px] text-subtle">{count}</Text>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${addLabel}: ${title}`}
-        accessibilityState={{ disabled: !canAdd }}
-        disabled={!canAdd}
-        onPress={onAddCard}
-        hitSlop={6}
-        className={[
-          'h-6 w-6 items-center justify-center rounded-lg',
-          canAdd ? 'bg-app active:opacity-90' : 'bg-border opacity-70',
-        ].join(' ')}
-      >
-        <Text className={['text-sm font-semibold leading-6', canAdd ? 'text-white' : 'text-muted'].join(' ')}>+</Text>
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${addLabel}: ${title}`}
+          accessibilityState={{ disabled: !canAdd }}
+          disabled={!canAdd}
+          onPress={onAddCard}
+          hitSlop={6}
+          className={[
+            'h-6 w-6 items-center justify-center rounded',
+            canAdd ? 'bg-app active:opacity-90' : 'bg-border opacity-70',
+          ].join(' ')}
+        >
+          <Text className={['text-sm font-semibold leading-6', canAdd ? 'text-white' : 'text-muted'].join(' ')}>+</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

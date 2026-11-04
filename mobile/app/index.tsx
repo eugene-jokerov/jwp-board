@@ -278,6 +278,7 @@ export default function HomeScreen() {
               collapsed={collapsedLevels[level.id] === true}
               onToggle={() => toggleLevel(level.id)}
               compact={compact}
+              width={width}
               expandedColumns={expandedColumns}
               onToggleColumn={toggleColumn}
               isCardMoveAllowed={isCardMoveAllowed}

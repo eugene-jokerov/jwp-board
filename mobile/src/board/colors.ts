@@ -20,11 +20,3 @@ export const LEVEL_COLORS: Record<LevelId, string> = {
   tactical: '#0ea5e9',
   operational: '#f59e0b',
 };
-
-/**
- * Полупрозрачный фон карточки: цвета родителей глухие, а карточка должна быть мягкой.
- * Восьмизначный hex с альфой поддерживают и native, и web.
- */
-export function cardTint(color: string | null): string {
-  return color === null ? EMPTY_COLOR : `${color}1f`;
-}
