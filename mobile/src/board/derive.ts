@@ -78,17 +78,37 @@ export function checkColumnChange(cards: readonly Card[], card: Card, target: Co
   return { allowed: true, reason: null };
 }
 
-/** Новый массив карточек с переведённой в соседнюю колонку карточкой. */
-export function moveCard(cards: readonly Card[], cardId: string, direction: MoveDirection): Card[] {
-  return cards.map((card) => {
-    if (card.id !== cardId) {
-      return card;
-    }
+/** Действие на карточке: перевод в следующую колонку. */
+export interface CardAction {
+  /** Колонка, в которую перейдёт карточка. */
+  target: ColumnId;
+  /** Название действия для подписи иконки: «Взять в работу», «Завершить задачу». */
+  label: string;
+  /** Причина запрета; null — переход разрешён. */
+  blockReason: string | null;
+}
 
-    const target = neighborColumn(card.column, direction);
+/** Действие иконки по текущей колонке карточки: «Беклог» и «В работе» — с переходом. */
+const NEXT_COLUMN_ACTION: Partial<Record<ColumnId, { target: ColumnId; label: string }>> = {
+  backlog: { target: 'in_progress', label: 'Взять в работу' },
+  in_progress: { target: 'done', label: 'Завершить задачу' },
+};
 
-    return target ? { ...card, column: target } : card;
-  });
+/**
+ * Действие карточки по её текущей колонке.
+ *
+ * Из «Беклога» — «Взять в работу» (в «В работе»), из «В работе» — «Завершить
+ * задачу» (в «Готово»). В «Готово» и «Отмене» действий нет — вернётся null.
+ * Доступность перехода проверяется тем же правилом, что и у формы редактирования.
+ */
+export function cardAction(cards: readonly Card[], card: Card): CardAction | null {
+  const action = NEXT_COLUMN_ACTION[card.column];
+
+  if (action === undefined) {
+    return null;
+  }
+
+  return { ...action, blockReason: checkMove(cards, card, 'next').reason };
 }
 
 /** Новый массив карточек с обновлённым названием и/или колонкой. */

@@ -10,7 +10,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
 import { NEUTRAL_COLOR } from '../colors';
-import { COLUMNS, type Card, type ColumnId, type MoveDirection } from '../types';
+import type { CardAction } from '../derive';
+import { COLUMNS, type Card, type ColumnId } from '../types';
 
 interface SwimlaneHeaderProps {
   title: string;
@@ -71,8 +72,10 @@ interface SwimlaneProps {
   /** Состояние раскрытых колонок аккордеона: ключ — `${laneId}:${columnId}`. */
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
-  isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
-  onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Действие карточки по её колонке; null — иконки нет. */
+  cardAction: (card: Card) => CardAction | null;
+  /** Выполнить действие карточки (перевод в следующую колонку). */
+  onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
   onOpenCard: (card: Card) => void;
   onAddCard: (columnId: ColumnId) => void;
@@ -86,8 +89,8 @@ export function Swimlane({
   cards,
   expandedColumns,
   onToggleColumn,
-  isCardMoveAllowed,
-  onMoveCard,
+  cardAction,
+  onCardAction,
   onOpenCard,
   onAddCard,
 }: SwimlaneProps) {
@@ -116,8 +119,8 @@ export function Swimlane({
               onToggle={() => onToggleColumn(key)}
               canCreate
               addLabel="+ добавить"
-              isCardMoveAllowed={isCardMoveAllowed}
-              onMoveCard={onMoveCard}
+              cardAction={cardAction}
+              onCardAction={onCardAction}
               onOpenCard={onOpenCard}
               onAddCard={() => onAddCard(column.id)}
             />

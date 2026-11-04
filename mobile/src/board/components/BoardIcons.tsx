@@ -1,12 +1,15 @@
 /**
- * Иконки доски правого края заголовка колонки.
+ * Иконки доски.
  *
- * Библиотек иконок в проекте нет (`@expo/vector-icons`, `react-native-svg`
- * не установлены), поэтому иконки рисуются примитивами `View`: они одинаково
- * работают на native и на web и красятся цветовыми токенами Tailwind.
+ * Библиотек иконок до этого не было и значки рисовались гранями `View`
+ * (шевроны, меню). Иконки действий взяты из Lucide (`lucide-react-native`,
+ * SVG через `react-native-svg`): они векторные, линейные и одинаково
+ * работают на native и на web.
  */
 
 import { View } from 'react-native';
+
+import { CircleCheck, Play } from 'lucide-react-native';
 
 /** Три точки в столбик — «меню колонки». */
 export function MenuIcon() {
@@ -27,4 +30,17 @@ export function ChevronLeftIcon() {
 /** Шеврон вправо — «развернуть колонку» (квадрат с гранями сверху и справа). */
 export function ChevronRightIcon() {
   return <View className="h-2.5 w-2.5 rotate-45 border-r border-t border-muted" />;
+}
+
+/** Цвет штриха иконок действия: иконки стоят на тёмной кнопке. */
+const ACTION_ICON_COLOR = '#ffffff';
+
+/** Иконка «Взять в работу»: play в круге. */
+export function PlayIcon() {
+  return <Play size={14} color={ACTION_ICON_COLOR} />;
+}
+
+/** Иконка «Завершить задачу»: галочка в круге. */
+export function CheckIcon() {
+  return <CircleCheck size={14} color={ACTION_ICON_COLOR} />;
 }

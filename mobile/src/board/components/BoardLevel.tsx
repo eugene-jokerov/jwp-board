@@ -21,9 +21,9 @@ import { Pressable, Text, View } from 'react-native';
 import { BoardCard } from './BoardCard';
 import { ChevronLeftIcon, ChevronRightIcon, MenuIcon } from './BoardIcons';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
-import { LEVEL_COLORS } from '../colors';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
-import { COLUMNS, type BoardLevel as BoardLevelModel, type Card, type ColumnId, type MoveDirection } from '../types';
+import type { CardAction } from '../derive';
+import { COLUMNS, type BoardLevel as BoardLevelModel, type Card, type ColumnId } from '../types';
 
 /**
  * Раскладка широкого режима.
@@ -148,8 +148,10 @@ interface BoardLevelProps {
   width: number;
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
-  isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
-  onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Действие карточки по её колонке; null — иконки нет. */
+  cardAction: (card: Card) => CardAction | null;
+  /** Выполнить действие карточки (перевод в следующую колонку). */
+  onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
   onOpenCard: (card: Card) => void;
   onAddCard: (parentId: string | null, columnId: ColumnId) => void;
@@ -170,8 +172,8 @@ export function BoardLevel({
   width,
   expandedColumns,
   onToggleColumn,
-  isCardMoveAllowed,
-  onMoveCard,
+  cardAction,
+  onCardAction,
   onOpenCard,
   onAddCard,
   onCreateInLevel,
@@ -180,7 +182,6 @@ export function BoardLevel({
   createHint,
 }: BoardLevelProps) {
   const total = lanes.reduce((sum, lane) => sum + lane.cards.length, 0);
-  const color = LEVEL_COLORS[level.id];
   // Широкая панель названий на больших окнах: шапка и тело берут один класс.
   const laneTitleWidth = widthOfLaneTitle(width);
   // Кнопка «+» в заголовке свимлайна создаёт карточку в первой колонке доски.
@@ -256,8 +257,6 @@ export function BoardLevel({
         onPress={onToggle}
         className="flex-row items-center gap-2.5 px-4 py-3 active:bg-surface"
       >
-        <View className="h-7 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-
         <Text className="flex-1 text-base font-bold text-app">{level.label}</Text>
 
         <Text className="text-xs text-muted">{total}</Text>
@@ -280,8 +279,8 @@ export function BoardLevel({
                 cards={lane.cards}
                 expandedColumns={expandedColumns}
                 onToggleColumn={onToggleColumn}
-                isCardMoveAllowed={isCardMoveAllowed}
-                onMoveCard={onMoveCard}
+                cardAction={cardAction}
+                onCardAction={onCardAction}
                 onOpenCard={onOpenCard}
                 onAddCard={(columnId) => onAddCard(lane.parentId, columnId)}
               />
@@ -426,10 +425,8 @@ export function BoardLevel({
                                 key={card.id}
                                 title={card.title}
                                 color={card.color}
-                                canMovePrev={isCardMoveAllowed(card, 'prev')}
-                                canMoveNext={isCardMoveAllowed(card, 'next')}
-                                onMove={(direction) => onMoveCard(card, direction)}
-                                onBlocked={(direction) => onMoveCard(card, direction)}
+                                action={cardAction(card)}
+                                onAction={() => onCardAction(card)}
                                 onPress={() => onOpenCard(card)}
                               />
                             ))}

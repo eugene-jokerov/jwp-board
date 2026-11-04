@@ -8,7 +8,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
-import type { BoardColumn as BoardColumnModel, Card, MoveDirection } from '../types';
+import type { CardAction } from '../derive';
+import type { BoardColumn as BoardColumnModel, Card } from '../types';
 
 interface BoardColumnProps {
   column: BoardColumnModel;
@@ -17,8 +18,10 @@ interface BoardColumnProps {
   onToggle: () => void;
   canCreate: boolean;
   addLabel: string;
-  isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
-  onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Действие карточки по её колонке; null — иконки нет. */
+  cardAction: (card: Card) => CardAction | null;
+  /** Выполнить действие карточки (перевод в следующую колонку). */
+  onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
   onOpenCard: (card: Card) => void;
   onAddCard: () => void;
@@ -31,8 +34,8 @@ export function BoardColumn({
   onToggle,
   canCreate,
   addLabel,
-  isCardMoveAllowed,
-  onMoveCard,
+  cardAction,
+  onCardAction,
   onOpenCard,
   onAddCard,
 }: BoardColumnProps) {
@@ -59,10 +62,8 @@ export function BoardColumn({
           key={card.id}
           title={card.title}
           color={card.color}
-          canMovePrev={isCardMoveAllowed(card, 'prev')}
-          canMoveNext={isCardMoveAllowed(card, 'next')}
-          onMove={(direction) => onMoveCard(card, direction)}
-          onBlocked={(direction) => onMoveCard(card, direction)}
+          action={cardAction(card)}
+          onAction={() => onCardAction(card)}
           onPress={() => onOpenCard(card)}
         />
       ))}

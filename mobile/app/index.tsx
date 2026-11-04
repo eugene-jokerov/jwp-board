@@ -14,7 +14,7 @@ import { BoardLevel, type SwimlaneModel } from '../src/board/components/BoardLev
 import { CardEditModal } from '../src/board/components/CardEditModal';
 import { CardFormModal, type CardDraft } from '../src/board/components/CardFormModal';
 import { DIRECTIONS, INITIAL_CARDS } from '../src/board/data';
-import { checkColumnChange, checkMove, moveCard, parentCandidates, updateCard } from '../src/board/derive';
+import { cardAction, checkColumnChange, parentCandidates, updateCard } from '../src/board/derive';
 import {
   COLUMNS,
   LEVELS,
@@ -24,7 +24,6 @@ import {
   type CardKind,
   type ColumnId,
   type LevelId,
-  type MoveDirection,
 } from '../src/board/types';
 import { FormAlert } from '../src/components/FormAlert';
 
@@ -177,30 +176,27 @@ export default function HomeScreen() {
     setExpandedColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  /** Перенос карточки: либо переносим, либо показываем причину запрета. */
-  const handleMove = (card: Card, direction: MoveDirection) => {
-    const check = checkMove(cards, card, direction);
+  /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
+  const handleCardAction = (card: Card) => {
+    const action = cardAction(cards, card);
 
-    if (check.allowed) {
-      setCards((prev) => moveCard(prev, card.id, direction));
+    if (action === null) {
+      return;
+    }
+
+    if (action.blockReason === null) {
+      setCards((prev) => updateCard(prev, card.id, { title: card.title, column: action.target }));
       setNotice(null);
       return;
     }
 
-    if (!check.reason) {
-      // Край доски — стрелка недоступна, объяснять нечего.
-      return;
-    }
-
-    setNotice(check.reason);
+    setNotice(action.blockReason);
 
     // На web Alert не работает, там текст показывается баннером над доской.
     if (Platform.OS !== 'web') {
-      Alert.alert('Перенос запрещён', check.reason);
+      Alert.alert('Перенос запрещён', action.blockReason);
     }
   };
-
-  const isCardMoveAllowed = (card: Card, direction: MoveDirection) => checkMove(cards, card, direction).allowed;
 
   /** Форма из свимлайна: родитель предопределён. */
   const openLaneForm = (level: BoardLevelModel, parentId: string | null, column: ColumnId) => {
@@ -306,8 +302,8 @@ export default function HomeScreen() {
               width={width}
               expandedColumns={expandedColumns}
               onToggleColumn={toggleColumn}
-              isCardMoveAllowed={isCardMoveAllowed}
-              onMoveCard={handleMove}
+              cardAction={(card) => cardAction(cards, card)}
+              onCardAction={handleCardAction}
               onOpenCard={(card) => setEditedCardId(card.id)}
               onAddCard={(parentId, columnId) => openLaneForm(level, parentId, columnId)}
               onCreateInLevel={() => openLevelForm(level)}
