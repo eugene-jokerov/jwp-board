@@ -23,7 +23,7 @@ cmd_node ?=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help init-envs build rebuild up start stop down restart ps logs \
+.PHONY: help init-envs dirs build rebuild up start stop down restart ps logs \
         install install-backend install-mobile \
         sh php-shell artisan composer migrate migrate-fresh seed test test-filter \
         pint pint-test phpstan phpstan-baseline phpstan-clear check route-list \
@@ -35,6 +35,7 @@ help:
 	@echo ""
 	@echo "  make init-envs        скопировать .env.example -> .env (если ещё нет)"
 	@echo "  make install          полная установка с нуля: сборка, старт, composer, migrate, npm"
+	@echo "  make dirs             создать каталоги Laravel (bootstrap/cache, storage/*)"
 	@echo "  make build            собрать docker-образы (php)"
 	@echo "  make rebuild          пересобрать образы без кэша"
 	@echo "  make up / down        поднять / остановить контейнеры"
@@ -74,7 +75,18 @@ init-envs:
 	@test -f backend/.env || cp backend/.env.example backend/.env
 	@echo "Файлы окружения готовы."
 
-build: init-envs
+# Laravel не создаёт эти каталоги сам: без bootstrap/cache падает
+# `artisan package:discover` в post-autoload-dump, без storage/* — логи и кэш.
+dirs:
+	@mkdir -p backend/bootstrap/cache \
+	          backend/storage/app/public \
+	          backend/storage/framework/cache/data \
+	          backend/storage/framework/sessions \
+	          backend/storage/framework/views \
+	          backend/storage/logs
+	@echo "Каталоги Laravel готовы (bootstrap/cache, storage/*)."
+
+build: init-envs dirs
 	$(COMPOSE) build $(build_args)
 
 rebuild: init-envs
