@@ -150,7 +150,7 @@ export default function AuthScreen() {
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
         >
-          <View className="w-full max-w-md self-center gap-6 rounded-2xl border border-black/5 bg-card p-6">
+          <View className="w-full max-w-md gap-6 self-center rounded-2xl border border-black/5 bg-card p-6">
             <View className="gap-2">
               <Text className="text-2xl font-bold text-app">JWP Board</Text>
               <Text className="text-sm text-muted">
@@ -229,4 +229,3 @@ export default function AuthScreen() {
     </SafeAreaView>
   );
 }
-

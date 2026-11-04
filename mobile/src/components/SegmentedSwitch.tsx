@@ -5,7 +5,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 interface SegmentedSwitchProps<T extends string> {
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
 }
@@ -22,10 +22,7 @@ export function SegmentedSwitch<T extends string>({ options, value, onChange }: 
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             onPress={() => onChange(option.value)}
-            className={[
-              'flex-1 items-center justify-center rounded-lg py-2.5',
-              isActive ? 'bg-card' : '',
-            ].join(' ')}
+            className={['flex-1 items-center justify-center rounded-lg py-2.5', isActive ? 'bg-card' : ''].join(' ')}
           >
             <Text className={isActive ? 'text-sm font-semibold text-app' : 'text-sm text-muted'}>{option.label}</Text>
           </Pressable>

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-// Цветовые токены повторяют палитру из src/styles/home.ts (заглушка экрана).
+// Цветовые токены фирменной палитры: используются в компонентах через className
+// (bg-surface, text-app, bg-err-bg, …).
 module.exports = {
   content: ['./app/**/*.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],

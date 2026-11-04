@@ -30,7 +30,6 @@ const CSRF_COOKIE = 'XSRF-TOKEN';
 /** HTTP-методы, для которых Laravel требует CSRF-токен. */
 const CSRF_PROTECTED_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
-
 /** Ошибка запроса к API с HTTP-статусом и телом ответа. */
 export class ApiError extends Error {
   public readonly status: number;
@@ -116,7 +115,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       body: options.body === undefined ? null : JSON.stringify(options.body),
       signal: controller.signal,
     });
-
 
     if (response.status === 204) {
       return undefined as T;
@@ -204,4 +202,3 @@ export async function webMe(): Promise<User> {
 export async function webLogout(): Promise<void> {
   await request<void>('/auth/web/logout', { method: 'POST' });
 }
-

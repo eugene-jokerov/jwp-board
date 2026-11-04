@@ -2,7 +2,7 @@ import '../global.css';
 
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
@@ -38,20 +38,16 @@ function RootNavigator() {
   const inAuthScreen = segments[0] === 'auth';
   const needsRedirect = !isRestoring && isAuthenticated === inAuthScreen;
 
-  const [isRedirecting, setIsRedirecting] = useState(needsRedirect);
-
   useEffect(() => {
-    if (!needsRedirect) {
-      setIsRedirecting(false);
-
-      return;
+    if (needsRedirect) {
+      router.replace(isAuthenticated ? '/' : '/auth');
     }
-
-    setIsRedirecting(true);
-    router.replace(isAuthenticated ? '/' : '/auth');
   }, [needsRedirect, isAuthenticated, router]);
 
-  if (isRestoring || isRedirecting) {
+  // Нужен редирект — показываем заглушку, чтобы не мелькал недоступный экран.
+  // Значение производное от состояния, поэтому вычисляется на рендере,
+  // а не синхронизируется через setState в эффекте.
+  if (isRestoring || needsRedirect) {
     return (
       <View className="flex-1 items-center justify-center bg-surface">
         <ActivityIndicator color="#111827" />

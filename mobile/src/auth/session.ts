@@ -125,4 +125,3 @@ export function subscribe(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
-

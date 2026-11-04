@@ -2,15 +2,17 @@
 
 Ты — ведущий full-stack разработчик. Задача — помогать в поддержке и развитии приложения.
 Проект — git-монорепозиторий: строгий бэкенд на Laravel, который отдаёт только JSON (headless API),
-и мобильный клиент на React Native (Expo). Web-фронтенда нет: никаких Blade-шаблонов, Vite и HTML-ответов.
+и клиент на React Native (Expo). Фронт один: приложение собирается и для native (iOS/Android),
+и для web через `react-native-web`. Отдельного web-фронтенда нет, и на стороне бэкенда
+не бывает Blade-шаблонов, Vite и HTML-ответов.
 
 ---
 
 ## 1. Обзор архитектуры и стек
 
 - **Бэкенд (`backend/`):** PHP 8.4 + Laravel 13 (headless API), MySQL 8.4, Eloquent, Laravel Sanctum (Bearer-токены), PHPUnit 13, Laravel Pint, PHPStan 2 + Larastan 3.
-- **Мобильный клиент (`mobile/`):** TypeScript + React Native (Expo SDK 58), expo-router.
-- **Архитектура:** REST API только под префиксом `/api/v1`. Мобильное приложение общается с бэкендом исключительно через этот API. Серверного рендеринга HTML нет; все ответы — `application/json`.
+- **Мобильный клиент (`mobile/`):** TypeScript + React Native (Expo SDK 58), expo-router. Один код на native и web (`react-native-web`).
+- **Архитектура:** REST API только под префиксом `/api/v1`. Клиент общается с бэкендом исключительно через этот API. Серверного рендеринга HTML нет; все ответы — `application/json`.
 - **Монорепо:** один `.git` в корне; `backend/` и `mobile/` — независимые приложения со своими `composer.json` / `package.json` (npm-воркспейсы не используются сознательно: Metro/Expo плохо переносит hoisting).
 - **Запуск:** всё через Docker Compose; команды — через корневой `Makefile`.
 
@@ -60,7 +62,12 @@
 - Конфиги NativeWind: `mobile/tailwind.config.js` (содержимое сканируется в `app/**` и `src/**`; пресет `nativewind/preset`; фирменная палитра в `theme.extend.colors`), `mobile/metro.config.js` (`withNativeWind`, вход — `global.css`), `mobile/babel.config.js` (`babel-preset-expo` с `jsxImportSource: 'nativewind'` + пресет `nativewind/babel`), `mobile/nativewind-env.d.ts` (типы `className`, файл подключён в `tsconfig.json`).
 - CSS-директивы — в `mobile/global.css`; файл импортируется один раз в корневом `app/_layout.tsx` (требование expo-router/NativeWind: импорт только в layout, не в других экранах).
 - Dev-сервер работает в watch-режиме (`CI=0`); если правки классов не появляются в приложении — сбрось кэш: `make restart` (контейнер стартует с флагом `--clear`).
-- ESLint/линтеры не настраивай и не запускай без просьбы.
+- **Фронт один — web не отдельное приложение.** Тот же код собирается для iOS/Android и для web (`react-native-web`, `web.output: "single"` в `app.json`). Ветвление `Platform.OS === 'web'` (`src/api/client.ts`, `src/auth/session.ts`, `src/auth/AuthContext.tsx`) — это **только выбор канала транспорта внутри одного фронта**: Bearer-токен + SecureStore против сессионной HttpOnly-cookie + CSRF-заголовка. Прочие платформенные ветки (`Platform.OS === 'ios'` в `app/auth.tsx` — поведение клавиатуры) — тоже норма. Такие ветки штатны: не удаляй их «как мёртвый код», не считай недостижимыми и не включай правила, которые сочтут `web` невозможным (например, `no-unnecessary-condition`, strict-type-checked). Правки в `client.ts` / `session.ts` проверяй на обеих платформах.
+- **Линтеры и форматирование (обязательно после правок TS/TSX).**
+  - ESLint (flat config `mobile/eslint.config.js`, база `eslint-config-expo`): проверка — `make lint`, автоисправление — `make lint-fix`.
+  - Prettier (`mobile/.prettierrc`, плагин `prettier-plugin-tailwindcss`): форматирование — `make format`, проверка — `make format-check`.
+  - Prettier сортирует Tailwind-классы в `className` — порядок классов не правь вручную и не опирайся на него в рассуждениях.
+  - Порядок проверок мобилки: `make typecheck` → `make lint` → `make format-check` (всё сразу — `make check-mobile`).
 
 ---
 
@@ -106,6 +113,9 @@ jwp-board/
    ├─ src/config/env.ts         # EXPO_PUBLIC_API_URL и конфигурация окружения
    ├─ global.css                # Tailwind-директивы, импорт в app/_layout.tsx
    ├─ tailwind.config.js        # content, presets: nativewind/preset, палитра
+   ├─ eslint.config.js          # ESLint flat config (база eslint-config-expo)
+   ├─ .prettierrc               # Prettier (+ prettier-plugin-tailwindcss)
+   ├─ .prettierignore           # что Prettier не трогает
    ├─ metro.config.js           # withNativeWind(config, { input })
    ├─ babel.config.js           # babel-preset-expo (jsxImportSource) + nativewind/babel
    ├─ nativewind-env.d.ts       # типы className
@@ -146,7 +156,7 @@ jwp-board/
 - PHP: `make sh`, `make php cmd="php -v"`, `make artisan cmd="about"`, `make composer cmd="require foo/bar"`.
 - Качество: `make test`, `make test-filter filter=HealthTest`, `make pint-test`, `make pint`, `make phpstan`, `make phpstan-baseline`, `make check`.
 - БД: `make migrate`, `make migrate-fresh`, `make seed`, `make db-shell`, `make db-test-shell`.
-- Мобилка: `make npm cmd="install"`, `make npx cmd="expo --version"`, `make typecheck`, `make node-shell`.
+- Мобилка: `make npm cmd="install"`, `make npx cmd="expo --version"`, `make typecheck`, `make lint`, `make format-check`, `make check-mobile`, `make node-shell`.
 - Прямой `docker compose` — для диагностики (`docker compose logs php`); изменяющие команды — через Makefile.
 
 ---
@@ -182,7 +192,7 @@ jwp-board/
 2. `make phpstan` — статический анализ (level 6, Larastan).
 3. `make test` — полный прогон PHPUnit.
 4. `make check` — всё сразу (то, что должен проходить любой PR).
-5. Для правок в мобилке — дополнительно `make typecheck`.
+5. Для правок в мобилке — дополнительно `make typecheck`, `make lint`, `make format-check` (или одной командой `make check-mobile`).
 
 Не считай задачу выполненной, пока не прогнал релевантные проверки в контейнере и не показал их вывод.
 

@@ -37,8 +37,34 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    void check();
-  }, [check]);
+    // Первичная загрузка без синхронного setLoading(true): состояние уже
+    // инициализировано как loading, а вызывать setState прямо в теле эффекта
+    // нельзя — это каскадные рендеры. Флаг нужен, чтобы ответ не пришёл
+    // в уже размонтированный компонент.
+    let active = true;
+
+    void fetchHealth()
+      .then((payload) => {
+        if (active) {
+          setHealth(payload);
+        }
+      })
+      .catch((e: unknown) => {
+        if (active) {
+          setHealth(null);
+          setError(e instanceof Error ? e.message : 'unknown error');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -75,15 +101,11 @@ export default function HomeScreen() {
           ) : null}
 
           {!loading && health ? (
-            <Text className="mt-2 rounded-lg bg-ok-bg px-2.5 py-1.5 text-sm text-ok-fg">
-              Status: {health.status}
-            </Text>
+            <Text className="mt-2 rounded-lg bg-ok-bg px-2.5 py-1.5 text-sm text-ok-fg">Status: {health.status}</Text>
           ) : null}
 
           {!loading && !health ? (
-            <Text className="mt-2 rounded-lg bg-err-bg px-2.5 py-1.5 text-sm text-err-fg">
-              No connection: {error}
-            </Text>
+            <Text className="mt-2 rounded-lg bg-err-bg px-2.5 py-1.5 text-sm text-err-fg">No connection: {error}</Text>
           ) : null}
         </View>
       </View>

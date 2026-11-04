@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.lock
+package-lock.json
+*.log
+.env
+.env.*
+expo-env.d.ts
+global.css

@@ -28,6 +28,7 @@ cmd_node ?=
         sh php-shell artisan composer migrate migrate-fresh seed test test-filter \
         pint pint-test phpstan phpstan-baseline phpstan-clear check route-list \
         node-shell npm npx expo-start expo-web expo-install typecheck \
+        lint lint-fix format format-check check-mobile \
         db-shell db-test-shell clean
 
 help:
@@ -66,6 +67,11 @@ help:
 	@echo "  make expo-install     npm install в mobile"
 	@echo "  make expo-start       expo dev server (запущен сервисом node)"
 	@echo "  make typecheck        tsc --noEmit в mobile"
+	@echo "  make lint             ESLint в mobile (без изменений)"
+	@echo "  make lint-fix         ESLint в mobile с автоисправлением"
+	@echo "  make format           Prettier: форматирование mobile"
+	@echo "  make format-check     Prettier: проверка форматирования mobile"
+	@echo "  make check-mobile     typecheck + lint + format-check"
 	@echo ""
 	@echo "  make db-shell         mysql-клиент основной БД"
 	@echo "  make db-test-shell    mysql-клиент тестовой БД"
@@ -189,6 +195,24 @@ expo-web:
 
 typecheck:
 	$(COMPOSE) run --rm $(node_service) npm run typecheck
+
+lint:
+	$(COMPOSE) run --rm $(node_service) npm run lint
+
+lint-fix:
+	$(COMPOSE) run --rm $(node_service) npm run lint:fix
+
+format:
+	$(COMPOSE) run --rm $(node_service) npm run format
+
+format-check:
+	$(COMPOSE) run --rm $(node_service) npm run format:check
+
+# Полная проверка мобильного клиента — аналог make check для бэкенда.
+check-mobile:
+	$(COMPOSE) run --rm $(node_service) npm run typecheck
+	$(COMPOSE) run --rm $(node_service) npm run lint
+	$(COMPOSE) run --rm $(node_service) npm run format:check
 
 db-shell:
 	$(COMPOSE) exec $(mysql_service) sh -lc 'mysql -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE"'

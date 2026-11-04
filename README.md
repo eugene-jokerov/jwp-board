@@ -92,6 +92,9 @@ make pint-test          # проверка стиля (Laravel Pint)
 make phpstan            # статический анализ (PHPStan + Larastan)
 make check              # test + pint-test + phpstan
 make typecheck          # проверка типов мобильного приложения
+make lint               # ESLint мобильного приложения
+make format-check       # проверка форматирования (Prettier)
+make check-mobile       # typecheck + lint + format-check
 ```
 
 ## Работа с мобильным клиентом
@@ -126,6 +129,19 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8080
 - `mobile/global.css` — директивы Tailwind; импортируется один раз в `mobile/app/_layout.tsx`.
 - `mobile/metro.config.js` / `mobile/babel.config.js` — обвязка NativeWind; менять без необходимости не нужно.
 - Контейнер `node` работает в watch-режиме (`CI=0`) и стартует с флагом `--clear`, поэтому правки классов подхватываются сразу; полный сброс кэша — `make restart`.
+
+### Линтеры и форматирование
+
+- **ESLint** — flat config `mobile/eslint.config.js` на базе `eslint-config-expo`: `make lint` (проверка), `make lint-fix` (автоисправление).
+- **Prettier** — `mobile/.prettierrc` с `prettier-plugin-tailwindcss` (сортирует классы в `className`): `make format` (запись), `make format-check` (проверка).
+- Всё вместе с типами: `make check-mobile`.
+
+### Web-платформа
+
+Фронт один: тот же код клиента собирается для iOS/Android и для web через `react-native-web`
+(`make expo-web`). Отдельного web-фронтенда нет — сервер остаётся headless JSON API.
+Ветвление по `Platform.OS` в `src/api/client.ts` и `src/auth/session.ts` — выбор канала
+аутентификации (Bearer-токен против HttpOnly-cookie), а не второй фронтенд.
 
 ## Конфигурация
 

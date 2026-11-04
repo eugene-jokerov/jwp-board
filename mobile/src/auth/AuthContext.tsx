@@ -77,25 +77,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(payload);
   }, []);
 
-  const signUp = useCallback(
-    async (email: string, password: string, passwordConfirmation: string): Promise<void> => {
-      const input = {
-        email: email.trim(),
-        password,
-        password_confirmation: passwordConfirmation,
-      };
+  const signUp = useCallback(async (email: string, password: string, passwordConfirmation: string): Promise<void> => {
+    const input = {
+      email: email.trim(),
+      password,
+      password_confirmation: passwordConfirmation,
+    };
 
-      if (IS_WEB) {
-        // Регистрация на сайте сразу авторизует: сервер открывает сессию.
-        applyWebUser(await webRegister(input));
+    if (IS_WEB) {
+      // Регистрация на сайте сразу авторизует: сервер открывает сессию.
+      applyWebUser(await webRegister(input));
 
-        return;
-      }
+      return;
+    }
 
-      setSession(await registerRequest(input));
-    },
-    [],
-  );
+    setSession(await registerRequest(input));
+  }, []);
 
   const signOut = useCallback(async (): Promise<void> => {
     if (IS_WEB) {

@@ -25,7 +25,11 @@ export function PrimaryButton({ label, onPress, loading = false, disabled = fals
         isDisabled ? 'opacity-60' : '',
       ].join(' ')}
     >
-      {loading ? <ActivityIndicator color="#ffffff" /> : <Text className="text-base font-semibold text-white">{label}</Text>}
+      {loading ? (
+        <ActivityIndicator color="#ffffff" />
+      ) : (
+        <Text className="text-base font-semibold text-white">{label}</Text>
+      )}
     </Pressable>
   );
 }
