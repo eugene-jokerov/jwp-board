@@ -12,7 +12,7 @@
  * onBlocked с текстом причины — на web Alert не работает, поэтому решение
  * «где показать» принимает экран.
  *
- * Клик по самой карточке (кроме иконки действия) открывает форму редактирования.
+ * Клик по названию карточки открывает форму редактирования.
  */
 
 import { Pressable, Text, View } from 'react-native';
@@ -39,19 +39,24 @@ interface BoardCardProps {
 
 export function BoardCard({ title, color, action, onAction, onPress }: BoardCardProps) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Открыть карточку «${title}»`}
-      onPress={onPress}
-      className="flex-row overflow-hidden rounded border border-card-line bg-card active:bg-lane"
-    >
+    <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
       {/* Полоса цвета родителя — единственный цветной акцент карточки. */}
       <View className="w-1" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
 
       <View className="flex-1 gap-1.5 px-2.5 py-2">
-        <Text className="text-sm font-medium leading-5 text-ink" numberOfLines={3}>
-          {title}
-        </Text>
+        {/* Открытие карточки — отдельная область над названием: кнопка-иконка
+            действия стоит рядом, а не внутри, иначе на web получится
+            <button> внутри <button>. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Открыть карточку «${title}»`}
+          onPress={onPress}
+          className="active:opacity-70"
+        >
+          <Text className="text-sm font-medium leading-5 text-ink" numberOfLines={3}>
+            {title}
+          </Text>
+        </Pressable>
 
         <View className="flex-row items-center justify-between gap-2">
           <Text className="flex-1 text-[11px] text-muted" numberOfLines={1}>
@@ -75,6 +80,6 @@ export function BoardCard({ title, color, action, onAction, onPress }: BoardCard
           ) : null}
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
