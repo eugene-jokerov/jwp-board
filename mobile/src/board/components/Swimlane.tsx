@@ -73,6 +73,8 @@ interface SwimlaneProps {
   onToggleColumn: (key: string) => void;
   isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
   onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Клик по карточке — открыть её на редактирование. */
+  onOpenCard: (card: Card) => void;
   onAddCard: (columnId: ColumnId) => void;
 }
 
@@ -86,6 +88,7 @@ export function Swimlane({
   onToggleColumn,
   isCardMoveAllowed,
   onMoveCard,
+  onOpenCard,
   onAddCard,
 }: SwimlaneProps) {
   return (
@@ -115,6 +118,7 @@ export function Swimlane({
               addLabel="+ добавить"
               isCardMoveAllowed={isCardMoveAllowed}
               onMoveCard={onMoveCard}
+              onOpenCard={onOpenCard}
               onAddCard={() => onAddCard(column.id)}
             />
           );

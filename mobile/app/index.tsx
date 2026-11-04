@@ -11,9 +11,10 @@ import { Alert, Platform, Pressable, ScrollView, Text, View, useWindowDimensions
 
 import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type SwimlaneModel } from '../src/board/components/BoardLevel';
+import { CardEditModal } from '../src/board/components/CardEditModal';
 import { CardFormModal, type CardDraft } from '../src/board/components/CardFormModal';
 import { DIRECTIONS, INITIAL_CARDS } from '../src/board/data';
-import { checkMove, moveCard, parentCandidates } from '../src/board/derive';
+import { checkColumnChange, checkMove, moveCard, parentCandidates, updateCard } from '../src/board/derive';
 import {
   COLUMNS,
   LEVELS,
@@ -164,6 +165,8 @@ export default function HomeScreen() {
   const [collapsedLevels, setCollapsedLevels] = useState<Record<string, boolean>>({});
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState<FormContext | null>(null);
+  /** Карточка, открытая на редактирование; null — попап закрыт. */
+  const [editedCardId, setEditedCardId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const toggleLevel = (levelId: LevelId) => {
@@ -234,7 +237,30 @@ export default function HomeScreen() {
     setForm(null);
   };
 
+  /**
+   * Изменение карточки: название и статус, если правило смены статуса выполнено.
+   * Ошибку возвращаем модалке — она показывается внутри попапа, а не над доской.
+   */
+  const saveCard = (card: Card, title: string, column: ColumnId): string | null => {
+    const check = checkColumnChange(cards, card, column);
+
+    if (!check.allowed) {
+      // Форма блокирует статусы сама, сюда попадаем только при гонке данных.
+      return check.reason;
+    }
+
+    setCards((prev) => updateCard(prev, card.id, { title, column }));
+    setEditedCardId(null);
+    setNotice(null);
+
+    return null;
+  };
+
   const draft = buildDraft(form, cards);
+
+  const editedCard = editedCardId === null ? null : (cards.find((card) => card.id === editedCardId) ?? null);
+  const editedCardLockedReason =
+    editedCard === null ? null : (checkColumnChange(cards, editedCard, editedCard.column).reason ?? null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -282,6 +308,7 @@ export default function HomeScreen() {
               onToggleColumn={toggleColumn}
               isCardMoveAllowed={isCardMoveAllowed}
               onMoveCard={handleMove}
+              onOpenCard={(card) => setEditedCardId(card.id)}
               onAddCard={(parentId, columnId) => openLaneForm(level, parentId, columnId)}
               onCreateInLevel={() => openLevelForm(level)}
               createLabel={LEVEL_CREATE_LABEL[level.id]}
@@ -295,6 +322,13 @@ export default function HomeScreen() {
       </ScrollView>
 
       <CardFormModal draft={draft} onCreate={createCard} onClose={() => setForm(null)} />
+
+      <CardEditModal
+        card={editedCard}
+        lockedReason={editedCardLockedReason}
+        onSave={saveCard}
+        onClose={() => setEditedCardId(null)}
+      />
     </View>
   );
 }

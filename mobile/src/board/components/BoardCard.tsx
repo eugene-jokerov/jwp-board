@@ -9,6 +9,8 @@
  * в работе (правило проверяет board/derive.ts и передаёт готовый результат).
  * По нажатию заблокированной стрелки вызываем onBlocked с текстом причины —
  * на web Alert не работает, поэтому решение «где показать» принимает экран.
+ *
+ * Клик по самой карточке (кроме стрелок) открывает форму редактирования.
  */
 
 import { Pressable, Text, View } from 'react-native';
@@ -23,9 +25,11 @@ interface BoardCardProps {
   canMoveNext: boolean;
   onMove: (direction: MoveDirection) => void;
   onBlocked: (direction: MoveDirection) => void;
+  /** Открыть карточку на редактирование. */
+  onPress: () => void;
 }
 
-export function BoardCard({ title, color, canMovePrev, canMoveNext, onMove, onBlocked }: BoardCardProps) {
+export function BoardCard({ title, color, canMovePrev, canMoveNext, onMove, onBlocked, onPress }: BoardCardProps) {
   const handlePress = (direction: MoveDirection, allowed: boolean) => {
     if (allowed) {
       onMove(direction);
@@ -36,7 +40,12 @@ export function BoardCard({ title, color, canMovePrev, canMoveNext, onMove, onBl
   };
 
   return (
-    <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Открыть карточку «${title}»`}
+      onPress={onPress}
+      className="flex-row overflow-hidden rounded border border-card-line bg-card active:bg-lane"
+    >
       {/* Полоса цвета родителя — единственный цветной акцент карточки. */}
       <View className="w-1" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
 
@@ -67,7 +76,7 @@ export function BoardCard({ title, color, canMovePrev, canMoveNext, onMove, onBl
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

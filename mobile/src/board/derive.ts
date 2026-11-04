@@ -55,6 +55,29 @@ export function checkMove(cards: readonly Card[], card: Card, direction: MoveDir
   return { allowed: neighborColumn(card.column, direction) !== null, reason: null };
 }
 
+/**
+ * Можно ли сменить колонку карточки из формы редактирования.
+ *
+ * Правило то же, что у стрелок: карточка с детьми в «В работе» заперта в своей
+ * колонке. Переход в текущую колонку — это не смена статуса, он разрешён всегда.
+ */
+export function checkColumnChange(cards: readonly Card[], card: Card, target: ColumnId): MoveCheck {
+  if (target === card.column) {
+    return { allowed: true, reason: null };
+  }
+
+  const active = activeChildren(cards, card.id);
+
+  if (active.length > 0) {
+    return {
+      allowed: false,
+      reason: `Нельзя сменить статус «${card.title}»: у неё есть зависимые карточки в работе (${active.length}). Сначала завершите или отмените их.`,
+    };
+  }
+
+  return { allowed: true, reason: null };
+}
+
 /** Новый массив карточек с переведённой в соседнюю колонку карточкой. */
 export function moveCard(cards: readonly Card[], cardId: string, direction: MoveDirection): Card[] {
   return cards.map((card) => {
@@ -66,6 +89,11 @@ export function moveCard(cards: readonly Card[], cardId: string, direction: Move
 
     return target ? { ...card, column: target } : card;
   });
+}
+
+/** Новый массив карточек с обновлённым названием и/или колонкой. */
+export function updateCard(cards: readonly Card[], cardId: string, patch: Pick<Card, 'title' | 'column'>): Card[] {
+  return cards.map((card) => (card.id === cardId ? { ...card, ...patch } : card));
 }
 
 /** Карточки свимлайна: у родителя — его дети, у корневого свимлайна — все карточки типа. */

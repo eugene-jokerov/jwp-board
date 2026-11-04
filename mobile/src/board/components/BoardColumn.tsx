@@ -19,6 +19,8 @@ interface BoardColumnProps {
   addLabel: string;
   isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
   onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Клик по карточке — открыть её на редактирование. */
+  onOpenCard: (card: Card) => void;
   onAddCard: () => void;
 }
 
@@ -31,6 +33,7 @@ export function BoardColumn({
   addLabel,
   isCardMoveAllowed,
   onMoveCard,
+  onOpenCard,
   onAddCard,
 }: BoardColumnProps) {
   const titleRow = (
@@ -60,6 +63,7 @@ export function BoardColumn({
           canMoveNext={isCardMoveAllowed(card, 'next')}
           onMove={(direction) => onMoveCard(card, direction)}
           onBlocked={(direction) => onMoveCard(card, direction)}
+          onPress={() => onOpenCard(card)}
         />
       ))}
 

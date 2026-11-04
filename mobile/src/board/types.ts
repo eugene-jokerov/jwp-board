@@ -58,9 +58,9 @@ export const COLUMNS: readonly BoardColumn[] = [
 ];
 
 export const LEVELS: readonly BoardLevel[] = [
-  { id: 'strategic', label: 'Стратегический' },
-  { id: 'tactical', label: 'Тактический' },
-  { id: 'operational', label: 'Операционный' },
+  { id: 'strategic', label: 'Стратегический уровень' },
+  { id: 'tactical', label: 'Тактический уровень' },
+  { id: 'operational', label: 'Операционный уровень' },
 ];
 
 /** Подпись типа карточки в единственном числе (для кнопок создания). */

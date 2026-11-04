@@ -150,6 +150,8 @@ interface BoardLevelProps {
   onToggleColumn: (key: string) => void;
   isCardMoveAllowed: (card: Card, direction: MoveDirection) => boolean;
   onMoveCard: (card: Card, direction: MoveDirection) => void;
+  /** Клик по карточке — открыть её на редактирование. */
+  onOpenCard: (card: Card) => void;
   onAddCard: (parentId: string | null, columnId: ColumnId) => void;
   onCreateInLevel: () => void;
   /** Подпись кнопки уровня, например «+ Инициатива». */
@@ -170,6 +172,7 @@ export function BoardLevel({
   onToggleColumn,
   isCardMoveAllowed,
   onMoveCard,
+  onOpenCard,
   onAddCard,
   onCreateInLevel,
   createLabel,
@@ -279,6 +282,7 @@ export function BoardLevel({
                 onToggleColumn={onToggleColumn}
                 isCardMoveAllowed={isCardMoveAllowed}
                 onMoveCard={onMoveCard}
+                onOpenCard={onOpenCard}
                 onAddCard={(columnId) => onAddCard(lane.parentId, columnId)}
               />
             ))
@@ -426,6 +430,7 @@ export function BoardLevel({
                                 canMoveNext={isCardMoveAllowed(card, 'next')}
                                 onMove={(direction) => onMoveCard(card, direction)}
                                 onBlocked={(direction) => onMoveCard(card, direction)}
+                                onPress={() => onOpenCard(card)}
                               />
                             ))}
                           </View>
