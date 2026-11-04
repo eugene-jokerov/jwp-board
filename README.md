@@ -112,6 +112,21 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8080
 > Приложение на Android-эмуляторе обращается к хосту по адресу `10.0.2.2`, поэтому
 > `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080`.
 
+### Стили: NativeWind (Tailwind CSS)
+
+Мобильный клиент стилизуется через NativeWind 4 — Tailwind-классы в `className`:
+
+```tsx
+<View className="flex-1 items-center justify-center bg-surface p-6">
+  <Text className="text-xl font-bold text-app">JWP Board</Text>
+</View>
+```
+
+- `mobile/tailwind.config.js` — сканируемые файлы (`app/**`, `src/**`), пресет `nativewind/preset`, палитра (`app`, `surface`, `card`, `muted`, `subtle`, `ok`, `err`).
+- `mobile/global.css` — директивы Tailwind; импортируется один раз в `mobile/app/_layout.tsx`.
+- `mobile/metro.config.js` / `mobile/babel.config.js` — обвязка NativeWind; менять без необходимости не нужно.
+- Контейнер `node` работает в watch-режиме (`CI=0`) и стартует с флагом `--clear`, поэтому правки классов подхватываются сразу; полный сброс кэша — `make restart`.
+
 ## Конфигурация
 
 Параметры compose — корневой `.env` (шаблон `.env.example`). Переменные Laravel — `backend/.env` (шаблон `backend/.env.example`, создаётся `make init-envs`).

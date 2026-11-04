@@ -1,3 +1,3 @@
 /// <reference types="expo/types" />
 
-// NOTE: This file is generated and auto-updated by Expo CLI.
+// NOTE: This file should not be edited and should be in your git ignore

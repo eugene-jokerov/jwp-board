@@ -49,6 +49,10 @@
 - Работа с API — только через `src/api/client.ts` (тонкая обёртка над `fetch`). Базовый URL берётся из `src/config/env.ts` (`process.env.EXPO_PUBLIC_API_URL`), **никогда не хардкодь адрес** в экранах.
 - Типы ответов API — в `src/api/types.ts`, пишутся вручную; кодогенерацию без запроса не вводи.
 - После правок TS обязательно `make typecheck`.
+- **Стилизация — NativeWind 4 (Tailwind CSS 3).** В разметке используй `className` (`<View className="flex-1 items-center bg-surface" />`). `StyleSheet` — только для того, что не выражается классами (анимации, вычисляемые размеры). Новые экраны — сразу на `className`.
+- Конфиги NativeWind: `mobile/tailwind.config.js` (содержимое сканируется в `app/**` и `src/**`; пресет `nativewind/preset`; фирменная палитра в `theme.extend.colors`), `mobile/metro.config.js` (`withNativeWind`, вход — `global.css`), `mobile/babel.config.js` (`babel-preset-expo` с `jsxImportSource: 'nativewind'` + пресет `nativewind/babel`), `mobile/nativewind-env.d.ts` (типы `className`, файл подключён в `tsconfig.json`).
+- CSS-директивы — в `mobile/global.css`; файл импортируется один раз в корневом `app/_layout.tsx` (требование expo-router/NativeWind: импорт только в layout, не в других экранах).
+- Dev-сервер работает в watch-режиме (`CI=0`); если правки классов не появляются в приложении — сбрось кэш: `make restart` (контейнер стартует с флагом `--clear`).
 - ESLint/линтеры не настраивай и не запускай без просьбы.
 
 ---
@@ -81,10 +85,15 @@ jwp-board/
 │  ├─ phpstan.neon.dist         # PHPStan + Larastan
 │  ├─ phpstan-baseline.neon     # принятые/унаследованные ошибки анализа
 │  └─ pint.json                 # стиль кода (Laravel Pint)
-└─ mobile/                      # Expo + React Native
+└─ mobile/                      # Expo + React Native (NativeWind/Tailwind)
    ├─ app/                      # экраны expo-router (сейчас заглушка)
    ├─ src/api/                  # client.ts, types.ts — единственная точка обращения к API
    ├─ src/config/env.ts         # EXPO_PUBLIC_API_URL и конфигурация окружения
+   ├─ global.css                # Tailwind-директивы, импорт в app/_layout.tsx
+   ├─ tailwind.config.js        # content, presets: nativewind/preset, палитра
+   ├─ metro.config.js           # withNativeWind(config, { input })
+   ├─ babel.config.js           # babel-preset-expo (jsxImportSource) + nativewind/babel
+   ├─ nativewind-env.d.ts       # типы className
    └─ app.json, package.json, tsconfig.json
 ```
 

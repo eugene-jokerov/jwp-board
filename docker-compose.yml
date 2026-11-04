@@ -98,13 +98,15 @@ services:
         container_name: ${COMPOSE_PROJECT_NAME:-jwp-board}-node
         working_dir: /app
         user: node
-        command: sh -c "npx expo start --lan"
+        command: sh -c "npx expo start --lan --clear"
         environment:
             # Адрес API для мобильного приложения. Для физического устройства/эмулятора
             # укажите IP хоста в локальной сети: http://192.168.x.x:8080
             EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:8080}
             EXPO_NO_TELEMETRY: "1"
-            CI: "1"
+            # CI=1 отключал наблюдение за файлами: правки на хосте не попадали в бандл
+            # без перезапуска контейнера. Watch-режим нужен для hot reload.
+            CI: "0"
         volumes:
             - ./mobile:/app
         ports:
