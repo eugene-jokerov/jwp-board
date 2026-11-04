@@ -28,6 +28,7 @@ interface SwimlaneHeaderProps {
  *
  * В одну строку название обрезалось (панель шириной 160 px), поэтому блок
  * разложен вертикально: название с цветной точкой сверху, счётчик и «+» — под ним.
+ * «+» создаёт карточку в колонке, которую передал `BoardLevel`.
  */
 export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCard }: SwimlaneHeaderProps) {
   return (

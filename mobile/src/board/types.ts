@@ -39,6 +39,16 @@ export interface Card {
   parentId: string | null;
 }
 
+/** Направление деятельности: родитель инициативы на стратегическом уровне. */
+export interface Direction {
+  id: string;
+  title: string;
+  color: string;
+}
+
+/** Родитель, которого можно выбрать в форме: карточка или направление. */
+export type ParentOptionModel = Card | Direction;
+
 /** Порядок колонок слева направо: по нему считаются соседние колонки. */
 export const COLUMNS: readonly BoardColumn[] = [
   { id: 'backlog', label: 'Беклог' },
@@ -58,6 +68,13 @@ export const KIND_LABEL: Record<CardKind, string> = {
   initiative: 'Инициатива',
   epic: 'Эпик',
   task: 'Задача',
+};
+
+/** Подпись родителя в форме создания: у инициативы родитель — направление. */
+export const PARENT_LABEL: Record<CardKind, string> = {
+  initiative: 'Направление',
+  epic: 'Инициатива',
+  task: 'Эпик',
 };
 
 /** Тип родительской карточки для каждого уровня: у стратегического родителя нет. */

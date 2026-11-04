@@ -30,12 +30,8 @@ import { FormAlert } from '../src/components/FormAlert';
 /** Ниже этой ширины доска переключается в одноколоночный режим (телефон). */
 const COMPACT_MAX_WIDTH = 900;
 
-/** Колонка, в которую попадает карточка, созданная из шапки уровня. */
-const LEVEL_CREATE_COLUMN: Record<LevelId, ColumnId> = {
-  strategic: 'in_progress',
-  tactical: 'backlog',
-  operational: 'backlog',
-};
+/** Колонка, в которую попадает карточка, созданная из шапки уровня: всегда «Беклог». */
+const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -150,7 +146,8 @@ function buildDraft(form: FormContext | null, cards: readonly Card[]): CardDraft
     laneId: fromLane ? form.parentId : null,
     laneColor: parent?.color ?? direction?.color ?? null,
     laneTitle: parent?.title ?? direction?.title ?? null,
-    parentOptions: fromLane || parentKind === null ? null : parentCandidates(cards, parentKind),
+    // У стратегического уровня родитель формы — направление, его выбирают из списка.
+    parentOptions: fromLane ? null : parentKind === null ? [...DIRECTIONS] : parentCandidates(cards, parentKind),
     allowNoParent: !fromLane && form.level === 'operational',
     columnLabel: columnLabel(form.column),
     columnId: form.column,
@@ -207,19 +204,21 @@ export default function HomeScreen() {
     setForm({ level: level.id, kind: LEVEL_CARD_KIND[level.id], parentId, column });
   };
 
-  /** Форма из шапки уровня: родителя выбирают вручную. */
+  /** Форма из шапки уровня: родителя выбирают вручную, карточка — в беклог. */
   const openLevelForm = (level: BoardLevelModel) => {
     setForm({
       level: level.id,
       kind: LEVEL_CARD_KIND[level.id],
       parentId: null,
-      column: LEVEL_CREATE_COLUMN[level.id],
+      column: LEVEL_CREATE_COLUMN,
     });
   };
 
   /** Создание карточки: цвет и родитель берутся из выбранной в форме связи. */
   const createCard = (cardDraft: CardDraft, title: string, parentId: string | null) => {
-    const parent = parentId === null ? null : cards.find((card) => card.id === parentId);
+    // Родитель инициативы — направление, у остальных уровней — карточка.
+    const parent =
+      DIRECTIONS.find((direction) => direction.id === parentId) ?? cards.find((card) => card.id === parentId) ?? null;
 
     setCards((prev) => [
       ...prev,

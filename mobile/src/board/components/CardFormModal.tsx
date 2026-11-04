@@ -13,8 +13,8 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
 import { EMPTY_COLOR } from '../colors';
-import type { Card, CardKind, ColumnId } from '../types';
-import { KIND_LABEL } from '../types';
+import type { CardKind, ColumnId, ParentOptionModel } from '../types';
+import { KIND_LABEL, PARENT_LABEL } from '../types';
 
 export interface CardDraft {
   kind: CardKind;
@@ -24,8 +24,11 @@ export interface CardDraft {
   laneColor: string | null;
   /** Название свимлайна — показываем в шапке формы. */
   laneTitle: string | null;
-  /** Допустимые родители (только карточки в работе); null — выбор не нужен. */
-  parentOptions: Card[] | null;
+  /**
+   * Допустимые родители: карточки в работе, а для инициативы — направления.
+   * null — выбор не нужен.
+   */
+  parentOptions: ParentOptionModel[] | null;
   /** Можно ли создать карточку без родителя (операционный уровень). */
   allowNoParent: boolean;
   columnLabel: string;
@@ -70,6 +73,15 @@ function ParentOption({ label, color, selected, onPress }: ParentOptionProps) {
   );
 }
 
+function parentErrorText(kind: CardKind): string {
+  return kind === 'initiative' ? 'Выберите направление.' : 'Выберите родителя (только карточки в колонке «В работе»).';
+}
+
+/** Пояснение под пустым списком родителей: у направлений оно не нужно. */
+function parentEmptyHint(kind: CardKind): string | null {
+  return kind === 'initiative' ? null : 'Нет карточек в колонке «В работе» — выбрать нечего.';
+}
+
 export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) {
   const [title, setTitle] = useState('');
   const [parentId, setParentId] = useState<string | null>(null);
@@ -94,24 +106,27 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const selectedParent = parentOptions?.find((card) => card.id === parentId) ?? null;
   const previewColor = draft.laneColor ?? selectedParent?.color ?? null;
 
+  // Безымянную карточку не создаём: кнопка ждёт название, а родителя —
+  // только если выбор обязателен (направление для инициативы, инициатива для эпика).
+  const createDisabled = title.trim() === '' || (parentRequired && selectedParent === null);
+
   const submit = () => {
-    const trimmed = title.trim();
-    const titleInvalid = trimmed === '';
+    const titleValue = title.trim();
     const parentInvalid = parentRequired && selectedParent === null;
 
-    if (titleInvalid) {
+    if (titleValue === '') {
       setTitleError('Укажите название.');
     }
 
     if (parentInvalid) {
-      setParentError('Выберите родителя (только карточки в колонке «В работе»).');
+      setParentError(parentErrorText(draft.kind));
     }
 
-    if (titleInvalid || parentInvalid) {
+    if (titleValue === '' || parentInvalid) {
       return;
     }
 
-    onCreate(draft, trimmed, draft.laneId ?? parentId);
+    onCreate(draft, titleValue, draft.laneId ?? parentId);
     setTitle('');
     setParentId(null);
     setTitleError(null);
@@ -144,7 +159,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
           {parentOptions !== null ? (
             <View className="gap-1.5">
-              <Text className="text-sm font-medium text-app">{draft.kind === 'epic' ? 'Инициатива' : 'Эпик'}</Text>
+              <Text className="text-sm font-medium text-app">{PARENT_LABEL[draft.kind]}</Text>
 
               <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
                 {draft.allowNoParent ? (
@@ -174,7 +189,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
               </ScrollView>
 
               {parentOptions.length === 0 && !draft.allowNoParent ? (
-                <Text className="text-xs text-err-fg">Нет карточек в колонке «В работе» — выбрать нечего.</Text>
+                <Text className="text-xs text-err-fg">{parentEmptyHint(draft.kind) ?? 'Выбрать нечего.'}</Text>
               ) : null}
 
               {parentError ? <Text className="text-xs text-err-fg">{parentError}</Text> : null}
@@ -203,8 +218,13 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: createDisabled }}
+              disabled={createDisabled}
               onPress={submit}
-              className="h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
+              className={[
+                'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
+                createDisabled ? 'opacity-60' : '',
+              ].join(' ')}
             >
               <Text className="text-sm font-semibold text-white">Создать</Text>
             </Pressable>
