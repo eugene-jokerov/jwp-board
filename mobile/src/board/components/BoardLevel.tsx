@@ -217,17 +217,17 @@ export function BoardLevel({
     setCollapsedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
   };
 
-  /** Запоминаем высоту группы карточек: берём максимальную по всем колонкам. */
+  /**
+   * Запоминаем высоту группы карточек свимлайна.
+   *
+   * В группу пишется последнее измерение: оно и есть её текущая высота.
+   * Раньше меньшее измерение игнорировалось, чтобы ячейка названия «не
+   * сжималась» на промежуточном layout, но из-за этого после удаления карточки
+   * (или переноса) высота оставалась прежней — колонка не адаптировалась.
+   * Высоту ячейки названия задаёт самая высокая группа: её выбирает `laneHeights`.
+   */
   const reportLaneHeight = (laneId: string, height: number) => {
-    setLaneHeights((prev) => {
-      // Ячейка названия должна покрыть самую высокую группу карточек свимлайна,
-      // поэтому меньшее измерение игнорируем: повторный layout не должен её сжимать.
-      if (prev[laneId] !== undefined && prev[laneId] >= height) {
-        return prev;
-      }
-
-      return { ...prev, [laneId]: height };
-    });
+    setLaneHeights((prev) => (prev[laneId] === height ? prev : { ...prev, [laneId]: height }));
   };
 
   const laneForm = (
@@ -427,18 +427,23 @@ export function BoardLevel({
                         const laneCards = lane.cards.filter((card) => card.column === column.id);
 
                         // Пустая группа сохраняет высоту строки: иначе карточки следующих
-                        // свимлайнов поднимутся и уедут из-под своего названия.
+                        // свимлайнов поднимутся и уедут из-под своего названия. Высота берётся
+                        // из измерений групп этого свимлайна (после удаления карточки она
+                        // тоже уменьшается) и не опускается ниже строки названия.
                         if (laneCards.length === 0) {
                           return (
                             <View key={lane.id} style={{ minHeight: laneHeights[lane.id] ?? LANE_TITLE_MIN_HEIGHT }} />
                           );
                         }
 
+                        // Высоту группы задаёт контент: карточки переменной высоты, и
+                        // после удаления или переноса она должна уменьшаться. Ячейка
+                        // названия свимлайна при этом тянется по самой высокой группе —
+                        // это делает `laneHeights` в панели названий.
                         return (
                           <View
                             key={lane.id}
                             className="gap-2"
-                            style={laneHeights[lane.id] === undefined ? undefined : { minHeight: laneHeights[lane.id] }}
                             onLayout={(event) => reportLaneHeight(lane.id, event.nativeEvent.layout.height)}
                           >
                             {laneCards.map((card) => (
