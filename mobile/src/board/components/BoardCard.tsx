@@ -13,13 +13,17 @@
  * «где показать» принимает экран.
  *
  * Клик по названию карточки открывает форму редактирования.
+ * Признак «без проекта» — отсутствие родителя, а не отсутствие цвета:
+ * у такой карточки цвет служебный (нейтральный c0).
  */
 
 import { Pressable, Text, View } from 'react-native';
 
 import { CheckIcon, PlayIcon } from './BoardIcons';
 import { NEUTRAL_COLOR } from '../colors';
+import { directionColorHex } from '../directionColors';
 import type { CardAction } from '../derive';
+import type { CardKind } from '../types';
 
 /** Иконка действия по целевой колонке: «В работе» — play, «Готово» — галочка. */
 function ActionIcon({ target }: { target: CardAction['target'] }) {
@@ -28,7 +32,12 @@ function ActionIcon({ target }: { target: CardAction['target'] }) {
 
 interface BoardCardProps {
   title: string;
+  /** Цвет родителя ключом палитры; у карточки без родителя — служебный c0. */
   color: string | null;
+  /** Есть ли у карточки родитель: если нет — под названием подпись «Без проекта». */
+  hasParent: boolean;
+  /** Тип карточки: у проекта без родителя подпись «Без инициативы». */
+  kind: CardKind;
   /** Действие над колонками; null — в этой колонке действий нет. */
   action: CardAction | null;
   /** Выполнить действие (перевод в следующую колонку). */
@@ -37,11 +46,14 @@ interface BoardCardProps {
   onPress: () => void;
 }
 
-export function BoardCard({ title, color, action, onAction, onPress }: BoardCardProps) {
+export function BoardCard({ title, color, hasParent, kind, action, onAction, onPress }: BoardCardProps) {
+  // У карточки без родителя подпись говорит, чего именно ей не хватает.
+  const withoutParentLabel = hasParent ? '' : kind === 'epic' ? 'Без инициативы' : 'Без проекта';
+
   return (
     <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
       {/* Полоса цвета родителя — единственный цветной акцент карточки. */}
-      <View className="w-1" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+      <View className="w-1" style={{ backgroundColor: directionColorHex(color) ?? NEUTRAL_COLOR }} />
 
       <View className="flex-1 gap-1.5 px-2.5 py-2">
         {/* Открытие карточки — отдельная область над названием: кнопка-иконка
@@ -60,7 +72,7 @@ export function BoardCard({ title, color, action, onAction, onPress }: BoardCard
 
         <View className="flex-row items-center justify-between gap-2">
           <Text className="flex-1 text-[11px] text-muted" numberOfLines={1}>
-            {color === null ? 'Без проекта' : ''}
+            {withoutParentLabel}
           </Text>
 
           {action ? (

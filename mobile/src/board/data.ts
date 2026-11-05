@@ -2,19 +2,22 @@
  * Демо-состояние доски.
  *
  * Backend ещё не подключён, поэтому данные статичные: три направления
- * (красный, синий, зелёный), инициативы в разных колонках, проекты под инициативами
+ * (цвета c1, c2, c3 — ключи палитры направлений), инициативы в разных колонках, проекты под инициативами
  * «в работе» и задачи под проектами «в работе». Отдельно добавлены проекты без инициативы
- * и задачи без проекта — так видно карточки без цвета.
+ * и задачи без проекта — у них служебный нейтральный цвет c0.
+ *
+ * Направления дальше живут в состоянии экрана: здесь только стартовый набор.
  */
 
-import type { Card, CardKind, ColumnId } from './types';
+import { UNPARENTED_CARD_COLOR } from './directionColors';
+import type { Card, CardKind, ColumnId, Direction } from './types';
 
 /** Три направления деятельности стратегического уровня. */
-export const DIRECTIONS = [
-  { id: 'dir-1', title: 'Направление 1', color: '#ef4444' },
-  { id: 'dir-2', title: 'Направление 2', color: '#3b82f6' },
-  { id: 'dir-3', title: 'Направление 3', color: '#22c55e' },
-] as const;
+export const DIRECTIONS: readonly Direction[] = [
+  { id: 'dir-1', title: 'Направление 1', color: 'c1' },
+  { id: 'dir-2', title: 'Направление 2', color: 'c2' },
+  { id: 'dir-3', title: 'Направление 3', color: 'c3' },
+];
 
 type CardSeed = [id: string, title: string, column: ColumnId, parentId: string | null];
 
@@ -63,12 +66,15 @@ const TASK_SEEDS: readonly CardSeed[] = [
   ['task-8', 'Задача без проекта 3', 'canceled', null],
 ];
 
-/** Дочерние карточки наследуют цвет родителя; у карточки без родителя цвета нет. */
+/**
+ * Дочерние карточки наследуют цвет родителя; у карточки без родителя — служебный
+ * нейтральный `c0`: направления у неё нет, но цвет всё равно нужен (полоска карточки).
+ */
 function inheritedColor(cards: readonly Card[], seed: CardSeed): string | null {
   const [, , , parentId] = seed;
   const parent = cards.find((card) => card.id === parentId);
 
-  return parent ? parent.color : null;
+  return parent ? parent.color : UNPARENTED_CARD_COLOR;
 }
 
 const initiativeColor = (seed: CardSeed): string | null => {

@@ -62,6 +62,8 @@ export function BoardColumn({
           key={card.id}
           title={card.title}
           color={card.color}
+          hasParent={card.parentId !== null}
+          kind={card.kind}
           action={cardAction(card)}
           onAction={() => onCardAction(card)}
           onPress={() => onOpenCard(card)}

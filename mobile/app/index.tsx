@@ -13,8 +13,18 @@ import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type SwimlaneModel } from '../src/board/components/BoardLevel';
 import { CardEditModal } from '../src/board/components/CardEditModal';
 import { CardFormModal, type CardDraft } from '../src/board/components/CardFormModal';
+import { DirectionsModal } from '../src/board/components/DirectionsModal';
+import { LevelSettingsMenu } from '../src/board/components/LevelSettingsMenu';
 import { DIRECTIONS, INITIAL_CARDS } from '../src/board/data';
-import { cardAction, checkColumnChange, parentCandidates, updateCard } from '../src/board/derive';
+import { UNPARENTED_CARD_COLOR, directionColorHex } from '../src/board/directionColors';
+import {
+  cardAction,
+  checkColumnChange,
+  checkDirectionDelete,
+  parentCandidates,
+  recolorDirection,
+  updateCard,
+} from '../src/board/derive';
 import {
   COLUMNS,
   LEVELS,
@@ -23,6 +33,7 @@ import {
   type Card,
   type CardKind,
   type ColumnId,
+  type Direction,
   type LevelId,
 } from '../src/board/types';
 import { FormAlert } from '../src/components/FormAlert';
@@ -72,13 +83,18 @@ function columnLabel(column: ColumnId): string {
  * - тактический/операционный — родительские карточки из «В работе»; карточки
  *   родителей вне работы и карточки без родителя собираются в свимлайн «без родителя».
  */
-function swimlanesOf(cards: readonly Card[], level: BoardLevelModel): SwimlaneModel[] {
+function swimlanesOf(
+  cards: readonly Card[],
+  directions: readonly Direction[],
+  level: BoardLevelModel,
+): SwimlaneModel[] {
   if (level.id === 'strategic') {
-    return DIRECTIONS.map((direction) => ({
+    return directions.map((direction) => ({
       id: direction.id,
       parentId: direction.id,
       title: direction.title,
-      color: direction.color,
+      // У направления хранится ключ палитры, свимлайн рисуется оттенком.
+      color: directionColorHex(direction.color),
       cards: cards.filter((card) => card.kind === 'initiative' && card.parentId === direction.id),
     }));
   }
@@ -98,7 +114,8 @@ function swimlanesOf(cards: readonly Card[], level: BoardLevelModel): SwimlaneMo
     id: parent.id,
     parentId: parent.id,
     title: parent.title,
-    color: parent.color,
+    // У карточки-родителя хранится ключ палитры, свимлайн рисуется оттенком.
+    color: directionColorHex(parent.color),
     cards: children.filter((card) => card.parentId === parent.id),
   }));
 
@@ -109,7 +126,8 @@ function swimlanesOf(cards: readonly Card[], level: BoardLevelModel): SwimlaneMo
       id: '__no_parent__',
       parentId: null,
       title: childKind === 'epic' ? 'Без инициативы' : 'Без проекта',
-      color: null,
+      // Свимлайн «без родителя» — это и есть служебный цвет c0.
+      color: directionColorHex(UNPARENTED_CARD_COLOR),
       cards: orphaned,
     });
   }
@@ -129,7 +147,11 @@ function nextCardId(cards: readonly Card[]): string {
 }
 
 /** Черновик для модалки: вид формы зависит от того, откуда её открыли. */
-function buildDraft(form: FormContext | null, cards: readonly Card[]): CardDraft | null {
+function buildDraft(
+  form: FormContext | null,
+  cards: readonly Card[],
+  directions: readonly Direction[],
+): CardDraft | null {
   if (form === null) {
     return null;
   }
@@ -137,7 +159,7 @@ function buildDraft(form: FormContext | null, cards: readonly Card[]): CardDraft
   const level = LEVELS.find((item) => item.id === form.level) ?? LEVELS[0];
   const parentKind = PARENT_KIND[form.level];
   const parent = cards.find((card) => card.id === form.parentId) ?? null;
-  const direction = DIRECTIONS.find((item) => item.id === form.parentId) ?? null;
+  const direction = directions.find((item) => item.id === form.parentId) ?? null;
   // Родитель из свимлайна: цвет известен сразу, выбирать ничего не нужно.
   const fromLane = parent !== null || direction !== null;
 
@@ -147,7 +169,7 @@ function buildDraft(form: FormContext | null, cards: readonly Card[]): CardDraft
     laneColor: parent?.color ?? direction?.color ?? null,
     laneTitle: parent?.title ?? direction?.title ?? null,
     // У стратегического уровня родитель формы — направление, его выбирают из списка.
-    parentOptions: fromLane ? null : parentKind === null ? [...DIRECTIONS] : parentCandidates(cards, parentKind),
+    parentOptions: fromLane ? null : parentKind === null ? [...directions] : parentCandidates(cards, parentKind),
     allowNoParent: !fromLane && form.level === 'operational',
     columnLabel: columnLabel(form.column),
     columnId: form.column,
@@ -161,12 +183,18 @@ export default function HomeScreen() {
   const compact = width < COMPACT_MAX_WIDTH;
 
   const [cards, setCards] = useState<Card[]>(() => [...INITIAL_CARDS]);
+  // Направления — состояние экрана: доска пока не связана с API.
+  const [directions, setDirections] = useState<Direction[]>(() => [...DIRECTIONS]);
   const [collapsedLevels, setCollapsedLevels] = useState<Record<string, boolean>>({});
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
   const [editedCardId, setEditedCardId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
+  const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
+  /** true — открыт попап настроек направлений. */
+  const [directionsOpen, setDirectionsOpen] = useState(false);
 
   const toggleLevel = (levelId: LevelId) => {
     setCollapsedLevels((prev) => ({ ...prev, [levelId]: !prev[levelId] }));
@@ -174,6 +202,82 @@ export default function HomeScreen() {
 
   const toggleColumn = (key: string) => {
     setExpandedColumns((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  /** Следующий свободный id направления: демо-состояние живёт только в памяти. */
+  const nextDirectionId = (items: readonly Direction[]): string => {
+    const max = items.reduce((acc, item) => {
+      const numeric = Number.parseInt(item.id.replace(/\D/g, ''), 10);
+
+      return Number.isNaN(numeric) ? acc : Math.max(acc, numeric);
+    }, 0);
+
+    return `dir-${max + 1}`;
+  };
+
+  /** Название направления не должно повторяться: свимлайны на доске были бы неразличимы. */
+  const directionTitleError = (items: readonly Direction[], title: string, exceptId: string | null): string | null => {
+    const normalized = title.trim().toLowerCase();
+    const duplicate = items.some((item) => item.id !== exceptId && item.title.trim().toLowerCase() === normalized);
+
+    return duplicate ? 'Направление с таким названием уже есть.' : null;
+  };
+
+  /**
+   * Цвет направления уникален: одинаковые цвета слили бы свимлайны и карточки.
+   * В палитре занятые цвета уже недоступны, здесь — проверка на всякий случай.
+   */
+  const directionColorError = (items: readonly Direction[], color: string, exceptId: string | null): string | null =>
+    items.some((item) => item.id !== exceptId && item.color === color)
+      ? 'Этот цвет уже занят другим направлением.'
+      : null;
+
+  /** Добавить направление; возвращает текст ошибки для попапа или null. */
+  const addDirection = (title: string, color: string): string | null => {
+    const error = directionTitleError(directions, title, null) ?? directionColorError(directions, color, null);
+
+    if (error !== null) {
+      return error;
+    }
+
+    setDirections((prev) => [...prev, { id: nextDirectionId(prev), title, color }]);
+
+    return null;
+  };
+
+  /**
+   * Изменить направление.
+   *
+   * Смена цвета перекрашивает и карточки направления: цвет карточки — это цвет
+   * её направления, иначе полоски карточек разъедутся с точкой свимлайна.
+   */
+  const updateDirection = (id: string, title: string, color: string): string | null => {
+    const error = directionTitleError(directions, title, id) ?? directionColorError(directions, color, id);
+
+    if (error !== null) {
+      return error;
+    }
+
+    const current = directions.find((item) => item.id === id) ?? null;
+
+    setDirections((prev) => prev.map((item) => (item.id === id ? { ...item, title, color } : item)));
+
+    if (current !== null && current.color !== color) {
+      setCards((prev) => recolorDirection(prev, id, color));
+    }
+
+    return null;
+  };
+
+  /** Удалить направление: правило проверяется в попапе, здесь — последний рубеж. */
+  const removeDirection = (id: string) => {
+    const direction = directions.find((item) => item.id === id) ?? null;
+
+    if (direction === null || !checkDirectionDelete(cards, direction).allowed) {
+      return;
+    }
+
+    setDirections((prev) => prev.filter((item) => item.id !== id));
   };
 
   /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
@@ -217,7 +321,7 @@ export default function HomeScreen() {
   const createCard = (cardDraft: CardDraft, title: string, parentId: string | null) => {
     // Родитель инициативы — направление, у остальных уровней — карточка.
     const parent =
-      DIRECTIONS.find((direction) => direction.id === parentId) ?? cards.find((card) => card.id === parentId) ?? null;
+      directions.find((direction) => direction.id === parentId) ?? cards.find((card) => card.id === parentId) ?? null;
 
     setCards((prev) => [
       ...prev,
@@ -226,7 +330,8 @@ export default function HomeScreen() {
         kind: cardDraft.kind,
         title,
         column: cardDraft.columnId,
-        color: parent ? parent.color : null,
+        // Карточка без родителя получает служебный нейтральный цвет c0.
+        color: parent ? parent.color : UNPARENTED_CARD_COLOR,
         parentId: parent ? parent.id : null,
       },
     ]);
@@ -252,7 +357,7 @@ export default function HomeScreen() {
     return null;
   };
 
-  const draft = buildDraft(form, cards);
+  const draft = buildDraft(form, cards, directions);
 
   const editedCard = editedCardId === null ? null : (cards.find((card) => card.id === editedCardId) ?? null);
   const editedCardLockedReason =
@@ -285,7 +390,7 @@ export default function HomeScreen() {
         {notice ? <FormAlert message={notice} /> : null}
 
         {LEVELS.map((level) => {
-          const lanes = swimlanesOf(cards, level);
+          const lanes = swimlanesOf(cards, directions, level);
           const parentKind = PARENT_KIND[level.id];
           // На стратегическом родитель (направление) всегда есть; ниже нужен хотя бы
           // один родитель в работе, иначе выбрать его в форме не из чего.
@@ -310,12 +415,44 @@ export default function HomeScreen() {
               createLabel={LEVEL_CREATE_LABEL[level.id]}
               canCreate={canCreate}
               createHint={canCreate ? null : LEVEL_CREATE_HINT[level.id]}
+              onOpenSettings={() => setSettingsLevel(level.id)}
             />
           );
         })}
 
         <Text className="px-1 pb-2 text-center text-[11px] text-subtle">Демо-данные: доска ещё не связана с API</Text>
       </ScrollView>
+
+      {/* Меню настроек уровня: иконка есть на всех уровнях, но пункты свои.
+          Сейчас «Направления» есть только у стратегического — там они и живут. */}
+      <LevelSettingsMenu
+        visible={settingsLevel !== null}
+        levelLabel={LEVELS.find((item) => item.id === settingsLevel)?.label ?? ''}
+        items={
+          settingsLevel === 'strategic'
+            ? [
+                {
+                  label: 'Направления',
+                  onPress: () => {
+                    setSettingsLevel(null);
+                    setDirectionsOpen(true);
+                  },
+                },
+              ]
+            : []
+        }
+        onClose={() => setSettingsLevel(null)}
+      />
+
+      <DirectionsModal
+        visible={directionsOpen}
+        directions={directions}
+        onAdd={addDirection}
+        onUpdate={updateDirection}
+        onDelete={removeDirection}
+        deleteReason={(direction) => checkDirectionDelete(cards, direction).reason}
+        onClose={() => setDirectionsOpen(false)}
+      />
 
       <CardFormModal draft={draft} onCreate={createCard} onClose={() => setForm(null)} />
 

@@ -19,7 +19,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardCard } from './BoardCard';
-import { ChevronLeftIcon, ChevronRightIcon, MenuIcon } from './BoardIcons';
+import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './BoardIcons';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
 import type { CardAction } from '../derive';
@@ -134,6 +134,7 @@ export interface SwimlaneModel {
   /** Родительская карточка, у свимлайна «без родителя» — null. */
   parentId: string | null;
   title: string;
+  /** Оттенок точки свимлайна (HEX), а не ключ палитры: компоненты рисуют его как есть. */
   color: string | null;
   cards: Card[];
 }
@@ -156,6 +157,8 @@ interface BoardLevelProps {
   onOpenCard: (card: Card) => void;
   onAddCard: (parentId: string | null, columnId: ColumnId) => void;
   onCreateInLevel: () => void;
+  /** Открыть меню «Настройки уровня» (иконка в строке с кнопкой создания). */
+  onOpenSettings: () => void;
   /** Подпись кнопки уровня, например «+ Инициатива». */
   createLabel: string;
   /** Можно ли создать карточку уровня (например, нет инициатив в работе). */
@@ -177,6 +180,7 @@ export function BoardLevel({
   onOpenCard,
   onAddCard,
   onCreateInLevel,
+  onOpenSettings,
   createLabel,
   canCreate,
   createHint,
@@ -235,7 +239,19 @@ export function BoardLevel({
         </Text>
       </Pressable>
 
-      {createHint ? <Text className="flex-1 text-[11px] text-muted">{createHint}</Text> : null}
+      {/* Подсказка занимает свободное место, поэтому иконка настроек прижата
+          к правому краю колонки свимлайнов — над их правой границей. */}
+      {createHint ? <Text className="flex-1 text-[11px] text-muted">{createHint}</Text> : <View className="flex-1" />}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Настройки уровня «${level.label}»`}
+        onPress={onOpenSettings}
+        hitSlop={6}
+        className="h-7 w-7 items-center justify-center rounded-lg active:bg-lane"
+      >
+        <SettingsIcon />
+      </Pressable>
     </View>
   );
 
@@ -425,6 +441,8 @@ export function BoardLevel({
                                 key={card.id}
                                 title={card.title}
                                 color={card.color}
+                                hasParent={card.parentId !== null}
+                                kind={card.kind}
                                 action={cardAction(card)}
                                 onAction={() => onCardAction(card)}
                                 onPress={() => onOpenCard(card)}

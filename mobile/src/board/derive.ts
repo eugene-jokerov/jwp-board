@@ -5,7 +5,7 @@
  * поэтому их можно свободно вызывать в теле компонента.
  */
 
-import { COLUMNS, type Card, type CardKind, type ColumnId, type MoveDirection } from './types';
+import { COLUMNS, type Card, type CardKind, type ColumnId, type Direction, type MoveDirection } from './types';
 
 /** Индекс колонки в фиксированном порядке доски. */
 function columnIndex(column: ColumnId): number {
@@ -119,6 +119,63 @@ export function updateCard(cards: readonly Card[], cardId: string, patch: Pick<C
 /** Карточки свимлайна: у родителя — его дети, у корневого свимлайна — все карточки типа. */
 export function laneCards(cards: readonly Card[], kind: CardKind, laneId: string | null): Card[] {
   return cards.filter((card) => (laneId === null ? card.kind === kind : card.parentId === laneId));
+}
+
+/**
+ * Все потомки карточки на любую глубину: проекты инициативы, задачи проектов.
+ *
+ * Направления — не карточки, поэтому их родителем в обход иерархии не выбраться:
+ * обход идёт только по `parentId` карточек.
+ */
+function collectDescendants(cards: readonly Card[], cardId: string, acc: Card[] = []): Card[] {
+  cards.forEach((card) => {
+    if (card.parentId === cardId) {
+      acc.push(card);
+      collectDescendants(cards, card.id, acc);
+    }
+  });
+
+  return acc;
+}
+
+/** Карточки направления: инициативы и все их потомки на других уровнях. */
+export function directionCards(cards: readonly Card[], directionId: string): Card[] {
+  return cards
+    .filter((card) => card.parentId === directionId)
+    .flatMap((card) => [card, ...collectDescendants(cards, card.id)]);
+}
+
+/**
+ * Можно ли удалить направление.
+ *
+ * Удаление запрещено, если в направлении есть карточки в любой колонке —
+ * иначе инициативы остались бы без родителя. Карточки в «Отмене» и «Готово»
+ * тоже считаются: они принадлежат направлению и отображаются в его свимлайне.
+ */
+export function checkDirectionDelete(cards: readonly Card[], direction: Direction): MoveCheck {
+  const total = directionCards(cards, direction.id).length;
+
+  if (total > 0) {
+    return {
+      allowed: false,
+      reason: `В направлении «${direction.title}» есть карточки (${total}). Удаление запрещено: сначала перенесите или удалите их.`,
+    };
+  }
+
+  return { allowed: true, reason: null };
+}
+
+/**
+ * Перекрасить направление и все его карточки.
+ *
+ * Цвет карточки — это цвет её направления, поэтому после смены цвета точки
+ * свимлайна карточки обязаны перекраситься каскадом: инициативы, а за ними
+ * проекты и задачи. Карточки без родителя своего цвета не имеют и не меняются.
+ */
+export function recolorDirection(cards: readonly Card[], directionId: string, color: string): Card[] {
+  const affected = new Set(directionCards(cards, directionId).map((card) => card.id));
+
+  return cards.map((card) => (affected.has(card.id) ? { ...card, color } : card));
 }
 
 /** Только карточки указанной колонки (в исходном порядке). */

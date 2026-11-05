@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/**
+ * Палитра направлений — универсальные ключи c0…c19.
+ *
+ * c0 — служебный нейтральный цвет карточек без родителя: направлению его не выбрать.
+ *
+ * В данных (и в базе) у направления хранится только ключ цвета, а оттенок
+ * берётся отсюда: переменные видят и Tailwind-тема (`palette.c1`), и web-интерфейс
+ * через резолвер `directionColorHex`. Красного в палитре нет: он зарезервирован
+ * под блокировки, нарушение VIP-лимитов и ошибки.
+ * На native CSS-переменных нет — те же оттенки продублированы в src/board/directionColors.ts.
+ */
+:root {
+  /* Служебный нейтральный цвет карточек без родителя. */
+  --color-direction-c0: #a8a29e;
+  --color-direction-c1: #3b82f6;
+  --color-direction-c2: #f59e0b;
+  --color-direction-c3: #22c55e;
+  --color-direction-c4: #8b5cf6;
+  --color-direction-c5: #06b6d4;
+  --color-direction-c6: #ec4899;
+  --color-direction-c7: #84cc16;
+  --color-direction-c8: #6366f1;
+  --color-direction-c9: #f97316;
+  --color-direction-c10: #10b981;
+  --color-direction-c11: #d946ef;
+  --color-direction-c12: #0ea5e9;
+  --color-direction-c13: #ca8a04;
+  --color-direction-c14: #64748b;
+  --color-direction-c15: #7c3aed;
+  --color-direction-c16: #14b8a6;
+  --color-direction-c17: #b45309;
+  --color-direction-c18: #0891b2;
+  --color-direction-c19: #db2777;
+}

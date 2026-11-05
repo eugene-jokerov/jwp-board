@@ -33,7 +33,11 @@ export interface Card {
   kind: CardKind;
   title: string;
   column: ColumnId;
-  /** Цвет наследуется от родителя; null — карточка без цвета (задача без проекта). */
+  /**
+   * Цвет наследуется от родителя. У карточки с родителем это ключ палитры
+   * направлений (`c1`…`c20`) — то же значение, что хранится в базе; null —
+   * карточка без цвета (задача без проекта).
+   */
   color: string | null;
   /** Родительская карточка: инициатива для проекта, проект для задачи. */
   parentId: string | null;
@@ -43,6 +47,11 @@ export interface Card {
 export interface Direction {
   id: string;
   title: string;
+  /**
+   * Ключ цвета из палитры направлений (`c1`…`c20`) — универсальное значение,
+   * которое хранится в базе данных. Оттенок для интерфейса даёт
+   * `directionColorHex` из `directionColors.ts`.
+   */
   color: string;
 }
 

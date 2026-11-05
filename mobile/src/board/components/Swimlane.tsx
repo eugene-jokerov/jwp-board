@@ -9,7 +9,6 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
-import { NEUTRAL_COLOR } from '../colors';
 import type { CardAction } from '../derive';
 import { COLUMNS, type Card, type ColumnId } from '../types';
 
@@ -35,7 +34,7 @@ export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCar
   return (
     <View className="gap-1.5">
       <View className="flex-row items-start gap-1.5">
-        <View className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+        <View className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
 
         <Text className="flex-1 text-[13px] font-semibold leading-4 text-ink" numberOfLines={3}>
           {title}
@@ -97,7 +96,7 @@ export function Swimlane({
   return (
     <View className="gap-2">
       <View className="flex-row items-center gap-2">
-        <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color ?? NEUTRAL_COLOR }} />
+        <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
 
         <Text className="flex-1 text-sm font-semibold text-app" numberOfLines={1}>
           {title}

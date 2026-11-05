@@ -9,7 +9,7 @@
 
 import { View } from 'react-native';
 
-import { CircleCheck, Play } from 'lucide-react-native';
+import { CircleCheck, Play, Settings } from 'lucide-react-native';
 
 /** Три точки в столбик — «меню колонки». */
 export function MenuIcon() {
@@ -43,4 +43,12 @@ export function PlayIcon() {
 /** Иконка «Завершить задачу»: галочка в круге. */
 export function CheckIcon() {
   return <CircleCheck size={14} color={ACTION_ICON_COLOR} />;
+}
+
+/** Цвет служебных иконок, которые стоят на светлом фоне. */
+const CONTROL_ICON_COLOR = '#6b7280';
+
+/** Иконка «Настройки уровня»: шестерёнка в строке с кнопкой создания. */
+export function SettingsIcon() {
+  return <Settings size={14} color={CONTROL_ICON_COLOR} />;
 }

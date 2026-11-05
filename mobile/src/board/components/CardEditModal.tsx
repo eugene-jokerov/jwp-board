@@ -13,6 +13,7 @@ import { Modal, Pressable, Text, View } from 'react-native';
 import { FormAlert } from '../../components/FormAlert';
 import { TextField } from '../../components/TextField';
 import { EMPTY_COLOR } from '../colors';
+import { directionColorHex } from '../directionColors';
 import { COLUMNS, KIND_LABEL, type Card, type ColumnId } from '../types';
 
 interface CardEditModalProps {
@@ -156,7 +157,7 @@ function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps
 
             <View
               className="h-4 w-4 rounded-full border border-border"
-              style={{ backgroundColor: card.color ?? EMPTY_COLOR }}
+              style={{ backgroundColor: directionColorHex(card.color) ?? EMPTY_COLOR }}
             />
           </View>
 

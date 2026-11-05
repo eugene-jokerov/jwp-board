@@ -5,7 +5,7 @@
  * - «с родителем из свимлайна» — родитель предопределён, цвет уже известен;
  * - «с выбором родителя» — карточку уровня создают кнопкой в шапке уровня,
  *   родитель обязателен (для тактики/операционного — только из «В работе»),
- *   у операционного уровня есть опция «Без проекта».
+ *   у операционного уровня есть опция «Без проекта» (карточка получает служебный цвет c0).
  */
 
 import { useState } from 'react';
@@ -13,6 +13,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
 import { EMPTY_COLOR } from '../colors';
+import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
 import { KIND_LABEL, PARENT_LABEL } from '../types';
 
@@ -62,7 +63,10 @@ function ParentOption({ label, color, selected, onPress }: ParentOptionProps) {
         selected ? 'border-app bg-surface' : 'border-border',
       ].join(' ')}
     >
-      <View className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: color ?? EMPTY_COLOR }} />
+      <View
+        className="h-3 w-3 rounded-full border border-border"
+        style={{ backgroundColor: directionColorHex(color) ?? EMPTY_COLOR }}
+      />
 
       <Text className="flex-1 text-sm text-app" numberOfLines={1}>
         {label}
@@ -164,8 +168,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
               <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
                 {draft.allowNoParent ? (
                   <ParentOption
-                    label="Без проекта (без цвета)"
-                    color={null}
+                    label="Без проекта (нейтральный цвет)"
+                    color={UNPARENTED_CARD_COLOR}
                     selected={parentId === null}
                     onPress={() => {
                       setParentId(null);
@@ -201,7 +205,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
             <View
               className="h-4 w-4 rounded-full border border-border"
-              style={{ backgroundColor: previewColor ?? EMPTY_COLOR }}
+              style={{ backgroundColor: directionColorHex(previewColor) ?? EMPTY_COLOR }}
             />
 
             <Text className="text-xs text-muted">{previewColor === null ? 'без цвета' : 'наследуется'}</Text>
