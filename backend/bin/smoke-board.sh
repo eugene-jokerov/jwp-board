@@ -35,7 +35,7 @@ INITIATIVE_ID=$(echo "$INITIATIVE" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
 
 echo "4. Проект под инициативой"
 PROJECT=$(curl -s -X POST "$API_URL/api/v1/tasks" -H "$AUTH" -H "$JSON" -H "$ACCEPT" \
-    -d "{\"type\":\"project\",\"column\":\"in_progress\",\"title\":\"Тренажерка\",\"iniciative_id\":$INITIATIVE_ID}")
+    -d "{\"type\":\"project\",\"column\":\"in_progress\",\"title\":\"Тренажерка\",\"initiative_id\":$INITIATIVE_ID}")
 echo "   $PROJECT"
 PROJECT_ID=$(echo "$PROJECT" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
 

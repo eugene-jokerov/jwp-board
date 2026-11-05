@@ -60,7 +60,7 @@ final class TasksTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.type', 'initiative')
             ->assertJsonPath('data.direction_id', $direction->id)
-            ->assertJsonPath('data.iniciative_id', null)
+            ->assertJsonPath('data.initiative_id', null)
             ->assertJsonPath('data.project_id', null)
             ->assertJsonPath('data.color', 'c5')
             ->assertJsonPath('data.allowed_transitions', ['backlog', 'in_progress', 'complete', 'canceled']);
@@ -77,10 +77,10 @@ final class TasksTest extends TestCase
                 'type' => 'project',
                 'column' => 'in_progress',
                 'title' => 'Проект',
-                'iniciative_id' => $initiative->id,
+                'initiative_id' => $initiative->id,
             ])
             ->assertCreated()
-            ->assertJsonPath('data.iniciative_id', $initiative->id)
+            ->assertJsonPath('data.initiative_id', $initiative->id)
             ->assertJsonPath('data.direction_id', $initiative->direction_id)
             ->assertJsonPath('data.project_id', null);
     }
@@ -132,7 +132,7 @@ final class TasksTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.project_id', $project->id)
-            ->assertJsonPath('data.iniciative_id', $initiative->id)
+            ->assertJsonPath('data.initiative_id', $initiative->id)
             ->assertJsonPath('data.direction_id', $initiative->direction_id);
     }
 
@@ -148,7 +148,7 @@ final class TasksTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.direction_id', null)
-            ->assertJsonPath('data.iniciative_id', null)
+            ->assertJsonPath('data.initiative_id', null)
             ->assertJsonPath('data.project_id', null);
     }
 

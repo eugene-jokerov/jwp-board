@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Eloquent-реализация порта TaskRepository.
  *
  * Все запросы ограничены user_id: граница пользователя — часть контракта порта.
- * Денормализованные direction_id и iniciative_id позволяют проверять
+ * Денормализованные direction_id и initiative_id позволяют проверять
  * иерархию и детей в работе без рекурсивных запросов.
  */
 final class EloquentTaskRepository implements TaskRepository
@@ -49,7 +49,7 @@ final class EloquentTaskRepository implements TaskRepository
             $query->where('column', $column->value);
         }
 
-        foreach (['direction_id', 'iniciative_id', 'project_id'] as $field) {
+        foreach (['direction_id', 'initiative_id', 'project_id'] as $field) {
             $value = $filters[$field] ?? null;
 
             if ($value !== null) {
@@ -86,7 +86,7 @@ final class EloquentTaskRepository implements TaskRepository
         return Task::query()->create([
             'user_id' => $userId,
             'direction_id' => $attributes['direction_id'],
-            'iniciative_id' => $attributes['iniciative_id'],
+            'initiative_id' => $attributes['initiative_id'],
             'project_id' => $attributes['project_id'],
             'type' => $attributes['type']->value,
             'column' => $attributes['column']->value,
@@ -126,7 +126,7 @@ final class EloquentTaskRepository implements TaskRepository
     private function childrenQuery(Task $task): Builder
     {
         return match ($task->type) {
-            CardType::Initiative => Task::query()->where('iniciative_id', $task->id),
+            CardType::Initiative => Task::query()->where('initiative_id', $task->id),
             CardType::Project => Task::query()->where('project_id', $task->id),
             CardType::Task => Task::query()->whereRaw('1 = 0'),
         };

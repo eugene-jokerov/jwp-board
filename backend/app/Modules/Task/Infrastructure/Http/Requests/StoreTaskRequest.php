@@ -35,7 +35,7 @@ final class StoreTaskRequest extends FormRequest
             'title' => ['required', 'string', 'max:'.TaskTitle::MAX_LENGTH],
             'description' => ['sometimes', 'nullable', 'string', 'max:'.TaskDescription::MAX_LENGTH],
             'direction_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'iniciative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'initiative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ];
     }
@@ -51,7 +51,7 @@ final class StoreTaskRequest extends FormRequest
             'title' => 'название',
             'description' => 'описание',
             'direction_id' => 'направление',
-            'iniciative_id' => 'инициатива',
+            'initiative_id' => 'инициатива',
             'project_id' => 'проект',
         ];
     }
@@ -83,7 +83,7 @@ final class StoreTaskRequest extends FormRequest
             'title' => $this->string('title')->toString(),
             'description' => $this->input('description'),
             'direction_id' => $this->input('direction_id'),
-            'iniciative_id' => $this->input('iniciative_id'),
+            'initiative_id' => $this->input('initiative_id'),
             'project_id' => $this->input('project_id'),
         ];
     }

@@ -18,7 +18,7 @@ use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 final readonly class UpdateTaskCommand
 {
     /**
-     * @param  array{direction_id?: int|null, iniciative_id?: int|null, project_id?: int|null}  $links
+     * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links
      * @param  array{title?: TaskTitle|null, description?: string|null, column?: CardColumn|null}  $changes
      */
     public function __construct(

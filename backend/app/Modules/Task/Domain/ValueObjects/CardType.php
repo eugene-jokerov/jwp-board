@@ -36,7 +36,7 @@ enum CardType: string
     }
 
     /**
-     * На карточки этого типа ссылаются через `iniciative_id`.
+     * На карточки этого типа ссылаются через `initiative_id`.
      */
     public function isInitiative(): bool
     {

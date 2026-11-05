@@ -36,10 +36,10 @@ final readonly class TaskFactory
         TaskTitle $title,
         ?TaskDescription $description,
         ?int $directionId,
-        ?int $iniciativeId,
+        ?int $initiativeId,
         ?int $projectId,
     ): Task {
-        $place = $this->placement->resolve($type, $userId, $directionId, $iniciativeId, $projectId);
+        $place = $this->placement->resolve($type, $userId, $directionId, $initiativeId, $projectId);
 
         return $this->tasks->create($userId, [
             'title' => $title->value(),
@@ -47,7 +47,7 @@ final readonly class TaskFactory
             'type' => $type,
             'column' => $column,
             'direction_id' => $place['direction_id'],
-            'iniciative_id' => $place['iniciative_id'],
+            'initiative_id' => $place['initiative_id'],
             'project_id' => $place['project_id'],
         ]);
     }

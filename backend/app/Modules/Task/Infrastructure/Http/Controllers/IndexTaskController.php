@@ -23,7 +23,7 @@ final class IndexTaskController extends Controller
     ) {}
 
     /**
-     * GET /api/v1/tasks?type=&column=&direction_id=&iniciative_id=&project_id=
+     * GET /api/v1/tasks?type=&column=&direction_id=&initiative_id=&project_id=
      */
     public function __invoke(Request $request): AnonymousResourceCollection
     {
@@ -39,7 +39,7 @@ final class IndexTaskController extends Controller
             is_string($type) ? CardType::tryFrom($type) : null,
             is_string($column) ? CardColumn::tryFrom($column) : null,
             $this->intOrNull($request->query('direction_id')),
-            $this->intOrNull($request->query('iniciative_id')),
+            $this->intOrNull($request->query('initiative_id')),
             $this->intOrNull($request->query('project_id')),
         ));
 

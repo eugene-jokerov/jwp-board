@@ -22,7 +22,7 @@ final readonly class CreateTaskCommand
         public TaskTitle $title,
         public ?TaskDescription $description = null,
         public ?int $directionId = null,
-        public ?int $iniciativeId = null,
+        public ?int $initiativeId = null,
         public ?int $projectId = null,
     ) {}
 
@@ -38,7 +38,7 @@ final readonly class CreateTaskCommand
             TaskTitle::fromString((string) $payload['title']),
             TaskDescription::fromNullableString(isset($payload['description']) ? (string) $payload['description'] : null),
             isset($payload['direction_id']) ? (int) $payload['direction_id'] : null,
-            isset($payload['iniciative_id']) ? (int) $payload['iniciative_id'] : null,
+            isset($payload['initiative_id']) ? (int) $payload['initiative_id'] : null,
             isset($payload['project_id']) ? (int) $payload['project_id'] : null,
         );
     }

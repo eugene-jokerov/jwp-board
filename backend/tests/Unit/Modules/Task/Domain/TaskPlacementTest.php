@@ -28,7 +28,7 @@ final class TaskPlacementTest extends TestCase
         $repository->add(InMemoryTaskRepository::task(6, 10, [
             'type' => CardType::Project->value,
             'direction_id' => 1,
-            'iniciative_id' => 5,
+            'initiative_id' => 5,
         ]));
 
         return $repository;
@@ -49,7 +49,7 @@ final class TaskPlacementTest extends TestCase
 
         $result = $placement->resolve(CardType::Project, 10, null, 5, null);
 
-        self::assertSame(['direction_id' => 1, 'iniciative_id' => 5, 'project_id' => null], $result);
+        self::assertSame(['direction_id' => 1, 'initiative_id' => 5, 'project_id' => null], $result);
     }
 
     public function test_project_rejects_mismatched_direction(): void
@@ -70,7 +70,7 @@ final class TaskPlacementTest extends TestCase
 
         $result = $placement->resolve(CardType::Project, 10, null, null, null);
 
-        self::assertSame(['direction_id' => null, 'iniciative_id' => null, 'project_id' => null], $result);
+        self::assertSame(['direction_id' => null, 'initiative_id' => null, 'project_id' => null], $result);
     }
 
     public function test_task_inherits_whole_chain_from_project(): void
@@ -79,7 +79,7 @@ final class TaskPlacementTest extends TestCase
 
         $result = $placement->resolve(CardType::Task, 10, null, null, 6);
 
-        self::assertSame(['direction_id' => 1, 'iniciative_id' => 5, 'project_id' => 6], $result);
+        self::assertSame(['direction_id' => 1, 'initiative_id' => 5, 'project_id' => 6], $result);
     }
 
     public function test_foreign_parent_is_rejected(): void

@@ -33,7 +33,7 @@ class TaskFactory extends Factory
         return [
             'user_id' => User::factory(),
             'direction_id' => null,
-            'iniciative_id' => null,
+            'initiative_id' => null,
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => CardColumn::Backlog->value,
@@ -71,7 +71,7 @@ class TaskFactory extends Factory
             return [
                 'type' => CardType::Initiative->value,
                 'direction_id' => $directionId,
-                'iniciative_id' => null,
+                'initiative_id' => null,
                 'project_id' => null,
             ];
         });
@@ -85,7 +85,7 @@ class TaskFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'type' => CardType::Project->value,
             'direction_id' => $initiative?->direction_id,
-            'iniciative_id' => $initiative === null ? null : (int) $initiative->id,
+            'initiative_id' => $initiative === null ? null : (int) $initiative->id,
             'project_id' => null,
         ]);
     }
@@ -98,7 +98,7 @@ class TaskFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'type' => CardType::Task->value,
             'direction_id' => $project?->direction_id,
-            'iniciative_id' => $project?->iniciative_id,
+            'initiative_id' => $project?->initiative_id,
             'project_id' => $project === null ? null : (int) $project->id,
         ]);
     }

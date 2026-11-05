@@ -33,7 +33,7 @@ final readonly class ListTasksQueryHandler
             'type' => $query->type,
             'column' => $query->column,
             'direction_id' => $query->directionId,
-            'iniciative_id' => $query->iniciativeId,
+            'initiative_id' => $query->initiativeId,
             'project_id' => $query->projectId,
         ]);
 

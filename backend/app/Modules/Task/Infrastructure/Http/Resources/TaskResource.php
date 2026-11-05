@@ -31,7 +31,7 @@ final class TaskResource extends JsonResource
             'title' => $this->resource->title,
             'description' => $this->resource->description,
             'direction_id' => $this->resource->directionId,
-            'iniciative_id' => $this->resource->iniciativeId,
+            'initiative_id' => $this->resource->initiativeId,
             'project_id' => $this->resource->projectId,
             'color' => $this->resource->directionColor?->key(),
             'allowed_transitions' => array_map(

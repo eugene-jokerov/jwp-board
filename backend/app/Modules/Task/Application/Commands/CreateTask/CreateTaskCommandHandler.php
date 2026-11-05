@@ -31,7 +31,7 @@ final readonly class CreateTaskCommandHandler
             $command->title,
             $command->description,
             $command->directionId,
-            $command->iniciativeId,
+            $command->initiativeId,
             $command->projectId,
         );
 

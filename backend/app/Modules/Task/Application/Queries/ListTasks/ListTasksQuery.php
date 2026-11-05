@@ -18,7 +18,7 @@ final readonly class ListTasksQuery
         public ?CardType $type = null,
         public ?CardColumn $column = null,
         public ?int $directionId = null,
-        public ?int $iniciativeId = null,
+        public ?int $initiativeId = null,
         public ?int $projectId = null,
     ) {}
 }

@@ -32,7 +32,7 @@ final class UpdateTaskRequest extends FormRequest
             'description' => ['sometimes', 'nullable', 'string', 'max:'.TaskDescription::MAX_LENGTH],
             'column' => ['sometimes', Rule::enum(CardColumn::class)],
             'direction_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
-            'iniciative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'initiative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ];
     }
@@ -47,7 +47,7 @@ final class UpdateTaskRequest extends FormRequest
             'description' => 'описание',
             'column' => 'колонка',
             'direction_id' => 'направление',
-            'iniciative_id' => 'инициатива',
+            'initiative_id' => 'инициатива',
             'project_id' => 'проект',
         ];
     }
@@ -67,13 +67,13 @@ final class UpdateTaskRequest extends FormRequest
     /**
      * Переданные ссылки иерархии (только ключи, которые есть в запросе).
      *
-     * @return array{direction_id?: int|null, iniciative_id?: int|null, project_id?: int|null}
+     * @return array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}
      */
     public function toLinkPayload(): array
     {
         $links = [];
 
-        foreach (['direction_id', 'iniciative_id', 'project_id'] as $field) {
+        foreach (['direction_id', 'initiative_id', 'project_id'] as $field) {
             if ($this->has($field)) {
                 $value = $this->input($field);
                 $links[$field] = $value === null ? null : (int) $value;

@@ -32,7 +32,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
         'type',
         'column',
         'direction_id',
-        'iniciative_id',
+        'initiative_id',
         'project_id',
     ];
 
@@ -139,7 +139,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
             'type' => $task->type->value,
             'column' => $task->column->value,
             'direction_id' => $task->direction_id === null ? null : (string) $task->direction_id,
-            'iniciative_id' => $task->iniciative_id === null ? null : (string) $task->iniciative_id,
+            'initiative_id' => $task->initiative_id === null ? null : (string) $task->initiative_id,
             'project_id' => $task->project_id === null ? null : (string) $task->project_id,
         ];
     }

@@ -24,7 +24,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property int|null $direction_id
- * @property int|null $iniciative_id
+ * @property int|null $initiative_id
  * @property int|null $project_id
  * @property CardType $type
  * @property CardColumn $column
@@ -46,7 +46,7 @@ class Task extends Model
     protected $fillable = [
         'user_id',
         'direction_id',
-        'iniciative_id',
+        'initiative_id',
         'project_id',
         'type',
         'column',

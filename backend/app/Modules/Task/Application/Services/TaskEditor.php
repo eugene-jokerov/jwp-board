@@ -29,7 +29,7 @@ final readonly class TaskEditor
     /**
      * Изменить карточку и вернуть её актуальное состояние.
      *
-     * @param  array{direction_id?: int|null, iniciative_id?: int|null, project_id?: int|null}  $links  переданные ссылки иерархии
+     * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links  переданные ссылки иерархии
      * @param  array{title?: string|null, description?: string|null, column?: CardColumn|null}  $fields
      *
      * @throws InvalidHierarchy если набор ссылок недопустим для типа карточки
@@ -69,14 +69,14 @@ final readonly class TaskEditor
     /**
      * Ссылки после обновления: переданные в запросе, остальные — текущие.
      *
-     * @param  array{direction_id?: int|null, iniciative_id?: int|null, project_id?: int|null}  $links
-     * @return array{direction_id: int|null, iniciative_id: int|null, project_id: int|null}
+     * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links
+     * @return array{direction_id: int|null, initiative_id: int|null, project_id: int|null}
      */
     private function mergeLinks(Task $task, array $links): array
     {
         return [
             'direction_id' => array_key_exists('direction_id', $links) ? $links['direction_id'] : $task->direction_id,
-            'iniciative_id' => array_key_exists('iniciative_id', $links) ? $links['iniciative_id'] : $task->iniciative_id,
+            'initiative_id' => array_key_exists('initiative_id', $links) ? $links['initiative_id'] : $task->initiative_id,
             'project_id' => array_key_exists('project_id', $links) ? $links['project_id'] : $task->project_id,
         ];
     }

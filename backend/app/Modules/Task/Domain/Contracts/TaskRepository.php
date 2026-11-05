@@ -25,7 +25,7 @@ interface TaskRepository
     /**
      * Карточки пользователя с фильтрами, в порядке создания.
      *
-     * @param  array{type?: CardType|null, column?: CardColumn|null, direction_id?: int|null, iniciative_id?: int|null, project_id?: int|null}  $filters
+     * @param  array{type?: CardType|null, column?: CardColumn|null, direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $filters
      * @return list<Task>
      */
     public function listForUser(int $userId, array $filters = []): array;

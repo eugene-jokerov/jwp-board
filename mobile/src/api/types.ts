@@ -75,7 +75,7 @@ export interface Task {
   title: string;
   description: string | null;
   direction_id: number | null;
-  iniciative_id: number | null;
+  initiative_id: number | null;
   project_id: number | null;
   /** Цвет направления карточки; null — направления нет. */
   color: string | null;
@@ -98,7 +98,7 @@ export interface TaskCreateInput {
   title: string;
   description?: string | null;
   direction_id?: number | null;
-  iniciative_id?: number | null;
+  initiative_id?: number | null;
   project_id?: number | null;
 }
 
@@ -110,6 +110,6 @@ export interface TaskListFilters {
   type?: CardType;
   column?: CardColumn;
   direction_id?: number;
-  iniciative_id?: number;
+  initiative_id?: number;
   project_id?: number;
 }
