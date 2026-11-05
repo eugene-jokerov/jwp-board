@@ -9,6 +9,7 @@ import { Pressable, Text, View } from 'react-native';
 import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
 import type { CardAction } from '../derive';
+import { hasParent } from '../mappers';
 import type { BoardColumn as BoardColumnModel, Card } from '../types';
 
 interface BoardColumnProps {
@@ -62,7 +63,7 @@ export function BoardColumn({
           key={card.id}
           title={card.title}
           color={card.color}
-          hasParent={card.parentId !== null}
+          hasParent={hasParent(card)}
           kind={card.kind}
           action={cardAction(card)}
           onAction={() => onCardAction(card)}

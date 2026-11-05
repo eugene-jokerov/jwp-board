@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
+import { FormAlert } from '../../components/FormAlert';
 import { EMPTY_COLOR } from '../colors';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
@@ -20,7 +21,7 @@ import { KIND_LABEL, PARENT_LABEL } from '../types';
 export interface CardDraft {
   kind: CardKind;
   /** Свимлайн, из которого открыли форму: там родитель предопределён. */
-  laneId: string | null;
+  laneId: number | null;
   /** Цвет, который унаследует карточка из свимлайна (null — без цвета). */
   laneColor: string | null;
   /** Название свимлайна — показываем в шапке формы. */
@@ -41,7 +42,8 @@ export interface CardDraft {
 
 interface CardFormModalProps {
   draft: CardDraft | null;
-  onCreate: (draft: CardDraft, title: string, parentId: string | null) => void;
+  /** Создать карточку; текст ошибки сервера или null при успехе. */
+  onCreate: (draft: CardDraft, title: string, parentId: number | null) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -88,9 +90,12 @@ function parentEmptyHint(kind: CardKind): string | null {
 
 export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) {
   const [title, setTitle] = useState('');
-  const [parentId, setParentId] = useState<string | null>(null);
+  const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
+  // Ошибка сервера (валидация иерархии, нет прав) показывается в самой форме.
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
   const close = () => {
@@ -98,6 +103,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setParentId(null);
     setTitleError(null);
     setParentError(null);
+    setFormError(null);
+    setSaving(false);
     onClose();
   };
 
@@ -112,9 +119,9 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
   // Безымянную карточку не создаём: кнопка ждёт название, а родителя —
   // только если выбор обязателен (направление для инициативы, инициатива для проекта).
-  const createDisabled = title.trim() === '' || (parentRequired && selectedParent === null);
+  const createDisabled = saving || title.trim() === '' || (parentRequired && selectedParent === null);
 
-  const submit = () => {
+  const submit = async () => {
     const titleValue = title.trim();
     const parentInvalid = parentRequired && selectedParent === null;
 
@@ -130,11 +137,16 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
       return;
     }
 
-    onCreate(draft, titleValue, draft.laneId ?? parentId);
-    setTitle('');
-    setParentId(null);
-    setTitleError(null);
-    setParentError(null);
+    setSaving(true);
+    const error = await onCreate(draft, titleValue, draft.laneId ?? parentId);
+    setSaving(false);
+
+    if (error !== null) {
+      setFormError(error);
+      return;
+    }
+
+    close();
   };
 
   return (
@@ -149,12 +161,15 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
             </Text>
           </View>
 
+          {formError ? <FormAlert message={formError} /> : null}
+
           <TextField
             label="Название"
             value={title}
             onChangeText={(value) => {
               setTitle(value);
               setTitleError(null);
+              setFormError(null);
             }}
             error={titleError}
             placeholder="Например: Запуск новой ветки"

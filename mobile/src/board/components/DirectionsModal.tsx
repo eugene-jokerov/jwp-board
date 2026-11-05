@@ -33,11 +33,11 @@ interface DirectionsModalProps {
   visible: boolean;
   directions: readonly Direction[];
   /** Добавить направление; текст ошибки или null при успехе. */
-  onAdd: (title: string, color: string) => string | null;
+  onAdd: (title: string, color: string) => Promise<string | null>;
   /** Изменить название и цвет; текст ошибки или null при успехе. */
-  onUpdate: (id: string, title: string, color: string) => string | null;
+  onUpdate: (id: number, title: string, color: string) => Promise<string | null>;
   /** Удалить направление: правило проверено экраном до вызова. */
-  onDelete: (id: string) => void;
+  onDelete: (id: number) => Promise<string | null>;
   /** Причина, по которой направление удалить нельзя; null — можно. */
   deleteReason: (direction: Direction) => string | null;
   onClose: () => void;
@@ -98,8 +98,8 @@ interface DirectionRowProps {
   usedColors: readonly string[];
   /** Причина запрета удаления; null — можно удалять. */
   deleteReason: string | null;
-  onSave: (title: string, color: string) => string | null;
-  onDelete: () => void;
+  onSave: (title: string, color: string) => Promise<string | null>;
+  onDelete: () => Promise<string | null>;
 }
 
 /**
@@ -112,6 +112,8 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
   const [color, setColor] = useState(direction.color);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // Пока идёт запрос, кнопки строки заблокированы: повторный клик не нужен.
+  const [saving, setSaving] = useState(false);
 
   const titleEmpty = title.trim() === '';
 
@@ -123,7 +125,7 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
     setMode('edit');
   };
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = title.trim();
 
     if (trimmed === '') {
@@ -131,11 +133,25 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
       return;
     }
 
-    const error = onSave(trimmed, color);
+    setSaving(true);
+    const error = await onSave(trimmed, color);
+    setSaving(false);
 
     if (error !== null) {
       setFormError(error);
       return;
+    }
+
+    setMode('view');
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    const error = await onDelete();
+    setSaving(false);
+
+    if (error !== null) {
+      setFormError(error);
     }
 
     setMode('view');
@@ -187,12 +203,12 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: titleEmpty }}
-            disabled={titleEmpty}
-            onPress={submit}
+            accessibilityState={{ disabled: titleEmpty || saving }}
+            disabled={titleEmpty || saving}
+            onPress={() => void submit()}
             className={[
               'h-10 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-              titleEmpty ? 'opacity-60' : '',
+              titleEmpty || saving ? 'opacity-60' : '',
             ].join(' ')}
           >
             <Text className="text-sm font-semibold text-white">Сохранить</Text>
@@ -242,6 +258,8 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
       {deleteReason === null ? null : <Text className="text-[11px] text-subtle">{deleteReason}</Text>}
 
+      {formError !== null && mode === 'view' ? <FormAlert message={formError} /> : null}
+
       {mode === 'confirmDelete' ? (
         <View className="gap-2 rounded-lg bg-err-bg p-2.5">
           <Text className="text-xs font-semibold text-err-fg">Удалить направление «{direction.title}»?</Text>
@@ -257,8 +275,13 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
             <Pressable
               accessibilityRole="button"
-              onPress={onDelete}
-              className="h-9 flex-1 items-center justify-center rounded-lg bg-err-fg active:opacity-90"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              onPress={() => void remove()}
+              className={[
+                'h-9 flex-1 items-center justify-center rounded-lg bg-err-fg active:opacity-90',
+                saving ? 'opacity-60' : '',
+              ].join(' ')}
             >
               <Text className="text-xs font-semibold text-white">Удалить</Text>
             </Pressable>
@@ -271,7 +294,7 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
 interface DirectionCreatorProps {
   usedColors: readonly string[];
-  onCreate: (title: string, color: string) => string | null;
+  onCreate: (title: string, color: string) => Promise<string | null>;
   /** Свернуть форму (после успешного добавления или по кнопке «Отмена»). */
   onClose: () => void;
 }
@@ -288,10 +311,11 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
   const [color, setColor] = useState(() => firstFreeDirectionColor(usedColors));
   const [titleError, setTitleError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const titleEmpty = title.trim() === '';
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = title.trim();
 
     if (trimmed === '') {
@@ -299,7 +323,9 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
       return;
     }
 
-    const error = onCreate(trimmed, color);
+    setSaving(true);
+    const error = await onCreate(trimmed, color);
+    setSaving(false);
 
     if (error !== null) {
       setFormError(error);
@@ -355,12 +381,12 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
 
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: titleEmpty }}
-          disabled={titleEmpty}
-          onPress={submit}
+          accessibilityState={{ disabled: titleEmpty || saving }}
+          disabled={titleEmpty || saving}
+          onPress={() => void submit()}
           className={[
             'h-10 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-            titleEmpty ? 'opacity-60' : '',
+            titleEmpty || saving ? 'opacity-60' : '',
           ].join(' ')}
         >
           <Text className="text-sm font-semibold text-white">Добавить</Text>

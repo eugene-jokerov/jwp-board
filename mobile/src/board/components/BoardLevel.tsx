@@ -23,6 +23,7 @@ import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './Boa
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
 import type { CardAction } from '../derive';
+import { hasParent } from '../mappers';
 import { COLUMNS, type BoardLevel as BoardLevelModel, type Card, type ColumnId } from '../types';
 
 /**
@@ -129,10 +130,13 @@ function CollapsedColumn({ label, onExpand }: { label: string; onExpand: () => v
 }
 
 export interface SwimlaneModel {
-  /** id родительской карточки; у свимлайна «без родителя» — служебный ключ. */
+  /**
+   * Ключ свимлайна для UI: `direction-<id>`, `card-<id>` или `no_parent`.
+   * Ключ строковый, потому что у свимлайна «без родителя» числового id нет.
+   */
   id: string;
-  /** Родительская карточка, у свимлайна «без родителя» — null. */
-  parentId: string | null;
+  /** id родительской карточки/направления; у свимлайна «без родителя» — null. */
+  parentId: number | null;
   title: string;
   /** Оттенок точки свимлайна (HEX), а не ключ палитры: компоненты рисуют его как есть. */
   color: string | null;
@@ -155,7 +159,8 @@ interface BoardLevelProps {
   onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
   onOpenCard: (card: Card) => void;
-  onAddCard: (parentId: string | null, columnId: ColumnId) => void;
+  /** Родитель из свимлайна: id карточки/направления или null («без родителя»). */
+  onAddCard: (parentId: number | null, columnId: ColumnId) => void;
   onCreateInLevel: () => void;
   /** Открыть меню «Настройки уровня» (иконка в строке с кнопкой создания). */
   onOpenSettings: () => void;
@@ -441,7 +446,7 @@ export function BoardLevel({
                                 key={card.id}
                                 title={card.title}
                                 color={card.color}
-                                hasParent={card.parentId !== null}
+                                hasParent={hasParent(card)}
                                 kind={card.kind}
                                 action={cardAction(card)}
                                 onAction={() => onCardAction(card)}

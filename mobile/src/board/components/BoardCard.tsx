@@ -27,7 +27,7 @@ import type { CardKind } from '../types';
 
 /** Иконка действия по целевой колонке: «В работе» — play, «Готово» — галочка. */
 function ActionIcon({ target }: { target: CardAction['target'] }) {
-  return target === 'done' ? <CheckIcon /> : <PlayIcon />;
+  return target === 'complete' ? <CheckIcon /> : <PlayIcon />;
 }
 
 interface BoardCardProps {
@@ -48,7 +48,7 @@ interface BoardCardProps {
 
 export function BoardCard({ title, color, hasParent, kind, action, onAction, onPress }: BoardCardProps) {
   // У карточки без родителя подпись говорит, чего именно ей не хватает.
-  const withoutParentLabel = hasParent ? '' : kind === 'epic' ? 'Без инициативы' : 'Без проекта';
+  const withoutParentLabel = hasParent ? '' : kind === 'project' ? 'Без инициативы' : 'Без проекта';
 
   return (
     <View className="flex-row overflow-hidden rounded border border-card-line bg-card">

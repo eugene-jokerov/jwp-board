@@ -1,10 +1,10 @@
 /**
  * Модалка редактирования карточки.
  *
- * Открывается кликом по карточке. Пока редактируются название и статус
- * (колонка доски). Правило смены статуса то же, что у стрелок на карточке:
- * если у карточки есть дети в «В работе», смена статуса запрещена — статусы
- * в списке заблокированы, причина показана под ними.
+ * Открывается кликом по карточке. Редактируются название и статус (колонка
+ * доски), карточку можно удалить. Доступные статусы — `allowedTransitions`
+ * из ответа сервера: если у карточки есть дети в работе, смена статуса
+ * запрещена, статусы в списке заблокированы и причина показана под ними.
  */
 
 import { useState } from 'react';
@@ -22,7 +22,9 @@ interface CardEditModalProps {
   /** Причина, по которой сменить статус нельзя; null — смена разрешена. */
   lockedReason: string | null;
   /** Сохранить изменения; возвращает текст ошибки, который показываем в модалке. */
-  onSave: (card: Card, title: string, column: ColumnId) => string | null;
+  onSave: (card: Card, title: string, column: ColumnId) => Promise<string | null>;
+  /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
+  onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -44,6 +46,7 @@ export function CardEditModal(props: CardEditModalProps) {
       card={props.card}
       lockedReason={props.lockedReason}
       onSave={props.onSave}
+      onDelete={props.onDelete}
       onClose={props.onClose}
     />
   );
@@ -52,7 +55,8 @@ export function CardEditModal(props: CardEditModalProps) {
 interface CardEditFormProps {
   card: Card;
   lockedReason: string | null;
-  onSave: (card: Card, title: string, column: ColumnId) => string | null;
+  onSave: (card: Card, title: string, column: ColumnId) => Promise<string | null>;
+  onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -83,14 +87,17 @@ function StatusOption({ label, selected, locked, onPress }: StatusOptionProps) {
   );
 }
 
-function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps) {
+function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEditFormProps) {
   const [title, setTitle] = useState(card.title);
   const [columnId, setColumnId] = useState<ColumnId>(card.column);
   const [titleError, setTitleError] = useState<string | null>(null);
-  // Ошибки сохранения (например, смену статуса запретили данные) показываем здесь же.
+  // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
   const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Удаление подтверждается в самой модалке: на web системные диалоги не работают.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = title.trim();
 
     if (trimmed === '') {
@@ -98,10 +105,23 @@ function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps
       return;
     }
 
-    const error = onSave(card, trimmed, columnId);
+    setSaving(true);
+    const error = await onSave(card, trimmed, columnId);
+    setSaving(false);
 
     if (error !== null) {
       setFormError(error);
+    }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    const error = await onDelete(card);
+    setSaving(false);
+
+    if (error !== null) {
+      setFormError(error);
+      setConfirmingDelete(false);
     }
   };
 
@@ -139,8 +159,9 @@ function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps
                   key={option.id}
                   label={option.label}
                   selected={option.id === columnId}
-                  // При блокировке доступна только текущая колонка: статус не меняется.
-                  locked={lockedReason !== null && option.id !== card.column}
+                  // Заблокированы статусы, которые сервер не разрешил, — и всегда
+                  // после начала запроса, чтобы не отправлять второй раз.
+                  locked={saving || !card.allowedTransitions.includes(option.id)}
                   onPress={() => {
                     setColumnId(option.id);
                     setFormError(null);
@@ -161,6 +182,45 @@ function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps
             />
           </View>
 
+          {confirmingDelete ? (
+            <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+              <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
+
+              <View className="flex-row gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setConfirmingDelete(false)}
+                  className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-app">Оставить</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving }}
+                  disabled={saving}
+                  onPress={() => void remove()}
+                  className={[
+                    'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
+                    saving ? 'opacity-60' : '',
+                  ].join(' ')}
+                >
+                  <Text className="text-sm font-semibold text-white">Удалить</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: saving }}
+              disabled={saving}
+              onPress={() => setConfirmingDelete(true)}
+              className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
+            >
+              <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
+            </Pressable>
+          )}
+
           <View className="flex-row gap-2">
             <Pressable
               accessibilityRole="button"
@@ -172,12 +232,12 @@ function CardEditForm({ card, lockedReason, onSave, onClose }: CardEditFormProps
 
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: titleEmpty }}
-              disabled={titleEmpty}
-              onPress={submit}
+              accessibilityState={{ disabled: titleEmpty || saving }}
+              disabled={titleEmpty || saving}
+              onPress={() => void submit()}
               className={[
                 'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-                titleEmpty ? 'opacity-60' : '',
+                titleEmpty || saving ? 'opacity-60' : '',
               ].join(' ')}
             >
               <Text className="text-sm font-semibold text-white">Сохранить</Text>

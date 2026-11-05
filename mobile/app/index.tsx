@@ -1,13 +1,23 @@
 /**
  * Главный экран: трёхуровневая канбан-доска.
  *
- * Доска пока только визуальная — данные лежат в состоянии экрана (board/data.ts).
+ * Данные приходят из backend API через `useBoard()` (src/board/store.ts):
+ * карточки, направления и переходы между колонками сервер отдаёт готовыми.
  * Уровни сворачиваются в строку, колонки фиксированные. На телефоне колонки
  * внутри свимлайна раскладываются вертикально как аккордеон.
  */
 
 import { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type SwimlaneModel } from '../src/board/components/BoardLevel';
@@ -15,16 +25,10 @@ import { CardEditModal } from '../src/board/components/CardEditModal';
 import { CardFormModal, type CardDraft } from '../src/board/components/CardFormModal';
 import { DirectionsModal } from '../src/board/components/DirectionsModal';
 import { LevelSettingsMenu } from '../src/board/components/LevelSettingsMenu';
-import { DIRECTIONS, INITIAL_CARDS } from '../src/board/data';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../src/board/directionColors';
-import {
-  cardAction,
-  checkColumnChange,
-  checkDirectionDelete,
-  parentCandidates,
-  recolorDirection,
-  updateCard,
-} from '../src/board/derive';
+import { cardAction, checkDirectionDelete, parentCandidates } from '../src/board/derive';
+import { parentOf } from '../src/board/mappers';
+import { useBoard } from '../src/board/store';
 import {
   COLUMNS,
   LEVELS,
@@ -60,7 +64,7 @@ const LEVEL_CREATE_HINT: Record<LevelId, string> = {
 /** Тип карточки, который создают на уровне. */
 const LEVEL_CARD_KIND: Record<LevelId, CardKind> = {
   strategic: 'initiative',
-  tactical: 'epic',
+  tactical: 'project',
   operational: 'task',
 };
 
@@ -69,7 +73,7 @@ interface FormContext {
   level: LevelId;
   kind: CardKind;
   /** Родитель из свимлайна; null — родителя выбирают вручную или он не нужен. */
-  parentId: string | null;
+  parentId: number | null;
   column: ColumnId;
 }
 
@@ -90,12 +94,12 @@ function swimlanesOf(
 ): SwimlaneModel[] {
   if (level.id === 'strategic') {
     return directions.map((direction) => ({
-      id: direction.id,
+      id: `direction-${direction.id}`,
       parentId: direction.id,
       title: direction.title,
       // У направления хранится ключ палитры, свимлайн рисуется оттенком.
       color: directionColorHex(direction.color),
-      cards: cards.filter((card) => card.kind === 'initiative' && card.parentId === direction.id),
+      cards: cards.filter((card) => card.kind === 'initiative' && card.directionId === direction.id),
     }));
   }
 
@@ -108,24 +112,27 @@ function swimlanesOf(
 
   const parents = parentCandidates(cards, parentKind);
   const children = cards.filter((card) => card.kind === childKind);
-  const parentIds = new Set(parents.map((card) => card.id));
 
   const lanes: SwimlaneModel[] = parents.map((parent) => ({
-    id: parent.id,
+    id: `card-${parent.id}`,
     parentId: parent.id,
     title: parent.title,
     // У карточки-родителя хранится ключ палитры, свимлайн рисуется оттенком.
     color: directionColorHex(parent.color),
-    cards: children.filter((card) => card.parentId === parent.id),
+    // Дети свимлайна — карточки, у которых родитель именно эта карточка.
+    cards: children.filter((card) => card.kind !== parent.kind && parentOf(card)?.id === parent.id),
   }));
 
-  const orphaned = children.filter((card) => card.parentId === null || !parentIds.has(card.parentId));
+  // Карточки без родителя и карточки, чей родитель вышел из работы,
+  // на этом уровне показывать негде — их видно в свимлайне «без родителя».
+  const inLane = new Set(lanes.flatMap((lane) => lane.cards.map((card) => card.id)));
+  const orphaned = children.filter((card) => !inLane.has(card.id));
 
   if (orphaned.length > 0) {
     lanes.push({
-      id: '__no_parent__',
+      id: `no_parent-${level.id}`,
       parentId: null,
-      title: childKind === 'epic' ? 'Без инициативы' : 'Без проекта',
+      title: childKind === 'project' ? 'Без инициативы' : 'Без проекта',
       // Свимлайн «без родителя» — это и есть служебный цвет c0.
       color: directionColorHex(UNPARENTED_CARD_COLOR),
       cards: orphaned,
@@ -133,17 +140,6 @@ function swimlanesOf(
   }
 
   return lanes;
-}
-
-/** Следующий свободный id карточки: демо-состояние живёт только в памяти. */
-function nextCardId(cards: readonly Card[]): string {
-  const max = cards.reduce((acc, card) => {
-    const numeric = Number.parseInt(card.id.replace(/\D/g, ''), 10);
-
-    return Number.isNaN(numeric) ? acc : Math.max(acc, numeric);
-  }, 0);
-
-  return `card-${max + 1}`;
 }
 
 /** Черновик для модалки: вид формы зависит от того, откуда её открыли. */
@@ -182,14 +178,24 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const compact = width < COMPACT_MAX_WIDTH;
 
-  const [cards, setCards] = useState<Card[]>(() => [...INITIAL_CARDS]);
-  // Направления — состояние экрана: доска пока не связана с API.
-  const [directions, setDirections] = useState<Direction[]>(() => [...DIRECTIONS]);
+  // Доска: карточки, направления и все изменения живут в API (src/board/store.ts).
+  const board = useBoard();
+  const { cards, directions, isLoading, loadError, reload } = board;
+
   const [collapsedLevels, setCollapsedLevels] = useState<Record<string, boolean>>({});
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({});
+  /** Повторная загрузка по кнопке: `reload` из хука сам индикатор не поднимает. */
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  /** Перечитать доску с индикатором загрузки — кнопка «Повторить» при ошибке. */
+  const reloadBoard = async () => {
+    setIsRefreshing(true);
+    await reload();
+    setIsRefreshing(false);
+  };
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
-  const [editedCardId, setEditedCardId] = useState<string | null>(null);
+  const [editedCardId, setEditedCardId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
@@ -204,93 +210,23 @@ export default function HomeScreen() {
     setExpandedColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  /** Следующий свободный id направления: демо-состояние живёт только в памяти. */
-  const nextDirectionId = (items: readonly Direction[]): string => {
-    const max = items.reduce((acc, item) => {
-      const numeric = Number.parseInt(item.id.replace(/\D/g, ''), 10);
-
-      return Number.isNaN(numeric) ? acc : Math.max(acc, numeric);
-    }, 0);
-
-    return `dir-${max + 1}`;
-  };
-
-  /** Название направления не должно повторяться: свимлайны на доске были бы неразличимы. */
-  const directionTitleError = (items: readonly Direction[], title: string, exceptId: string | null): string | null => {
-    const normalized = title.trim().toLowerCase();
-    const duplicate = items.some((item) => item.id !== exceptId && item.title.trim().toLowerCase() === normalized);
-
-    return duplicate ? 'Направление с таким названием уже есть.' : null;
-  };
-
-  /**
-   * Цвет направления уникален: одинаковые цвета слили бы свимлайны и карточки.
-   * В палитре занятые цвета уже недоступны, здесь — проверка на всякий случай.
-   */
-  const directionColorError = (items: readonly Direction[], color: string, exceptId: string | null): string | null =>
-    items.some((item) => item.id !== exceptId && item.color === color)
-      ? 'Этот цвет уже занят другим направлением.'
-      : null;
-
-  /** Добавить направление; возвращает текст ошибки для попапа или null. */
-  const addDirection = (title: string, color: string): string | null => {
-    const error = directionTitleError(directions, title, null) ?? directionColorError(directions, color, null);
-
-    if (error !== null) {
-      return error;
-    }
-
-    setDirections((prev) => [...prev, { id: nextDirectionId(prev), title, color }]);
-
-    return null;
-  };
-
-  /**
-   * Изменить направление.
-   *
-   * Смена цвета перекрашивает и карточки направления: цвет карточки — это цвет
-   * её направления, иначе полоски карточек разъедутся с точкой свимлайна.
-   */
-  const updateDirection = (id: string, title: string, color: string): string | null => {
-    const error = directionTitleError(directions, title, id) ?? directionColorError(directions, color, id);
-
-    if (error !== null) {
-      return error;
-    }
-
-    const current = directions.find((item) => item.id === id) ?? null;
-
-    setDirections((prev) => prev.map((item) => (item.id === id ? { ...item, title, color } : item)));
-
-    if (current !== null && current.color !== color) {
-      setCards((prev) => recolorDirection(prev, id, color));
-    }
-
-    return null;
-  };
-
-  /** Удалить направление: правило проверяется в попапе, здесь — последний рубеж. */
-  const removeDirection = (id: string) => {
-    const direction = directions.find((item) => item.id === id) ?? null;
-
-    if (direction === null || !checkDirectionDelete(cards, direction).allowed) {
-      return;
-    }
-
-    setDirections((prev) => prev.filter((item) => item.id !== id));
-  };
-
   /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
   const handleCardAction = (card: Card) => {
-    const action = cardAction(cards, card);
+    const action = cardAction(card);
 
     if (action === null) {
       return;
     }
 
     if (action.blockReason === null) {
-      setCards((prev) => updateCard(prev, card.id, { title: card.title, column: action.target }));
       setNotice(null);
+      // Перевод в следующую колонку — PATCH /tasks/{id}; при 409 сервер объясняет запрет.
+      void board.moveCard(card, action.target).then((error) => {
+        if (error !== null) {
+          setNotice(error);
+        }
+      });
+
       return;
     }
 
@@ -303,7 +239,7 @@ export default function HomeScreen() {
   };
 
   /** Форма из свимлайна: родитель предопределён. */
-  const openLaneForm = (level: BoardLevelModel, parentId: string | null, column: ColumnId) => {
+  const openLaneForm = (level: BoardLevelModel, parentId: number | null, column: ColumnId) => {
     setForm({ level: level.id, kind: LEVEL_CARD_KIND[level.id], parentId, column });
   };
 
@@ -317,51 +253,56 @@ export default function HomeScreen() {
     });
   };
 
-  /** Создание карточки: цвет и родитель берутся из выбранной в форме связи. */
-  const createCard = (cardDraft: CardDraft, title: string, parentId: string | null) => {
-    // Родитель инициативы — направление, у остальных уровней — карточка.
-    const parent =
-      directions.find((direction) => direction.id === parentId) ?? cards.find((card) => card.id === parentId) ?? null;
+  /**
+   * Создание карточки: родителя выбирает форма, остальное (цвет, ссылки иерархии)
+   * считает сервер, а модалке возвращается текст ошибки для показа внутри формы.
+   */
+  const createCard = async (cardDraft: CardDraft, title: string, parentId: number | null) => {
+    const error = await board.createCard(cardDraft, title, parentId);
 
-    setCards((prev) => [
-      ...prev,
-      {
-        id: nextCardId(prev),
-        kind: cardDraft.kind,
-        title,
-        column: cardDraft.columnId,
-        // Карточка без родителя получает служебный нейтральный цвет c0.
-        color: parent ? parent.color : UNPARENTED_CARD_COLOR,
-        parentId: parent ? parent.id : null,
-      },
-    ]);
-    setForm(null);
+    if (error === null) {
+      setForm(null);
+      setNotice(null);
+    }
+
+    return error;
   };
 
   /**
-   * Изменение карточки: название и статус, если правило смены статуса выполнено.
-   * Ошибку возвращаем модалке — она показывается внутри попапа, а не над доской.
+   * Изменение карточки: название и статус. Ошибку возвращаем модалке — она
+   * показывается внутри попапа, а не над доской.
    */
-  const saveCard = (card: Card, title: string, column: ColumnId): string | null => {
-    const check = checkColumnChange(cards, card, column);
+  const saveCard = async (card: Card, title: string, column: ColumnId) => {
+    const error = await board.saveCard(card, title, column);
 
-    if (!check.allowed) {
-      // Форма блокирует статусы сама, сюда попадаем только при гонке данных.
-      return check.reason;
+    if (error === null) {
+      setEditedCardId(null);
+      setNotice(null);
     }
 
-    setCards((prev) => updateCard(prev, card.id, { title, column }));
-    setEditedCardId(null);
-    setNotice(null);
+    return error;
+  };
 
-    return null;
+  /** Удаление карточки; 409 (есть дочерние карточки) возвращаем модалке. */
+  const removeCard = async (card: Card) => {
+    const error = await board.removeCard(card);
+
+    if (error === null) {
+      setEditedCardId(null);
+      setNotice(null);
+    }
+
+    return error;
   };
 
   const draft = buildDraft(form, cards, directions);
 
   const editedCard = editedCardId === null ? null : (cards.find((card) => card.id === editedCardId) ?? null);
+  // Сменить статус нельзя, если сервер разрешил только текущую колонку.
   const editedCardLockedReason =
-    editedCard === null ? null : (checkColumnChange(cards, editedCard, editedCard.column).reason ?? null);
+    editedCard !== null && editedCard.allowedTransitions.length <= 1
+      ? `Нельзя сменить статус «${editedCard.title}»: у неё есть зависимые карточки в работе. Сначала завершите или отмените их.`
+      : null;
 
   const handleSignOut = async () => {
     await signOut();
@@ -389,6 +330,41 @@ export default function HomeScreen() {
 
         {notice ? <FormAlert message={notice} /> : null}
 
+        {loadError !== null ? (
+          <View className="gap-2 rounded-xl border border-border bg-card p-3">
+            <FormAlert message={loadError} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isRefreshing }}
+              disabled={isRefreshing}
+              onPress={() => void reloadBoard()}
+              className={[
+                'h-10 items-center justify-center rounded-xl bg-app active:opacity-90',
+                isRefreshing ? 'opacity-60' : '',
+              ].join(' ')}
+            >
+              <Text className="text-sm font-semibold text-white">Повторить</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {isLoading ? (
+          <View className="items-center gap-2 rounded-xl bg-card px-4 py-10">
+            <ActivityIndicator color="#111827" />
+            <Text className="text-xs text-muted">Загружаем доску…</Text>
+          </View>
+        ) : null}
+
+        {!isLoading && loadError === null && directions.length === 0 && cards.length === 0 ? (
+          <View className="items-center gap-1 rounded-xl bg-card px-4 py-10">
+            <Text className="text-sm font-semibold text-app">Доска пуста</Text>
+            <Text className="text-center text-xs text-muted">
+              Добавьте направление: в настройках стратегического уровня, затем создайте инициативу.
+            </Text>
+          </View>
+        ) : null}
+
         {LEVELS.map((level) => {
           const lanes = swimlanesOf(cards, directions, level);
           const parentKind = PARENT_KIND[level.id];
@@ -407,7 +383,7 @@ export default function HomeScreen() {
               width={width}
               expandedColumns={expandedColumns}
               onToggleColumn={toggleColumn}
-              cardAction={(card) => cardAction(cards, card)}
+              cardAction={cardAction}
               onCardAction={handleCardAction}
               onOpenCard={(card) => setEditedCardId(card.id)}
               onAddCard={(parentId, columnId) => openLaneForm(level, parentId, columnId)}
@@ -420,7 +396,9 @@ export default function HomeScreen() {
           );
         })}
 
-        <Text className="px-1 pb-2 text-center text-[11px] text-subtle">Демо-данные: доска ещё не связана с API</Text>
+        <Text className="px-1 pb-2 text-center text-[11px] text-subtle">
+          Данные доски хранятся на сервере и общие для всех устройств
+        </Text>
       </ScrollView>
 
       {/* Меню настроек уровня: иконка есть на всех уровнях, но пункты свои.
@@ -447,9 +425,9 @@ export default function HomeScreen() {
       <DirectionsModal
         visible={directionsOpen}
         directions={directions}
-        onAdd={addDirection}
-        onUpdate={updateDirection}
-        onDelete={removeDirection}
+        onAdd={board.addDirection}
+        onUpdate={board.editDirection}
+        onDelete={board.removeDirection}
         deleteReason={(direction) => checkDirectionDelete(cards, direction).reason}
         onClose={() => setDirectionsOpen(false)}
       />
@@ -460,6 +438,7 @@ export default function HomeScreen() {
         card={editedCard}
         lockedReason={editedCardLockedReason}
         onSave={saveCard}
+        onDelete={removeCard}
         onClose={() => setEditedCardId(null)}
       />
     </View>

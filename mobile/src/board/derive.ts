@@ -1,81 +1,54 @@
 /**
  * Чистые функции над состоянием доски.
  *
- * Здесь нет React: вычисления и проверки правил живут отдельно от рендера,
+ * Здесь нет React: вычисления и проверки живут отдельно от рендера,
  * поэтому их можно свободно вызывать в теле компонента.
+ *
+ * Правила смены колонки на клиенте не дублируются: сервер отдаёт у каждой
+ * карточки `allowedTransitions`, и интерфейс показывает переходы только по нему.
  */
 
-import { COLUMNS, type Card, type CardKind, type ColumnId, type Direction, type MoveDirection } from './types';
+import { COLUMNS, type Card, type CardKind, type ColumnId, type Direction } from './types';
 
 /** Индекс колонки в фиксированном порядке доски. */
 function columnIndex(column: ColumnId): number {
   return COLUMNS.findIndex((item) => item.id === column);
 }
 
-/** Соседняя колонка в указанном направлении; null — за краем доски. */
-export function neighborColumn(column: ColumnId, direction: MoveDirection): ColumnId | null {
-  const next = COLUMNS[columnIndex(column) + (direction === 'prev' ? -1 : 1)];
-
-  return next ? next.id : null;
+/** Карточки, у которых указанная карточка — родитель: проекты инициативы, задачи проекта. */
+export function childrenOf(cards: readonly Card[], card: Card): Card[] {
+  return cards.filter((item) =>
+    card.kind === 'initiative' ? item.initiativeId === card.id : item.projectId === card.id,
+  );
 }
 
-/** Дочерние карточки (проекты инициативы, задачи проекта). */
-export function childrenOf(cards: readonly Card[], cardId: string): Card[] {
-  return cards.filter((card) => card.parentId === cardId);
-}
-
-/** Дочерние карточки, которые сейчас в работе — они блокируют перенос родителя. */
-export function activeChildren(cards: readonly Card[], cardId: string): Card[] {
-  return childrenOf(cards, cardId).filter((card) => card.column === 'in_progress');
+/** Карточки направления на любом уровне: инициативы, их проекты и задачи. */
+export function directionCards(cards: readonly Card[], directionId: number): Card[] {
+  return cards.filter((card) => card.directionId === directionId);
 }
 
 export interface MoveCheck {
   allowed: boolean;
-  /** Текст причины запрета; null — стрелка просто недоступна на краю доски. */
+  /** Текст причины запрета; null — переход разрешён. */
   reason: string | null;
 }
 
 /**
- * Можно ли перевести карточку в соседнюю колонку.
+ * Можно ли перевести карточку в указанную колонку.
  *
- * Правила:
- * - если у карточки есть дети в «В работе», перенос запрещён в любую колонку;
- * - из «Беклога» влево и из «Отмены» вправо двигаться некуда.
+ * Решение принимает сервер: `allowedTransitions` содержит колонки, доступные
+ * прямо сейчас, плюс текущую. Если целевой колонки там нет — смену блокируют
+ * зависимые карточки в работе.
  */
-export function checkMove(cards: readonly Card[], card: Card, direction: MoveDirection): MoveCheck {
-  const active = activeChildren(cards, card.id);
-
-  if (active.length > 0) {
-    return {
-      allowed: false,
-      reason: `Нельзя переместить «${card.title}»: у неё есть зависимые карточки в работе (${active.length}). Сначала завершите или отмените их.`,
-    };
-  }
-
-  return { allowed: neighborColumn(card.column, direction) !== null, reason: null };
-}
-
-/**
- * Можно ли сменить колонку карточки из формы редактирования.
- *
- * Правило то же, что у стрелок: карточка с детьми в «В работе» заперта в своей
- * колонке. Переход в текущую колонку — это не смена статуса, он разрешён всегда.
- */
-export function checkColumnChange(cards: readonly Card[], card: Card, target: ColumnId): MoveCheck {
-  if (target === card.column) {
+export function checkColumnChange(card: Card, target: ColumnId): MoveCheck {
+  if (target === card.column || card.allowedTransitions.includes(target)) {
     return { allowed: true, reason: null };
   }
 
-  const active = activeChildren(cards, card.id);
-
-  if (active.length > 0) {
-    return {
-      allowed: false,
-      reason: `Нельзя сменить статус «${card.title}»: у неё есть зависимые карточки в работе (${active.length}). Сначала завершите или отмените их.`,
-    };
-  }
-
-  return { allowed: true, reason: null };
+  return {
+    allowed: false,
+    reason: `Нельзя сменить статус «${card.title}»: у неё есть зависимые карточки в работе. Сначала завершите или отмените их.`,
+  };
 }
 
 /** Действие на карточке: перевод в следующую колонку. */
@@ -88,61 +61,34 @@ export interface CardAction {
   blockReason: string | null;
 }
 
-/** Действие иконки по текущей колонке карточки: «Беклог» и «В работе» — с переходом. */
-const NEXT_COLUMN_ACTION: Partial<Record<ColumnId, { target: ColumnId; label: string }>> = {
-  backlog: { target: 'in_progress', label: 'Взять в работу' },
-  in_progress: { target: 'done', label: 'Завершить задачу' },
-};
+/** Подпись действия перехода: зависит от целевой колонки. */
+function actionLabel(target: ColumnId): string {
+  return target === 'in_progress' ? 'Взять в работу' : 'Завершить задачу';
+}
 
 /**
- * Действие карточки по её текущей колонке.
+ * Действие иконки на карточке: следующий шаг по порядку колонок.
  *
- * Из «Беклога» — «Взять в работу» (в «В работе»), из «В работе» — «Завершить
- * задачу» (в «Готово»). В «Готово» и «Отмене» действий нет — вернётся null.
- * Доступность перехода проверяется тем же правилом, что и у формы редактирования.
+ * В «Готово» и «Отмене» действий нет. Если следующий шаг запрещён
+ * (`allowedTransitions` содержит только текущую колонку), иконка остаётся
+ * и нажатие объясняет причину: на web Alert не работает, поэтому решение
+ * «где показать текст» принимает экран.
  */
-export function cardAction(cards: readonly Card[], card: Card): CardAction | null {
-  const action = NEXT_COLUMN_ACTION[card.column];
+export function cardAction(card: Card): CardAction | null {
+  const index = columnIndex(card.column);
+  const next = COLUMNS[index + 1];
 
-  if (action === undefined) {
+  if (index < 0 || next === undefined || next.id === 'canceled') {
     return null;
   }
 
-  return { ...action, blockReason: checkMove(cards, card, 'next').reason };
-}
+  const allowed = card.allowedTransitions.includes(next.id);
 
-/** Новый массив карточек с обновлённым названием и/или колонкой. */
-export function updateCard(cards: readonly Card[], cardId: string, patch: Pick<Card, 'title' | 'column'>): Card[] {
-  return cards.map((card) => (card.id === cardId ? { ...card, ...patch } : card));
-}
-
-/** Карточки свимлайна: у родителя — его дети, у корневого свимлайна — все карточки типа. */
-export function laneCards(cards: readonly Card[], kind: CardKind, laneId: string | null): Card[] {
-  return cards.filter((card) => (laneId === null ? card.kind === kind : card.parentId === laneId));
-}
-
-/**
- * Все потомки карточки на любую глубину: проекты инициативы, задачи проектов.
- *
- * Направления — не карточки, поэтому их родителем в обход иерархии не выбраться:
- * обход идёт только по `parentId` карточек.
- */
-function collectDescendants(cards: readonly Card[], cardId: string, acc: Card[] = []): Card[] {
-  cards.forEach((card) => {
-    if (card.parentId === cardId) {
-      acc.push(card);
-      collectDescendants(cards, card.id, acc);
-    }
-  });
-
-  return acc;
-}
-
-/** Карточки направления: инициативы и все их потомки на других уровнях. */
-export function directionCards(cards: readonly Card[], directionId: string): Card[] {
-  return cards
-    .filter((card) => card.parentId === directionId)
-    .flatMap((card) => [card, ...collectDescendants(cards, card.id)]);
+  return {
+    target: next.id,
+    label: actionLabel(next.id),
+    blockReason: allowed ? null : checkColumnChange(card, next.id).reason,
+  };
 }
 
 /**
@@ -151,6 +97,7 @@ export function directionCards(cards: readonly Card[], directionId: string): Car
  * Удаление запрещено, если в направлении есть карточки в любой колонке —
  * иначе инициативы остались бы без родителя. Карточки в «Отмене» и «Готово»
  * тоже считаются: они принадлежат направлению и отображаются в его свимлайне.
+ * Финальную проверку повторяет сервер (409 при непустом направлении).
  */
 export function checkDirectionDelete(cards: readonly Card[], direction: Direction): MoveCheck {
   const total = directionCards(cards, direction.id).length;
@@ -165,36 +112,7 @@ export function checkDirectionDelete(cards: readonly Card[], direction: Directio
   return { allowed: true, reason: null };
 }
 
-/**
- * Перекрасить направление и все его карточки.
- *
- * Цвет карточки — это цвет её направления, поэтому после смены цвета точки
- * свимлайна карточки обязаны перекраситься каскадом: инициативы, а за ними
- * проекты и задачи. Карточки без родителя своего цвета не имеют и не меняются.
- */
-export function recolorDirection(cards: readonly Card[], directionId: string, color: string): Card[] {
-  const affected = new Set(directionCards(cards, directionId).map((card) => card.id));
-
-  return cards.map((card) => (affected.has(card.id) ? { ...card, color } : card));
-}
-
-/** Только карточки указанной колонки (в исходном порядке). */
-export function cardsInColumn(cards: readonly Card[], column: ColumnId): Card[] {
-  return cards.filter((card) => card.column === column);
-}
-
 /** Карточки, которые могут быть родителем на уровне: только те, что в работе. */
 export function parentCandidates(cards: readonly Card[], kind: CardKind): Card[] {
   return cards.filter((card) => card.kind === kind && card.column === 'in_progress');
-}
-
-/** Количество карточек по колонкам — для счётчиков в заголовках. */
-export function countByColumn(cards: readonly Card[]): Record<ColumnId, number> {
-  const result: Record<ColumnId, number> = { backlog: 0, in_progress: 0, done: 0, canceled: 0 };
-
-  cards.forEach((card) => {
-    result[card.column] += 1;
-  });
-
-  return result;
 }
