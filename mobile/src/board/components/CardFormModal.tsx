@@ -3,9 +3,10 @@
  *
  * Два режима:
  * - «с родителем из свимлайна» — родитель предопределён, цвет уже известен;
- * - «с выбором родителя» — карточку уровня создают кнопкой в шапке уровня,
- *   родитель обязателен (для тактики/операционного — только из «В работе»),
- *   у операционного уровня есть опция «Без проекта» (карточка получает служебный цвет c0).
+ * - «с выбором родителя» — карточку уровня создают кнопкой в шапке уровня.
+ *   У направления на стратегическом уровне родитель обязателен, а у тактического
+ *   и операционного есть опция «без родителя»: проект без инициативы и задача без
+ *   проекта допустимы (карточка получает служебный нейтральный цвет c0).
  */
 
 import { useState } from 'react';
@@ -13,7 +14,6 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
 import { FormAlert } from '../../components/FormAlert';
-import { EMPTY_COLOR } from '../colors';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
 import { KIND_LABEL, PARENT_LABEL } from '../types';
@@ -31,8 +31,10 @@ export interface CardDraft {
    * null — выбор не нужен.
    */
   parentOptions: ParentOptionModel[] | null;
-  /** Можно ли создать карточку без родителя (операционный уровень). */
+  /** Можно ли создать карточку без родителя (проект без инициативы, задача без проекта). */
   allowNoParent: boolean;
+  /** Подпись опции «без родителя» в списке: у тактики и операционного уровня она своя. */
+  noParentLabel: string;
   columnLabel: string;
   /** Колонка, в которую попадёт карточка. */
   columnId: ColumnId;
@@ -67,7 +69,7 @@ function ParentOption({ label, color, selected, onPress }: ParentOptionProps) {
     >
       <View
         className="h-3 w-3 rounded-full border border-border"
-        style={{ backgroundColor: directionColorHex(color) ?? EMPTY_COLOR }}
+        style={{ backgroundColor: directionColorHex(color) }}
       />
 
       <Text className="flex-1 text-sm text-app" numberOfLines={1}>
@@ -183,7 +185,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
               <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
                 {draft.allowNoParent ? (
                   <ParentOption
-                    label="Без проекта (нейтральный цвет)"
+                    label={draft.noParentLabel}
                     color={UNPARENTED_CARD_COLOR}
                     selected={parentId === null}
                     onPress={() => {
@@ -220,10 +222,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
             <View
               className="h-4 w-4 rounded-full border border-border"
-              style={{ backgroundColor: directionColorHex(previewColor) ?? EMPTY_COLOR }}
+              style={{ backgroundColor: directionColorHex(previewColor) }}
             />
 
-            <Text className="text-xs text-muted">{previewColor === null ? 'без цвета' : 'наследуется'}</Text>
+            <Text className="text-xs text-muted">{previewColor === null ? 'без родителя' : 'наследуется'}</Text>
           </View>
 
           <View className="flex-row gap-2">

@@ -151,8 +151,10 @@ export default function AuthScreen() {
           automaticallyAdjustKeyboardInsets
         >
           <View className="w-full max-w-md gap-6 self-center rounded-2xl border border-black/5 bg-card p-6">
+            {/* Лого и слоган: название продукта сверху, под ним — короткое описание. */}
             <View className="gap-2">
               <Text className="text-2xl font-bold text-app">JWP Board</Text>
+              <Text className="text-xs font-medium uppercase tracking-wide text-subtle">Персональный канбан</Text>
               <Text className="text-sm text-muted">
                 {isSignUp ? 'Создайте аккаунт по email и паролю.' : 'Войдите, чтобы продолжить работу.'}
               </Text>

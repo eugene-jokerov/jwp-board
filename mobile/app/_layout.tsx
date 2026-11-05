@@ -3,9 +3,38 @@ import '../global.css';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
+import { BRAND_NAME, BrandTitle } from '../src/components/BrandTitle';
+
+/**
+ * Лого и слоган в заголовке: вместо одной строки «JWP Board» — название и под
+ * ним слоган. Размеры совпадают со стандартным заголовком стека (web — 18 px
+ * medium), а `overflow` — половина строки слогана: центр заголовка ограничен
+ * высотой хедера, и без смещения слоган обрезался бы снизу.
+ */
+const HEADER_TITLE_FONT_SIZE = 18;
+const HEADER_TITLE_OVERFLOW = 8;
+
+function headerTitle() {
+  return (
+    <BrandTitle overflow={HEADER_TITLE_OVERFLOW} color="#111827" fontSize={HEADER_TITLE_FONT_SIZE} fontWeight="500" />
+  );
+}
+
+/**
+ * Заголовок экрана.
+ *
+ * На web заголовок рисуется обычными элементами, и туда передаётся кастомный
+ * `headerTitle` с лого и слоганом. На native заголовок — системный, кастомный
+ * компонент в нём не поддерживается: там остаётся название продукта одной
+ * строкой, а слоган виден сразу в шапке экрана и на форме входа.
+ */
+const SCREEN_OPTIONS = {
+  headerTitleAlign: 'center' as const,
+  ...(Platform.OS === 'web' ? { headerTitle } : null),
+};
 
 /**
  * Корневой layout приложения (expo-router).
@@ -56,8 +85,8 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{ headerTitleAlign: 'center' }}>
-      <Stack.Screen name="index" options={{ title: 'JWP Board' }} />
+    <Stack screenOptions={SCREEN_OPTIONS}>
+      <Stack.Screen name="index" options={{ title: BRAND_NAME }} />
       <Stack.Screen name="auth" options={{ headerShown: false, title: 'Вход' }} />
     </Stack>
   );

@@ -7,7 +7,8 @@
  * внутри свимлайна раскладываются вертикально как аккордеон.
  */
 
-import { useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +21,8 @@ import {
 } from 'react-native';
 
 import { useAuth } from '../src/auth/AuthContext';
-import { BoardLevel, type SwimlaneModel } from '../src/board/components/BoardLevel';
+import { BoardLevel, type LevelCreateHintModel, type SwimlaneModel } from '../src/board/components/BoardLevel';
+import { HamburgerIcon } from '../src/board/components/BoardIcons';
 import { CardEditModal } from '../src/board/components/CardEditModal';
 import { CardFormModal, type CardDraft } from '../src/board/components/CardFormModal';
 import { DirectionsModal } from '../src/board/components/DirectionsModal';
@@ -41,6 +43,7 @@ import {
   type LevelId,
 } from '../src/board/types';
 import { FormAlert } from '../src/components/FormAlert';
+import { MainMenu } from '../src/components/MainMenu';
 
 /** Ниже этой ширины доска переключается в одноколоночный режим (телефон). */
 const COMPACT_MAX_WIDTH = 900;
@@ -54,12 +57,29 @@ const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   operational: '+ Задача',
 };
 
-/** Текст под кнопкой уровня, если создать карточку нельзя. */
-const LEVEL_CREATE_HINT: Record<LevelId, string> = {
-  strategic: '',
-  tactical: 'Нужна хотя бы одна инициатива в «В работе»',
-  operational: 'Нужен хотя бы один проект в «В работе»',
-};
+/**
+ * Подсказка под кнопкой уровня, если создать карточку нельзя.
+ *
+ * Кнопку блокирует только стратегический уровень: инициатива не может жить
+ * вне направления. Проект без инициативы и задачу без проекта создавать можно —
+ * сервер это разрешает (TaskPlacement), поэтому блокировать тактику и операционный
+ * уровень из-за пустых свимлайнов не нужно.
+ *
+ * Текст подсказки тот же, что был, но слово «направление» — ссылка: клик сразу
+ * открывает попап «Направления», где направление и добавляют.
+ */
+function createHintOf(level: LevelId, onOpenDirections: () => void): LevelCreateHintModel | null {
+  if (level !== 'strategic') {
+    return null;
+  }
+
+  return {
+    before: 'Сначала добавьте ',
+    link: 'направление',
+    after: ': настройки уровня → «Направления»',
+    onPressLink: onOpenDirections,
+  };
+}
 
 /** Тип карточки, который создают на уровне. */
 const LEVEL_CARD_KIND: Record<LevelId, CardKind> = {
@@ -83,9 +103,11 @@ function columnLabel(column: ColumnId): string {
 
 /**
  * Свимлайны уровня:
- * - стратегический — направления деятельности;
+ * - стратегический — направления деятельности; инициативы без направления
+ *   собираются в свимлайн «Без направления»;
  * - тактический/операционный — родительские карточки из «В работе»; карточки
- *   родителей вне работы и карточки без родителя собираются в свимлайн «без родителя».
+ *   родителей вне работы и карточки без родителя (проект без инициативы, задача
+ *   без проекта) собираются в свимлайн «без родителя».
  */
 function swimlanesOf(
   cards: readonly Card[],
@@ -93,14 +115,34 @@ function swimlanesOf(
   level: BoardLevelModel,
 ): SwimlaneModel[] {
   if (level.id === 'strategic') {
-    return directions.map((direction) => ({
+    const initiatives = cards.filter((card) => card.kind === 'initiative');
+
+    const lanes: SwimlaneModel[] = directions.map((direction) => ({
       id: `direction-${direction.id}`,
       parentId: direction.id,
       title: direction.title,
       // У направления хранится ключ палитры, свимлайн рисуется оттенком.
       color: directionColorHex(direction.color),
-      cards: cards.filter((card) => card.kind === 'initiative' && card.directionId === direction.id),
+      cards: initiatives.filter((card) => card.directionId === direction.id),
     }));
+
+    // Инициативы без направления остаются в данных, даже если все направления
+    // удалили: специально их не создают (кнопка заблокирована), но терять их
+    // из виду нельзя — показываем в служебном свимлайне.
+    const directionIds = new Set(directions.map((direction) => direction.id));
+    const unassigned = initiatives.filter((card) => card.directionId === null || !directionIds.has(card.directionId));
+
+    if (unassigned.length > 0) {
+      lanes.push({
+        id: 'no_direction',
+        parentId: null,
+        title: 'Без направления',
+        color: directionColorHex(UNPARENTED_CARD_COLOR),
+        cards: unassigned,
+      });
+    }
+
+    return lanes;
   }
 
   const parentKind = PARENT_KIND[level.id];
@@ -118,6 +160,8 @@ function swimlanesOf(
     parentId: parent.id,
     title: parent.title,
     // У карточки-родителя хранится ключ палитры, свимлайн рисуется оттенком.
+    // У проекта без инициативы цвет null — резолвер отдаёт служебный c0,
+    // поэтому такой свимлайн не остаётся без точки цвета.
     color: directionColorHex(parent.color),
     // Дети свимлайна — карточки, у которых родитель именно эта карточка.
     cards: children.filter((card) => card.kind !== parent.kind && parentOf(card)?.id === parent.id),
@@ -164,9 +208,14 @@ function buildDraft(
     laneId: fromLane ? form.parentId : null,
     laneColor: parent?.color ?? direction?.color ?? null,
     laneTitle: parent?.title ?? direction?.title ?? null,
-    // У стратегического уровня родитель формы — направление, его выбирают из списка.
+    // Уровень формы задаёт родителя: у стратегического это направление из списка,
+    // у остальных — родительская карточка. Пустой список не блокирует форму:
+    // проект без инициативы и задачу без проекта сервер разрешает.
     parentOptions: fromLane ? null : parentKind === null ? [...directions] : parentCandidates(cards, parentKind),
-    allowNoParent: !fromLane && form.level === 'operational',
+    // Родитель необязателен на тактическом (проект без инициативы) и
+    // операционном (задача без проекта) уровнях. У инициативы направление обязательно.
+    allowNoParent: !fromLane && form.level !== 'strategic',
+    noParentLabel: form.level === 'tactical' ? 'Без инициативы (нейтральный цвет)' : 'Без проекта (нейтральный цвет)',
     columnLabel: columnLabel(form.column),
     columnId: form.column,
     levelLabel: level.label,
@@ -175,6 +224,7 @@ function buildDraft(
 
 export default function HomeScreen() {
   const { session, signOut } = useAuth();
+  const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const compact = width < COMPACT_MAX_WIDTH;
 
@@ -201,6 +251,26 @@ export default function HomeScreen() {
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
   /** true — открыт попап настроек направлений. */
   const [directionsOpen, setDirectionsOpen] = useState(false);
+  /** true — открыто главное меню (гамбургер в шапке). */
+  const [mainMenuOpen, setMainMenuOpen] = useState(false);
+
+  // Гамбургер главного меню — в правом углу шапки стека. Настройки шапки
+  // задаются экраном (см. app/_layout.tsx), само меню — модалка MainMenu.
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Главное меню"
+          onPress={() => setMainMenuOpen(true)}
+          hitSlop={8}
+          className="h-9 w-9 items-center justify-center rounded-lg active:bg-surface"
+        >
+          <HamburgerIcon />
+        </Pressable>
+      ),
+    });
+  }, [navigation]);
 
   const toggleLevel = (levelId: LevelId) => {
     setCollapsedLevels((prev) => ({ ...prev, [levelId]: !prev[levelId] }));
@@ -305,29 +375,13 @@ export default function HomeScreen() {
       : null;
 
   const handleSignOut = async () => {
+    setMainMenuOpen(false);
     await signOut();
   };
 
   return (
     <View className="flex-1 bg-surface">
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-3 py-3">
-        <View className="flex-row items-center gap-3 rounded-2xl bg-card px-4 py-3">
-          <View className="flex-1 gap-0.5">
-            <Text className="text-base font-bold text-app">Канбан-доска</Text>
-            <Text className="text-xs text-muted" numberOfLines={1}>
-              {session?.user?.email ?? '—'}
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void handleSignOut()}
-            className="rounded-xl bg-app px-3 py-2 active:opacity-90"
-          >
-            <Text className="text-xs font-semibold text-white">Выйти</Text>
-          </Pressable>
-        </View>
-
         {notice ? <FormAlert message={notice} /> : null}
 
         {loadError !== null ? (
@@ -360,17 +414,18 @@ export default function HomeScreen() {
           <View className="items-center gap-1 rounded-xl bg-card px-4 py-10">
             <Text className="text-sm font-semibold text-app">Доска пуста</Text>
             <Text className="text-center text-xs text-muted">
-              Добавьте направление: в настройках стратегического уровня, затем создайте инициативу.
+              Добавьте направление: в настройках стратегического уровня, затем создайте инициативу. Проекты и задачи
+              можно создавать и без родителя.
             </Text>
           </View>
         ) : null}
 
         {LEVELS.map((level) => {
           const lanes = swimlanesOf(cards, directions, level);
-          const parentKind = PARENT_KIND[level.id];
-          // На стратегическом родитель (направление) всегда есть; ниже нужен хотя бы
-          // один родитель в работе, иначе выбрать его в форме не из чего.
-          const canCreate = parentKind === null || parentCandidates(cards, parentKind).length > 0;
+          // Кнопку блокирует только стратегический уровень: инициативе родитель
+          // (направление) обязателен, а проекту и задаче родитель не нужен —
+          // они создаются и «без инициативы» / «без проекта».
+          const canCreate = level.id !== 'strategic' || directions.length > 0;
 
           return (
             <BoardLevel
@@ -390,7 +445,7 @@ export default function HomeScreen() {
               onCreateInLevel={() => openLevelForm(level)}
               createLabel={LEVEL_CREATE_LABEL[level.id]}
               canCreate={canCreate}
-              createHint={canCreate ? null : LEVEL_CREATE_HINT[level.id]}
+              createHint={canCreate ? null : createHintOf(level.id, () => setDirectionsOpen(true))}
               onOpenSettings={() => setSettingsLevel(level.id)}
             />
           );
@@ -400,6 +455,17 @@ export default function HomeScreen() {
           Данные доски хранятся на сервере и общие для всех устройств
         </Text>
       </ScrollView>
+
+      {/* Главное меню: действия уровня аккаунта. Открывается гамбургером в шапке,
+          поэтому данных пользователя на самой доске больше нет. */}
+      <MainMenu
+        visible={mainMenuOpen}
+        email={session?.user?.email ?? '—'}
+        items={[
+          { label: 'Выйти', confirm: true, confirmQuestion: 'Выйти из аккаунта?', onPress: () => void handleSignOut() },
+        ]}
+        onClose={() => setMainMenuOpen(false)}
+      />
 
       {/* Меню настроек уровня: иконка есть на всех уровнях, но пункты свои.
           Сейчас «Направления» есть только у стратегического — там они и живут. */}

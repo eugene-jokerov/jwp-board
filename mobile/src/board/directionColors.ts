@@ -66,6 +66,9 @@ export const DIRECTION_COLORS: readonly DirectionColor[] = [
  */
 export const UNPARENTED_CARD_COLOR = 'c0';
 
+/** Оттенок служебного цвета: единый источник для резолвера и запасных оттенков. */
+const UNPARENTED_CARD_HEX = '#a8a29e';
+
 /**
  * Все ключи, у которых есть оттенок: служебный c0 и палитра направлений.
  *
@@ -98,18 +101,20 @@ export function firstFreeDirectionColor(usedColors: readonly string[]): string {
  * Оттенок для интерфейса по ключу палитры.
  *
  * В данных живёт только ключ, поэтому любой показ цвета идёт через эту функцию.
- * Неизвестный ключ (например, из будущего API) красится служебным нейтральным
- * цветом, а не первым цветом палитры: иначе любая «дырка» в палитре даёт синие
- * свимлайны и карточки.
+ * `null` — у карточки нет направления (проект без инициативы, задача без
+ * проекта): это тот же случай, что и служебный ключ `c0`, поэтому оттенок один
+ * и тот же. Неизвестный ключ (например, из будущего API) тоже красится
+ * служебным нейтральным цветом, а не первым цветом палитры: иначе любая
+ * «дырка» в палитре даёт синие свимлайны и карточки.
  */
-export function directionColorHex(key: string | null): string | null {
+export function directionColorHex(key: string | null): string {
   if (key === null) {
-    return null;
+    return UNPARENTED_CARD_HEX;
   }
 
   const color = SHOWABLE_COLORS.find((item) => item.key === key);
 
-  return HEX_BY_COLOR_KEY[color ? color.key : UNPARENTED_CARD_COLOR] ?? null;
+  return HEX_BY_COLOR_KEY[color ? color.key : UNPARENTED_CARD_COLOR] ?? UNPARENTED_CARD_HEX;
 }
 
 /** Название цвета по ключу — для подсказок и доступности. */
@@ -127,7 +132,7 @@ export function directionColorLabel(key: string): string {
  */
 const HEX_BY_COLOR_KEY: Record<string, string> = {
   // Служебный нейтральный цвет карточек без родителя.
-  [UNPARENTED_CARD_COLOR]: '#a8a29e',
+  [UNPARENTED_CARD_COLOR]: UNPARENTED_CARD_HEX,
   c1: '#3b82f6',
   c2: '#f59e0b',
   c3: '#22c55e',

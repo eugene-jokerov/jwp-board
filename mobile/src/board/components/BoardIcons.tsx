@@ -9,7 +9,7 @@
 
 import { View } from 'react-native';
 
-import { CircleCheck, Play, Settings } from 'lucide-react-native';
+import { CircleCheck, Menu, Play, Settings } from 'lucide-react-native';
 
 /** Три точки в столбик — «меню колонки». */
 export function MenuIcon() {
@@ -51,4 +51,9 @@ const CONTROL_ICON_COLOR = '#6b7280';
 /** Иконка «Настройки уровня»: шестерёнка в строке с кнопкой создания. */
 export function SettingsIcon() {
   return <Settings size={14} color={CONTROL_ICON_COLOR} />;
+}
+
+/** Иконка главного меню: «гамбургер» в шапке экрана. */
+export function HamburgerIcon() {
+  return <Menu size={22} color={CONTROL_ICON_COLOR} />;
 }

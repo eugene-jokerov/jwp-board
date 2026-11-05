@@ -20,7 +20,6 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { CheckIcon, PlayIcon } from './BoardIcons';
-import { NEUTRAL_COLOR } from '../colors';
 import { directionColorHex } from '../directionColors';
 import type { CardAction } from '../derive';
 import type { CardKind } from '../types';
@@ -52,8 +51,9 @@ export function BoardCard({ title, color, hasParent, kind, action, onAction, onP
 
   return (
     <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
-      {/* Полоса цвета родителя — единственный цветной акцент карточки. */}
-      <View className="w-1" style={{ backgroundColor: directionColorHex(color) ?? NEUTRAL_COLOR }} />
+      {/* Полоса цвета родителя — единственный цветной акцент карточки.
+          У карточки без родителя резолвер отдаёт служебный c0. */}
+      <View className="w-1" style={{ backgroundColor: directionColorHex(color) }} />
 
       <View className="flex-1 gap-1.5 px-2.5 py-2">
         {/* Открытие карточки — отдельная область над названием: кнопка-иконка

@@ -138,9 +138,30 @@ export interface SwimlaneModel {
   /** id родительской карточки/направления; у свимлайна «без родителя» — null. */
   parentId: number | null;
   title: string;
-  /** Оттенок точки свимлайна (HEX), а не ключ палитры: компоненты рисуют его как есть. */
-  color: string | null;
+  /**
+   * Оттенок точки свимлайна (HEX), а не ключ палитры: компоненты рисуют его как есть.
+   * У свимлайна проекта/задачи без родителя — служебный оттенок c0.
+   */
+  color: string;
   cards: Card[];
+}
+
+/**
+ * Подсказка под кнопкой уровня, если создать карточку нельзя.
+ *
+ * Текст разбит на три части, чтобы ссылкой было только одно слово внутри фразы
+ * (например, «направление»), а остальное осталось обычным текстом. Клик по
+ * ссылке сразу открывает экран, где нужную сущность создают.
+ */
+export interface LevelCreateHintModel {
+  /** Текст перед ссылкой. */
+  before: string;
+  /** Текст ссылки; null — ссылки нет, подсказка показывается обычным текстом. */
+  link: string | null;
+  /** Текст после ссылки. */
+  after: string;
+  /** Клик по ссылке: открыть экран настроек. */
+  onPressLink: () => void;
 }
 
 interface BoardLevelProps {
@@ -166,9 +187,10 @@ interface BoardLevelProps {
   onOpenSettings: () => void;
   /** Подпись кнопки уровня, например «+ Инициатива». */
   createLabel: string;
-  /** Можно ли создать карточку уровня (например, нет инициатив в работе). */
+  /** Можно ли создать карточку уровня (например, нет направлений). */
   canCreate: boolean;
-  createHint: string | null;
+  /** Подсказка под кнопкой уровня, если создать карточку нельзя; null — подсказки нет. */
+  createHint: LevelCreateHintModel | null;
 }
 
 export function BoardLevel({
@@ -245,8 +267,29 @@ export function BoardLevel({
       </Pressable>
 
       {/* Подсказка занимает свободное место, поэтому иконка настроек прижата
-          к правому краю колонки свимлайнов — над их правой границей. */}
-      {createHint ? <Text className="flex-1 text-[11px] text-muted">{createHint}</Text> : <View className="flex-1" />}
+          к правому краю колонки свимлайнов — над их правой границей.
+          Ссылкой оформляется только фрагмент фразы (`createHint.link`): остальной
+          текст остаётся обычным, а клик по ссылке сразу открывает нужный экран
+          настроек — искать пункт в меню уровня не нужно. */}
+      {createHint ? (
+        <Text className="flex-1 text-[11px] text-muted">
+          {createHint.before}
+          {createHint.link !== null ? (
+            <Text
+              accessibilityRole="link"
+              accessibilityLabel={createHint.link}
+              onPress={createHint.onPressLink}
+              suppressHighlighting
+              className="font-medium text-app underline"
+            >
+              {createHint.link}
+            </Text>
+          ) : null}
+          {createHint.after}
+        </Text>
+      ) : (
+        <View className="flex-1" />
+      )}
 
       <Pressable
         accessibilityRole="button"
@@ -269,6 +312,14 @@ export function BoardLevel({
         </Text>
       </View>
     ) : null;
+
+  /**
+   * У свимлайн-кнопки «+» есть родитель: у направления и у карточки-родителя.
+   * Свимлайны «Без инициативы» / «Без проекта» / «Без направления» служебные —
+   * в них родителя не задать, поэтому кнопки создания нет: карточку без родителя
+   * создают кнопкой уровня, где родителя выбирают в форме.
+   */
+  const canAddInLane = (lane: SwimlaneModel) => canCreate && lane.parentId !== null;
 
   return (
     <View className="overflow-hidden rounded-2xl border border-border bg-surface">
@@ -300,6 +351,7 @@ export function BoardLevel({
                 cards={lane.cards}
                 expandedColumns={expandedColumns}
                 onToggleColumn={onToggleColumn}
+                canCreate={canAddInLane(lane)}
                 cardAction={cardAction}
                 onCardAction={onCardAction}
                 onOpenCard={onOpenCard}
@@ -397,7 +449,8 @@ export function BoardLevel({
                         color={lane.color}
                         count={lane.cards.length}
                         addLabel="Добавить карточку"
-                        canAdd
+                        canAdd={canCreate}
+                        canAddInLane={canAddInLane(lane)}
                         onAddCard={() => onAddCard(lane.parentId, firstColumnId)}
                       />
                     </View>

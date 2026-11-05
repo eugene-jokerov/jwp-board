@@ -20,6 +20,8 @@ interface SwimlaneHeaderProps {
   /** Подпись кнопки создания подсказывает тип карточки, например «+ Задача». */
   addLabel: string;
   canAdd: boolean;
+  /** Свимлайн «без родителя»: кнопки «+» нет, родителя выбирают в форме уровня. */
+  canAddInLane: boolean;
   onAddCard: () => void;
 }
 
@@ -28,9 +30,20 @@ interface SwimlaneHeaderProps {
  *
  * В одну строку название обрезалось (панель шириной 160 px), поэтому блок
  * разложен вертикально: название с цветной точкой сверху, счётчик и «+» — под ним.
- * «+» создаёт карточку в колонке, которую передал `BoardLevel`.
+ * «+» создаёт карточку в колонке, которую передал `BoardLevel`. У свимлайна
+ * «без родителя» кнопки нет: там нет родителя для предопределения.
  */
-export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCard }: SwimlaneHeaderProps) {
+export function SwimlaneHeader({
+  title,
+  color,
+  count,
+  addLabel,
+  canAdd,
+  canAddInLane,
+  onAddCard,
+}: SwimlaneHeaderProps) {
+  const addDisabled = !canAdd || !canAddInLane;
+
   return (
     <View className="gap-1.5">
       <View className="flex-row items-start gap-1.5">
@@ -47,16 +60,18 @@ export function SwimlaneHeader({ title, color, count, addLabel, canAdd, onAddCar
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${addLabel}: ${title}`}
-          accessibilityState={{ disabled: !canAdd }}
-          disabled={!canAdd}
+          accessibilityState={{ disabled: addDisabled }}
+          disabled={addDisabled}
           onPress={onAddCard}
           hitSlop={6}
           className={[
             'h-6 w-6 items-center justify-center rounded',
-            canAdd ? 'bg-app active:opacity-90' : 'bg-border opacity-70',
+            addDisabled ? 'bg-border opacity-70' : 'bg-app active:opacity-90',
           ].join(' ')}
         >
-          <Text className={['text-sm font-semibold leading-6', canAdd ? 'text-white' : 'text-muted'].join(' ')}>+</Text>
+          <Text className={['text-sm font-semibold leading-6', addDisabled ? 'text-muted' : 'text-white'].join(' ')}>
+            +
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -77,6 +92,11 @@ interface SwimlaneProps {
   onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
   onOpenCard: (card: Card) => void;
+  /**
+   * Можно ли создавать карточки в колонках свимлайна: у служебного свимлайна
+   * «без родителя» кнопка создания заблокирована.
+   */
+  canCreate: boolean;
   onAddCard: (columnId: ColumnId) => void;
 }
 
@@ -88,6 +108,7 @@ export function Swimlane({
   cards,
   expandedColumns,
   onToggleColumn,
+  canCreate,
   cardAction,
   onCardAction,
   onOpenCard,
@@ -116,7 +137,7 @@ export function Swimlane({
               cards={cards.filter((card) => card.column === column.id)}
               expanded={expandedColumns[key] === true}
               onToggle={() => onToggleColumn(key)}
-              canCreate
+              canCreate={canCreate}
               addLabel="+ добавить"
               cardAction={cardAction}
               onCardAction={onCardAction}
