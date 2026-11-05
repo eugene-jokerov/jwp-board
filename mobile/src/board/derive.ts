@@ -19,7 +19,7 @@ export function neighborColumn(column: ColumnId, direction: MoveDirection): Colu
   return next ? next.id : null;
 }
 
-/** Дочерние карточки (эпики инициативы, задачи эпика). */
+/** Дочерние карточки (проекты инициативы, задачи проекта). */
 export function childrenOf(cards: readonly Card[], cardId: string): Card[] {
   return cards.filter((card) => card.parentId === cardId);
 }

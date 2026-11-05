@@ -5,7 +5,7 @@
  * - «с родителем из свимлайна» — родитель предопределён, цвет уже известен;
  * - «с выбором родителя» — карточку уровня создают кнопкой в шапке уровня,
  *   родитель обязателен (для тактики/операционного — только из «В работе»),
- *   у операционного уровня есть опция «Без эпика».
+ *   у операционного уровня есть опция «Без проекта».
  */
 
 import { useState } from 'react';
@@ -107,7 +107,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const previewColor = draft.laneColor ?? selectedParent?.color ?? null;
 
   // Безымянную карточку не создаём: кнопка ждёт название, а родителя —
-  // только если выбор обязателен (направление для инициативы, инициатива для эпика).
+  // только если выбор обязателен (направление для инициативы, инициатива для проекта).
   const createDisabled = title.trim() === '' || (parentRequired && selectedParent === null);
 
   const submit = () => {
@@ -164,7 +164,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
               <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
                 {draft.allowNoParent ? (
                   <ParentOption
-                    label="Без эпика (без цвета)"
+                    label="Без проекта (без цвета)"
                     color={null}
                     selected={parentId === null}
                     onPress={() => {

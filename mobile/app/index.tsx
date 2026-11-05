@@ -35,7 +35,7 @@ const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
-  tactical: '+ Эпик',
+  tactical: '+ Проект',
   operational: '+ Задача',
 };
 
@@ -43,7 +43,7 @@ const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
 const LEVEL_CREATE_HINT: Record<LevelId, string> = {
   strategic: '',
   tactical: 'Нужна хотя бы одна инициатива в «В работе»',
-  operational: 'Нужен хотя бы один эпик в «В работе»',
+  operational: 'Нужен хотя бы один проект в «В работе»',
 };
 
 /** Тип карточки, который создают на уровне. */
@@ -108,7 +108,7 @@ function swimlanesOf(cards: readonly Card[], level: BoardLevelModel): SwimlaneMo
     lanes.push({
       id: '__no_parent__',
       parentId: null,
-      title: childKind === 'epic' ? 'Без инициативы' : 'Без эпика',
+      title: childKind === 'epic' ? 'Без инициативы' : 'Без проекта',
       color: null,
       cards: orphaned,
     });
