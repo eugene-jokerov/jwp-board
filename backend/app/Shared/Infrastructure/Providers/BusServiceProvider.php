@@ -2,6 +2,26 @@
 
 namespace App\Shared\Infrastructure\Providers;
 
+use App\Modules\Direction\Application\Commands\CreateDirection\CreateDirectionCommand;
+use App\Modules\Direction\Application\Commands\CreateDirection\CreateDirectionCommandHandler;
+use App\Modules\Direction\Application\Commands\DeleteDirection\DeleteDirectionCommand;
+use App\Modules\Direction\Application\Commands\DeleteDirection\DeleteDirectionCommandHandler;
+use App\Modules\Direction\Application\Commands\UpdateDirection\UpdateDirectionCommand;
+use App\Modules\Direction\Application\Commands\UpdateDirection\UpdateDirectionCommandHandler;
+use App\Modules\Direction\Application\Queries\ListDirections\ListDirectionsQuery;
+use App\Modules\Direction\Application\Queries\ListDirections\ListDirectionsQueryHandler;
+use App\Modules\Direction\Application\Queries\ShowDirection\ShowDirectionQuery;
+use App\Modules\Direction\Application\Queries\ShowDirection\ShowDirectionQueryHandler;
+use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
+use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommandHandler;
+use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommand;
+use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommandHandler;
+use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommand;
+use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommandHandler;
+use App\Modules\Task\Application\Queries\ListTasks\ListTasksQuery;
+use App\Modules\Task\Application\Queries\ListTasks\ListTasksQueryHandler;
+use App\Modules\Task\Application\Queries\ShowTask\ShowTaskQuery;
+use App\Modules\Task\Application\Queries\ShowTask\ShowTaskQueryHandler;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommandHandler;
 use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
@@ -31,6 +51,12 @@ final class BusServiceProvider extends ServiceProvider
      */
     private const array COMMAND_HANDLERS = [
         RegisterUserCommand::class => RegisterUserCommandHandler::class,
+        CreateDirectionCommand::class => CreateDirectionCommandHandler::class,
+        UpdateDirectionCommand::class => UpdateDirectionCommandHandler::class,
+        DeleteDirectionCommand::class => DeleteDirectionCommandHandler::class,
+        CreateTaskCommand::class => CreateTaskCommandHandler::class,
+        UpdateTaskCommand::class => UpdateTaskCommandHandler::class,
+        DeleteTaskCommand::class => DeleteTaskCommandHandler::class,
     ];
 
     /**
@@ -40,6 +66,10 @@ final class BusServiceProvider extends ServiceProvider
      */
     private const array QUERY_HANDLERS = [
         CurrentUserQuery::class => CurrentUserQueryHandler::class,
+        ListDirectionsQuery::class => ListDirectionsQueryHandler::class,
+        ShowDirectionQuery::class => ShowDirectionQueryHandler::class,
+        ListTasksQuery::class => ListTasksQueryHandler::class,
+        ShowTaskQuery::class => ShowTaskQueryHandler::class,
     ];
 
     /**

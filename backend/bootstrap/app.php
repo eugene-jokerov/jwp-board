@@ -1,5 +1,11 @@
 <?php
 
+use App\Modules\Direction\Domain\Exceptions\DirectionHasCards;
+use App\Modules\Direction\Domain\Exceptions\DirectionNotFound;
+use App\Modules\Task\Domain\Exceptions\ColumnChangeBlocked;
+use App\Modules\Task\Domain\Exceptions\InvalidHierarchy;
+use App\Modules\Task\Domain\Exceptions\TaskHasChildren;
+use App\Modules\Task\Domain\Exceptions\TaskNotFound;
 use App\Modules\User\Domain\Exceptions\EmailAlreadyRegistered;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             __DIR__.'/../routes/api.php',
             // Маршруты модулей подключаются здесь: префикс /api и middleware группирует фреймворк.
             __DIR__.'/../app/Modules/User/routes/api.php',
+            __DIR__.'/../app/Modules/Direction/routes/api.php',
+            __DIR__.'/../app/Modules/Task/routes/api.php',
         ],
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
@@ -53,4 +61,22 @@ return Application::configure(basePath: dirname(__DIR__))
                 ],
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         });
+
+        // Не найдено: чужой ресурс неотличим от несуществующего.
+        $exceptions->render(fn (DirectionNotFound|TaskNotFound $e) => response()->json([
+            'message' => $e->getMessage(),
+        ], Response::HTTP_NOT_FOUND));
+
+        // Конфликт состояния: запрет удаления и запрет смены колонки.
+        $exceptions->render(fn (DirectionHasCards|TaskHasChildren|ColumnChangeBlocked $e) => response()->json([
+            'message' => $e->getMessage(),
+        ], Response::HTTP_CONFLICT));
+
+        // Некорректная иерархия карточки — это ошибка входных данных.
+        $exceptions->render(fn (InvalidHierarchy $e) => response()->json([
+            'message' => $e->getMessage(),
+            'errors' => [
+                'hierarchy' => [$e->getMessage()],
+            ],
+        ], Response::HTTP_UNPROCESSABLE_ENTITY));
     })->create();

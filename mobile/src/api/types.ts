@@ -52,3 +52,64 @@ export interface ApiErrorPayload {
   message?: string;
   errors?: Record<string, string[]>;
 }
+
+/** Колонка канбан-доски. */
+export type CardColumn = 'backlog' | 'in_progress' | 'complete' | 'canceled';
+
+/** Тип карточки: имя узла в иерархии доски. */
+export type CardType = 'initiative' | 'project' | 'task';
+
+/** Направление движения по жизни (GET /api/v1/directions). */
+export interface Direction {
+  id: number;
+  title: string;
+  /** Ключ палитры направлений (`c1`…`c19`). */
+  color: string;
+}
+
+/** Карточка доски (GET /api/v1/tasks). */
+export interface Task {
+  id: number;
+  type: CardType;
+  column: CardColumn;
+  title: string;
+  description: string | null;
+  direction_id: number | null;
+  iniciative_id: number | null;
+  project_id: number | null;
+  /** Цвет направления карточки; null — направления нет. */
+  color: string | null;
+  /** Колонки, в которые карточку можно перевести сейчас. */
+  allowed_transitions: CardColumn[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Тело создания направления. */
+export interface DirectionInput {
+  title: string;
+  color: string;
+}
+
+/** Тело создания карточки. */
+export interface TaskCreateInput {
+  type: CardType;
+  column: CardColumn;
+  title: string;
+  description?: string | null;
+  direction_id?: number | null;
+  iniciative_id?: number | null;
+  project_id?: number | null;
+}
+
+/** Тело изменения карточки: любое подмножество полей, включая колонку. */
+export type TaskUpdateInput = Partial<TaskCreateInput>;
+
+/** Фильтры списка карточек. */
+export interface TaskListFilters {
+  type?: CardType;
+  column?: CardColumn;
+  direction_id?: number;
+  iniciative_id?: number;
+  project_id?: number;
+}

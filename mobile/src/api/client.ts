@@ -15,8 +15,14 @@ import type {
   ApiErrorPayload,
   AuthPayload,
   DataResponse,
+  Direction,
+  DirectionInput,
   HealthPayload,
   RegisterInput,
+  Task,
+  TaskCreateInput,
+  TaskListFilters,
+  TaskUpdateInput,
   User,
   UserPayload,
 } from './types';
@@ -201,4 +207,91 @@ export async function webMe(): Promise<User> {
 /** Выход веб-клиента: сервер уничтожает сессию и гасит cookie. */
 export async function webLogout(): Promise<void> {
   await request<void>('/auth/web/logout', { method: 'POST' });
+}
+
+/**
+ * Заголовок авторизации для запросов доски.
+ *
+ * Тот же принцип, что у аутентификации: на native — Bearer-токен,
+ * на web — сессионная cookie (её прикладывает браузер).
+ */
+function authHeaders(token: string | null): { token: string | null } {
+  return { token: IS_WEB ? null : token };
+}
+
+/** Список направлений пользователя. */
+export async function fetchDirections(token: string | null): Promise<Direction[]> {
+  const response = await request<DataResponse<Direction[]>>('/directions', authHeaders(token));
+
+  return response.data;
+}
+
+/** Создание направления. */
+export async function createDirection(token: string | null, input: DirectionInput): Promise<Direction> {
+  const response = await request<DataResponse<Direction>>('/directions', {
+    method: 'POST',
+    body: input,
+    ...authHeaders(token),
+  });
+
+  return response.data;
+}
+
+/** Изменение направления: переданные поля заменяются. */
+export async function updateDirection(
+  token: string | null,
+  directionId: number,
+  input: Partial<DirectionInput>,
+): Promise<Direction> {
+  const response = await request<DataResponse<Direction>>(`/directions/${directionId}`, {
+    method: 'PATCH',
+    body: input,
+    ...authHeaders(token),
+  });
+
+  return response.data;
+}
+
+/** Удаление направления; 409 — в направлении есть карточки. */
+export async function deleteDirection(token: string | null, directionId: number): Promise<void> {
+  await request<void>(`/directions/${directionId}`, { method: 'DELETE', ...authHeaders(token) });
+}
+
+/** Список карточек с фильтрами доски. */
+export async function fetchTasks(token: string | null, filters: TaskListFilters = {}): Promise<Task[]> {
+  const query = Object.entries(filters)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+    .join('&');
+
+  const response = await request<DataResponse<Task[]>>(`/tasks${query ? `?${query}` : ''}`, authHeaders(token));
+
+  return response.data;
+}
+
+/** Создание карточки. */
+export async function createTask(token: string | null, input: TaskCreateInput): Promise<Task> {
+  const response = await request<DataResponse<Task>>('/tasks', {
+    method: 'POST',
+    body: input,
+    ...authHeaders(token),
+  });
+
+  return response.data;
+}
+
+/** Изменение карточки, включая смену колонки (409 — смену блокируют дети в работе). */
+export async function updateTask(token: string | null, taskId: number, input: TaskUpdateInput): Promise<Task> {
+  const response = await request<DataResponse<Task>>(`/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: input,
+    ...authHeaders(token),
+  });
+
+  return response.data;
+}
+
+/** Удаление карточки; 409 — есть дочерние карточки. */
+export async function deleteTask(token: string | null, taskId: number): Promise<void> {
+  await request<void>(`/tasks/${taskId}`, { method: 'DELETE', ...authHeaders(token) });
 }

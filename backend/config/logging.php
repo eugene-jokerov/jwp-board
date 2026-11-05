@@ -1,5 +1,8 @@
 <?php
 
+use Monolog\Handler\NullHandler;
+use Monolog\Handler\StreamHandler;
+
 return [
     /*
     | Логирование: в контейнере пишем в stderr, чтобы `make logs` показывал всё.
@@ -28,7 +31,7 @@ return [
         'stderr' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
-            'handler' => Monolog\Handler\StreamHandler::class,
+            'handler' => StreamHandler::class,
             'formatter' => env('LOG_STDERR_FORMATTER'),
             'with' => [
                 'stream' => 'php://stderr',
@@ -37,7 +40,7 @@ return [
 
         'null' => [
             'driver' => 'monolog',
-            'handler' => Monolog\Handler\NullHandler::class,
+            'handler' => NullHandler::class,
         ],
     ],
 ];

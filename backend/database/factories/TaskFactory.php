@@ -1,0 +1,105 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Modules\Direction\Domain\Direction;
+use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\User\Domain\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * Фабрика карточек для тестов.
+ *
+ * По умолчанию создаёт задачу без проекта. Состояния initiative(), project()
+ * и task() собирают непротиворечивую иерархию и корректную денормализацию
+ * direction_id — так же, как это делает доменный сервис.
+ *
+ * @extends Factory<Task>
+ */
+class TaskFactory extends Factory
+{
+    /**
+     * @var class-string<Task>
+     */
+    protected $model = Task::class;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        return [
+            'user_id' => User::factory(),
+            'direction_id' => null,
+            'iniciative_id' => null,
+            'project_id' => null,
+            'type' => CardType::Task->value,
+            'column' => CardColumn::Backlog->value,
+            'title' => 'Карточка '.fake()->unique()->numberBetween(1, 10000),
+            'description' => null,
+        ];
+    }
+
+    /**
+     * Карточка конкретной колонки.
+     */
+    public function inColumn(CardColumn $column): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'column' => $column->value,
+        ]);
+    }
+
+    /**
+     * Инициатива со своим направлением.
+     */
+    public function initiative(?Direction $direction = null): static
+    {
+        return $this->state(function (array $attributes) use ($direction): array {
+            $userId = $attributes['user_id'];
+
+            if ($userId instanceof User) {
+                $userId = (int) $userId->id;
+            }
+
+            $directionId = $direction !== null
+                ? (int) $direction->id
+                : (int) Direction::factory()->create(['user_id' => $userId])->id;
+
+            return [
+                'type' => CardType::Initiative->value,
+                'direction_id' => $directionId,
+                'iniciative_id' => null,
+                'project_id' => null,
+            ];
+        });
+    }
+
+    /**
+     * Проект: с инициативой или без неё (тогда и без направления).
+     */
+    public function project(?Task $initiative = null): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'type' => CardType::Project->value,
+            'direction_id' => $initiative?->direction_id,
+            'iniciative_id' => $initiative === null ? null : (int) $initiative->id,
+            'project_id' => null,
+        ]);
+    }
+
+    /**
+     * Задача под проектом: наследует инициативу и направление проекта.
+     */
+    public function task(?Task $project = null): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'type' => CardType::Task->value,
+            'direction_id' => $project?->direction_id,
+            'iniciative_id' => $project?->iniciative_id,
+            'project_id' => $project === null ? null : (int) $project->id,
+        ]);
+    }
+}
