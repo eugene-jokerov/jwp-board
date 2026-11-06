@@ -25,6 +25,8 @@ import type {
   TaskUpdateInput,
   User,
   UserPayload,
+  UserSettingEntry,
+  UserSettingsInput,
 } from './types';
 
 /** Веб-клиент аутентифицируется сессионной cookie, а не токеном. */
@@ -294,4 +296,57 @@ export async function updateTask(token: string | null, taskId: number, input: Ta
 /** Удаление карточки; 409 — есть дочерние карточки. */
 export async function deleteTask(token: string | null, taskId: number): Promise<void> {
   await request<void>(`/tasks/${taskId}`, { method: 'DELETE', ...authHeaders(token) });
+}
+
+/**
+ * Настройки пользователя списком пар «ключ — значение».
+ *
+ * Значения сервер отдаёт расшифрованным JSON, поэтому клиент получает объекты
+ * (например, объект свёрнутых уровней), а не строки.
+ */
+export async function fetchUserSettings(token: string | null): Promise<UserSettingEntry[]> {
+  const response = await request<DataResponse<UserSettingEntry[]>>('/user/settings', authHeaders(token));
+
+  return response.data;
+}
+
+/**
+ * Сохранение настроек: переданные ключи создаются или перезаписываются (UPSERT).
+ *
+ * Клиент шлёт только изменившиеся настройки; значение на сервере хранится
+ * как JSON-текст, а в ответ приходит полное состояние пользователя.
+ */
+export async function updateUserSettings(
+  token: string | null,
+  settings: UserSettingsInput,
+): Promise<UserSettingEntry[]> {
+  const response = await request<DataResponse<UserSettingEntry[]>>('/user/settings', {
+    method: 'PUT',
+    body: { settings: serializeSettings(settings) },
+    ...authHeaders(token),
+  });
+
+  return response.data;
+}
+
+/**
+ * Сбросить настройку — вернуть её к значению по умолчанию.
+ *
+ * Сервер удаляет пару целиком (204); повторный запрос безопасен.
+ */
+export async function deleteUserSetting(token: string | null, key: string): Promise<void> {
+  await request<void>(`/user/settings/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    ...authHeaders(token),
+  });
+}
+
+/**
+ * Настройки → тело запроса.
+ *
+ * Сервер хранит значение текстом, поэтому каждый объект кодируется в JSON-строку
+ * здесь, в единственной точке обращения к API, а не в экранах.
+ */
+function serializeSettings(settings: UserSettingsInput): Record<string, string> {
+  return Object.fromEntries(Object.entries(settings).map(([key, value]) => [key, JSON.stringify(value)]));
 }

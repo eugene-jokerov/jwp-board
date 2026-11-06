@@ -172,6 +172,13 @@ interface BoardLevelProps {
   compact: boolean;
   /** Ширина окна: от неё зависит ширина панели названий свимлайнов. */
   width: number;
+  /**
+   * Свёрнутые колонки уровня. Состояние приходит извне (`useBoardSettings`):
+   * оно сохраняется на сервере и не сбрасывается при перезагрузке страницы.
+   */
+  collapsedColumns: CollapsedColumns;
+  /** Свернуть или развернуть колонку широкой раскладки этого уровня. */
+  onToggleCollapsed: (columnId: ColumnId) => void;
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
   /** Действие карточки по её колонке; null — иконки нет. */
@@ -200,6 +207,8 @@ export function BoardLevel({
   onToggle,
   compact,
   width,
+  collapsedColumns,
+  onToggleCollapsed,
   expandedColumns,
   onToggleColumn,
   cardAction,
@@ -226,18 +235,6 @@ export function BoardLevel({
    * в самой широкой колонке свимлайна.
    */
   const [laneHeights, setLaneHeights] = useState<Record<string, number>>({});
-
-  /**
-   * Свёрнутые колонки уровня.
-   *
-   * Состояние живёт внутри уровня: свернув «Беклог» на стратегическом,
-   * на тактическом и операционном он остаётся развёрнутым.
-   */
-  const [collapsedColumns, setCollapsedColumns] = useState<CollapsedColumns>({});
-
-  const toggleColumnCollapsed = (columnId: ColumnId) => {
-    setCollapsedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
-  };
 
   /**
    * Запоминаем высоту группы карточек свимлайна.
@@ -385,7 +382,7 @@ export function BoardLevel({
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`Развернуть колонку «${column.label}»`}
-                          onPress={() => toggleColumnCollapsed(column.id)}
+                          onPress={() => onToggleCollapsed(column.id)}
                           hitSlop={4}
                           className={COLUMN_ICON_BUTTON}
                         >
@@ -411,7 +408,7 @@ export function BoardLevel({
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`Свернуть колонку «${column.label}»`}
-                          onPress={() => toggleColumnCollapsed(column.id)}
+                          onPress={() => onToggleCollapsed(column.id)}
                           hitSlop={4}
                           className={COLUMN_ICON_BUTTON}
                         >
@@ -465,7 +462,7 @@ export function BoardLevel({
                       <CollapsedColumn
                         key={column.id}
                         label={column.label}
-                        onExpand={() => toggleColumnCollapsed(column.id)}
+                        onExpand={() => onToggleCollapsed(column.id)}
                       />
                     );
                   }

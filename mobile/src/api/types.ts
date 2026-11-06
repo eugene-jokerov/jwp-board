@@ -105,6 +105,22 @@ export interface TaskCreateInput {
 /** Тело изменения карточки: любое подмножество полей, включая колонку. */
 export type TaskUpdateInput = Partial<TaskCreateInput>;
 
+/**
+ * Пользовательская настройка интерфейса (GET /api/v1/user/settings).
+ *
+ * Сервер хранит значение строкой и отдаёт расшифрованный JSON, поэтому тип
+ * значения на клиенте — неизвестное: конкретную форму знает тот, кто настройку
+ * читает (см. `BoardSettings` в src/board/settings.ts).
+ */
+export interface UserSettingEntry {
+  /** Ключ настройки в пространстве имён приложения, например `board.collapsed_levels`. */
+  key: string;
+  value: unknown;
+}
+
+/** Набор настроек для сохранения: ключ => значение (уйдёт на сервер как JSON). */
+export type UserSettingsInput = Record<string, unknown>;
+
 /** Фильтры списка карточек. */
 export interface TaskListFilters {
   type?: CardType;

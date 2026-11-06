@@ -1,6 +1,9 @@
 <?php
 
+use App\Modules\User\Infrastructure\Http\Controllers\DeleteUserSettingsController;
+use App\Modules\User\Infrastructure\Http\Controllers\IndexUserSettingsController;
 use App\Modules\User\Infrastructure\Http\Controllers\RegisterController;
+use App\Modules\User\Infrastructure\Http\Controllers\UpdateUserSettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,4 +21,17 @@ Route::prefix('v1')->group(function (): void {
     Route::post('user/register', RegisterController::class)
         ->middleware('throttle:auth')
         ->name('api.v1.user.register');
+
+    // Пользовательские настройки (свёрнутые уровни и колонки доски).
+    // Один ключ — одно значение: сохранение идёт UPSERT-ом, поэтому клиенту
+    // не нужно знать, была ли настройка сохранена раньше.
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('user/settings', IndexUserSettingsController::class)
+            ->name('api.v1.user.settings.index');
+        Route::put('user/settings', UpdateUserSettingsController::class)
+            ->name('api.v1.user.settings.update');
+        Route::delete('user/settings/{key}', DeleteUserSettingsController::class)
+            ->where('key', '[a-z0-9_.]+')
+            ->name('api.v1.user.settings.destroy');
+    });
 });

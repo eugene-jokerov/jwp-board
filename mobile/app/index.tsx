@@ -30,6 +30,7 @@ import { LevelSettingsMenu } from '../src/board/components/LevelSettingsMenu';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../src/board/directionColors';
 import { cardAction, checkDirectionDelete, parentCandidates } from '../src/board/derive';
 import { parentOf } from '../src/board/mappers';
+import { useBoardSettings } from '../src/board/settings';
 import { useBoard } from '../src/board/store';
 import {
   COLUMNS,
@@ -232,7 +233,11 @@ export default function HomeScreen() {
   const board = useBoard();
   const { cards, directions, isLoading, loadError, reload } = board;
 
-  const [collapsedLevels, setCollapsedLevels] = useState<Record<string, boolean>>({});
+  /**
+   * Свёрнутые уровни и колонки — настройки пользователя: они сохраняются на
+   * сервере (UserMeta) и восстанавливаются при следующем открытии доски.
+   */
+  const { collapsedLevels, collapsedColumns, toggleLevel, toggleColumn } = useBoardSettings();
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({});
   /** Повторная загрузка по кнопке: `reload` из хука сам индикатор не поднимает. */
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -272,11 +277,8 @@ export default function HomeScreen() {
     });
   }, [navigation]);
 
-  const toggleLevel = (levelId: LevelId) => {
-    setCollapsedLevels((prev) => ({ ...prev, [levelId]: !prev[levelId] }));
-  };
-
-  const toggleColumn = (key: string) => {
+  /** Аккордеон колонок на телефоне: раскрыть/свернуть карточки колонки свимлайна. */
+  const toggleLaneColumn = (key: string) => {
     setExpandedColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -436,8 +438,10 @@ export default function HomeScreen() {
               onToggle={() => toggleLevel(level.id)}
               compact={compact}
               width={width}
+              collapsedColumns={collapsedColumns[level.id] ?? {}}
+              onToggleCollapsed={(columnId) => toggleColumn(level.id, columnId)}
               expandedColumns={expandedColumns}
-              onToggleColumn={toggleColumn}
+              onToggleColumn={toggleLaneColumn}
               cardAction={cardAction}
               onCardAction={handleCardAction}
               onOpenCard={(card) => setEditedCardId(card.id)}

@@ -22,10 +22,16 @@ use App\Modules\Task\Application\Queries\ListTasks\ListTasksQuery;
 use App\Modules\Task\Application\Queries\ListTasks\ListTasksQueryHandler;
 use App\Modules\Task\Application\Queries\ShowTask\ShowTaskQuery;
 use App\Modules\Task\Application\Queries\ShowTask\ShowTaskQueryHandler;
+use App\Modules\User\Application\Commands\DeleteUserSettings\DeleteUserSettingsCommand;
+use App\Modules\User\Application\Commands\DeleteUserSettings\DeleteUserSettingsCommandHandler;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommandHandler;
+use App\Modules\User\Application\Commands\UpdateUserSettings\UpdateUserSettingsCommand;
+use App\Modules\User\Application\Commands\UpdateUserSettings\UpdateUserSettingsCommandHandler;
 use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
 use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQueryHandler;
+use App\Modules\User\Application\Queries\ListUserSettings\ListUserSettingsQuery;
+use App\Modules\User\Application\Queries\ListUserSettings\ListUserSettingsQueryHandler;
 use App\Shared\Application\Bus\CommandBus;
 use App\Shared\Application\Bus\LaravelCommandBus;
 use App\Shared\Application\Bus\LaravelQueryBus;
@@ -51,6 +57,8 @@ final class BusServiceProvider extends ServiceProvider
      */
     private const array COMMAND_HANDLERS = [
         RegisterUserCommand::class => RegisterUserCommandHandler::class,
+        UpdateUserSettingsCommand::class => UpdateUserSettingsCommandHandler::class,
+        DeleteUserSettingsCommand::class => DeleteUserSettingsCommandHandler::class,
         CreateDirectionCommand::class => CreateDirectionCommandHandler::class,
         UpdateDirectionCommand::class => UpdateDirectionCommandHandler::class,
         DeleteDirectionCommand::class => DeleteDirectionCommandHandler::class,
@@ -66,6 +74,7 @@ final class BusServiceProvider extends ServiceProvider
      */
     private const array QUERY_HANDLERS = [
         CurrentUserQuery::class => CurrentUserQueryHandler::class,
+        ListUserSettingsQuery::class => ListUserSettingsQueryHandler::class,
         ListDirectionsQuery::class => ListDirectionsQueryHandler::class,
         ShowDirectionQuery::class => ShowDirectionQueryHandler::class,
         ListTasksQuery::class => ListTasksQueryHandler::class,

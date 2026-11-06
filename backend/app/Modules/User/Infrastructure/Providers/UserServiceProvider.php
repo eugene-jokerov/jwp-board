@@ -2,7 +2,9 @@
 
 namespace App\Modules\User\Infrastructure\Providers;
 
+use App\Modules\User\Domain\Contracts\UserMetaRepository;
 use App\Modules\User\Domain\Contracts\UserRepository;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserMetaRepository;
 use App\Modules\User\Infrastructure\Persistence\EloquentUserRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,6 +21,7 @@ final class UserServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(UserRepository::class, EloquentUserRepository::class);
+        $this->app->bind(UserMetaRepository::class, EloquentUserMetaRepository::class);
     }
 
     /**
