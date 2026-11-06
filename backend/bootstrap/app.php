@@ -16,13 +16,16 @@ use Illuminate\Http\Response;
 
 /*
 |--------------------------------------------------------------------------
-| Bootstrap приложения (headless API)
+| Bootstrap приложения (headless API + лендинг)
 |--------------------------------------------------------------------------
-| Регистрируем только API-маршруты: web-роутинга и Blade-шаблонов в проекте нет.
 | Префикс /api для routes/api.php добавляется фреймворком автоматически.
+| Веб-роутинг существует только для публичного сайта: routes/web.php отдаёт
+| статический лендинг из public/landing. Blade-шаблонов в проекте нет,
+| а веб-версия приложения (/board/) — статика и до Laravel не доходит.
 */
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        web: __DIR__.'/../routes/web.php',
         api: [
             __DIR__.'/../routes/api.php',
             // Маршруты модулей подключаются здесь: префикс /api и middleware группирует фреймворк.
@@ -48,8 +51,11 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // API всегда отвечает JSON (в том числе на 404/405/500).
+        // Остальные маршруты (лендинг) ведут себя как обычный сайт: редирект
+        // браузера не должен превращаться в JSON-ответ только потому, что
+        // клиент прислал Accept: application/json.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request): bool => $request->is('api/*') || $request->expectsJson()
+            fn (Request $request): bool => $request->is('api/*')
         );
 
         // Доменные исключения не знают про HTTP: перевод в ответ API живёт здесь.

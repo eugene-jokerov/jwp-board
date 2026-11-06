@@ -1,9 +1,11 @@
 # JWP Board
 
-Монорепозиторий проекта **JWP Board**: headless API на Laravel и мобильный клиент на React Native (Expo).
+Монорепозиторий проекта **JWP Board**: headless API на Laravel, мобильный клиент на React Native (Expo)
+и публичный сайт с веб-версией приложения.
 
-- **`backend/`** — Laravel 13, только JSON API (`/api/v1/*`), аутентификация по токенам Sanctum.
-- **`mobile/`** — Expo SDK 58 + React Native (TypeScript), сейчас в состоянии заглушки.
+- **`backend/`** — Laravel 13: JSON API (`/api/v1/*`), аутентификация по токенам Sanctum, а также лендинг по `/`.
+- **`mobile/`** — Expo SDK 58 + React Native (TypeScript); собирается для iOS/Android и для web.
+- **Веб-версия** — тот же клиент, собранный для web: `http://localhost:8080/board/`.
 - **Docker** — PHP 8.4 (php-fpm) + nginx + MySQL 8.4 + Node 24.
 
 Подробные правила разработки (архитектура, соглашения, команды, ограничения) — в [`AGENTS.md`](./AGENTS.md).
@@ -72,7 +74,9 @@ make npm cmd="install"           # зависимости Expo (~500 МБ)
 
 | Сервис | Порт | Адрес |
 | --- | --- | --- |
-| API (nginx) | 8080 | http://localhost:8080 |
+| API (nginx) | 8080 | http://localhost:8080/api/v1/health |
+| Лендинг | 8080 | http://localhost:8080/ |
+| Веб-версия приложения | 8080 | http://localhost:8080/board/ (`make web-build`) |
 | Expo / Metro | 8081 | http://localhost:8081 |
 | MySQL | 3307 | `127.0.0.1:3307`, БД `jwp_board`, пользователь `jwp`/`jwp` |
 | MySQL (tests) | 3308 | `127.0.0.1:3308`, БД `jwp_board_test` |
@@ -140,9 +144,38 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8080
 ### Web-платформа
 
 Фронт один: тот же код клиента собирается для iOS/Android и для web через `react-native-web`
-(`make expo-web`). Отдельного web-фронтенда нет — сервер остаётся headless JSON API.
-Ветвление по `Platform.OS` в `src/api/client.ts` и `src/auth/session.ts` — выбор канала
-аутентификации (Bearer-токен против HttpOnly-cookie), а не второй фронтенд.
+(`make expo-web` — dev, `make web-build` — production). Отдельного web-фронтенда нет; сервер
+остаётся headless JSON API. Ветвление по `Platform.OS` в `src/api/client.ts` и `src/auth/session.ts` —
+выбор канала аутентификации (Bearer-токен против HttpOnly-cookie), а не второй фронтенд.
+
+В dev-режиме Expo открывается по корню (`http://localhost:8081/`), а собранная веб-версия —
+по `/board/`: подпуть задан `experiments.baseUrl: "/board"` в `mobile/app.json`, поэтому все
+маршруты expo-router и ассеты бандла строятся от `/board/`.
+
+### Веб-версия и лендинг
+
+| Адрес | Что отдаётся |
+| --- | --- |
+| `/` | лендинг — статический файл `backend/resources/views/landing.html` (вне веб-корня) |
+| `/board/` | веб-версия приложения — сборка Expo (`web.output: "single"`, SPA) |
+| `/api/v1/*` | JSON API |
+
+```bash
+make web-build      # expo export --platform web -> mobile/dist -> backend/public/board
+```
+
+Что важно знать:
+
+- Сборка кладётся в `backend/public/board/` и **в git не попадает** (`backend/.gitignore`).
+- Разметка лендинга лежит в `backend/resources/views/landing.html` — вне веб-корня, поэтому `/`
+  единственный адрес страницы (`/landing/` и `/landing/index.html` редиректят на `/`).
+- Маршрутизацию задаёт веб-сервер: локально — `docker/nginx/default.conf`, на виртуальном хостинге —
+  `.htaccess` (нужен включённый `mod_rewrite`):
+  - `backend/public/.htaccess` — `/board/**` отдаётся из сборки, остальное уходит в Laravel;
+  - `.htaccess` самой сборки (`mobile/public/.htaccess`, копируется `expo export`) — SPA-фолбэк на `index.html`.
+- Cookie сессии и CSRF работают, когда API и веб-версия на одном домене (так и есть: `/` и `/board/`
+  на одном origin). Для локальной сборки в `backend/.env` добавлены `localhost:8080` и
+  `127.0.0.1:8080` в `SANCTUM_STATEFUL_DOMAINS` и `CORS_ALLOWED_ORIGINS`.
 
 ## Конфигурация
 
@@ -165,7 +198,7 @@ PHP_XDEBUG_MODE=debug
 ├── docker-compose.yml            # базовый состав сервисов
 ├── docker-compose.override.yml   # dev-надстройки
 ├── docker/php, docker/nginx      # образы и конфиги
-├── backend/                      # Laravel 13 (headless API)
+├── backend/                      # Laravel 13 (headless API + лендинг)
 └── mobile/                       # Expo + React Native
 ```
 

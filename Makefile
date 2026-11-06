@@ -28,6 +28,7 @@ cmd_node ?=
         sh php-shell artisan composer migrate migrate-fresh seed test test-filter \
         pint pint-test phpstan phpstan-baseline phpstan-clear check route-list \
         node-shell npm npx expo-start expo-web expo-install typecheck \
+        web-build \
         lint lint-fix format format-check check-mobile \
         db-shell db-test-shell phpmyadmin phpmyadmin-stop clean
 
@@ -67,6 +68,7 @@ help:
 	@echo "  make expo-install     npm install в mobile"
 	@echo "  make expo-start       expo dev server (запущен сервисом node)"
 	@echo "  make typecheck        tsc --noEmit в mobile"
+	@echo "  make web-build        сборка веб-версии (mobile/dist -> backend/public/board, SPA /board/)"
 	@echo "  make lint             ESLint в mobile (без изменений)"
 	@echo "  make lint-fix         ESLint в mobile с автоисправлением"
 	@echo "  make format           Prettier: форматирование mobile"
@@ -197,6 +199,18 @@ expo-web:
 
 typecheck:
 	$(COMPOSE) run --rm $(node_service) npm run typecheck
+
+# Сборка веб-версии: SPA с baseUrl /board (app.json) кладётся в backend/public/board,
+# откуда её отдают nginx локально и .htaccess на хостинге. Каталог в .gitignore.
+# Копирование выполняет контейнер php: в node:alpine rsync нет.
+# .htaccess для хостинга лежит в mobile/public — expo export копирует эту папку
+# в dist целиком, поэтому файл переезжает вместе со сборкой.
+web-build:
+	$(COMPOSE) run --rm $(node_service) npm run build:web
+	$(COMPOSE) exec -T $(php_service) sh -lc 'mkdir -p public/board'
+	$(COMPOSE) run --rm -v "$(CURDIR)/mobile/dist:/src:ro" \
+		-v "$(CURDIR)/backend/public/board:/dst" \
+		--entrypoint sh $(php_service) -c 'rsync -a --delete /src/ /dst/'
 
 lint:
 	$(COMPOSE) run --rm $(node_service) npm run lint

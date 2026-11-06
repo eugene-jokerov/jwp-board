@@ -4,7 +4,12 @@
 Проект — git-монорепозиторий: строгий бэкенд на Laravel, который отдаёт только JSON (headless API),
 и клиент на React Native (Expo). Фронт один: приложение собирается и для native (iOS/Android),
 и для web через `react-native-web`. Отдельного web-фронтенда нет, и на стороне бэкенда
-не бывает Blade-шаблонов, Vite и HTML-ответов.
+не бывает Blade-шаблонов, Vite и HTML-ответов из контроллеров.
+
+Исключение — публичный сайт: на `/` живёт статический лендинг (короткое описание продукта и
+переход на доску), а веб-версия приложения открывается по `/board/`. Лендинг — готовый HTML-файл в
+`backend/resources/views/landing.html`, который отдаётся как статика; веб-версия — сборка `mobile` (`make web-build`)
+в `backend/public/board/`. Подробности — в разделе 1.1.
 
 ---
 
@@ -18,7 +23,8 @@
 
 ## 1.1 Бэкенд
 
-- **Роутинг только API.** Все маршруты — в `routes/api.php`, семейство v1 — внутри `Route::prefix('v1')->group(...)`. Файла `routes/web.php` быть не должно: `bootstrap/app.php` регистрирует только `api:`.
+- **Роутинг только API.** Все маршруты — в `routes/api.php`, семейство v1 — внутри `Route::prefix('v1')->group(...)`. `routes/web.php` существует **только для лендинга** (см. ниже): новых веб-маршрутов и контроллеров там быть не должно.
+- **Лендинг и веб-версия.** `GET /` отдаёт статический файл `resources/views/landing.html` (без Blade, Vite и рендера в контроллере); файл лежит **вне веб-корня**, поэтому страницы по адресам `/landing/`, `/landing/index.html` не существует — дублей у `/` нет. `/board` редиректит на `/board/`, а `/board/**` — SPA-сборка `mobile` в `public/board/`, её отдаёт веб-сервер. На хостинге маршрутизацию задаёт `.htaccess` (`public/.htaccess` и `.htaccess` внутри сборки из `mobile/public`), локально — `docker/nginx/default.conf` с той же логикой. Fallback в `routes/web.php` уводит неизвестные страницы на лендинг, но `/api/*` остаётся JSON 404.
 - **Контроллеры** — в `app/Http/Controllers/Api/V1/`, наследуются от базового `App\Http\Controllers\Controller`. Примеры имён: `HealthController`, `AuthController`, `BoardController`. Для ресурса — `index/show/store/update/destroy`.
 - **Валидация** — всегда через `FormRequest` (`app/Http/Requests/Api/V1/...`), не через `$request->validate()` в контроллере.
 - **Ответы** — через `JsonResource` (`app/Http/Resources/...`). Не возвращай Eloquent-модель напрямую: это раскрывает лишние поля (например, `password`).
@@ -62,7 +68,7 @@
 - Конфиги NativeWind: `mobile/tailwind.config.js` (содержимое сканируется в `app/**` и `src/**`; пресет `nativewind/preset`; фирменная палитра в `theme.extend.colors`), `mobile/metro.config.js` (`withNativeWind`, вход — `global.css`), `mobile/babel.config.js` (`babel-preset-expo` с `jsxImportSource: 'nativewind'` + пресет `nativewind/babel`), `mobile/nativewind-env.d.ts` (типы `className`, файл подключён в `tsconfig.json`).
 - CSS-директивы — в `mobile/global.css`; файл импортируется один раз в корневом `app/_layout.tsx` (требование expo-router/NativeWind: импорт только в layout, не в других экранах).
 - Dev-сервер работает в watch-режиме (`CI=0`); если правки классов не появляются в приложении — сбрось кэш: `make restart` (контейнер стартует с флагом `--clear`).
-- **Фронт один — web не отдельное приложение.** Тот же код собирается для iOS/Android и для web (`react-native-web`, `web.output: "single"` в `app.json`). Ветвление `Platform.OS === 'web'` (`src/api/client.ts`, `src/auth/session.ts`, `src/auth/AuthContext.tsx`) — это **только выбор канала транспорта внутри одного фронта**: Bearer-токен + SecureStore против сессионной HttpOnly-cookie + CSRF-заголовка. Прочие платформенные ветки (`Platform.OS === 'ios'` в `app/auth.tsx` — поведение клавиатуры) — тоже норма. Такие ветки штатны: не удаляй их «как мёртвый код», не считай недостижимыми и не включай правила, которые сочтут `web` невозможным (например, `no-unnecessary-condition`, strict-type-checked). Правки в `client.ts` / `session.ts` проверяй на обеих платформах.
+- **Фронт один — web не отдельное приложение.** Тот же код собирается для iOS/Android и для web (`react-native-web`, `web.output: "single"` и `experiments.baseUrl: "/board"` в `app.json`; из-за baseUrl экспорт открывается по `/board/`, а dev-сервер Expo — по `/`). Ветвление `Platform.OS === 'web'` (`src/api/client.ts`, `src/auth/session.ts`, `src/auth/AuthContext.tsx`) — это **только выбор канала транспорта внутри одного фронта**: Bearer-токен + SecureStore против сессионной HttpOnly-cookie + CSRF-заголовка. Прочие платформенные ветки (`Platform.OS === 'ios'` в `app/auth.tsx` — поведение клавиатуры) — тоже норма. Такие ветки штатны: не удаляй их «как мёртвый код», не считай недостижимыми и не включай правила, которые сочтут `web` невозможным (например, `no-unnecessary-condition`, strict-type-checked). Правки в `client.ts` / `session.ts` проверяй на обеих платформах.
 - **Линтеры и форматирование (обязательно после правок TS/TSX).**
   - ESLint (flat config `mobile/eslint.config.js`, база `eslint-config-expo`): проверка — `make lint`, автоисправление — `make lint-fix`.
   - Prettier (`mobile/.prettierrc`, плагин `prettier-plugin-tailwindcss`): форматирование — `make format`, проверка — `make format-check`.
@@ -83,8 +89,8 @@ jwp-board/
 ├─ .env(.example)               # параметры compose: порты, MySQL, uid, xdebug
 ├─ docker/
 │  ├─ php/                      # Dockerfile (php:8.4-fpm), php.ini, www.conf, xdebug.ini
-│  └─ nginx/default.conf        # vhost на backend/public, fastcgi php:9000
-├─ backend/                     # Laravel 13, headless API
+│  └─ nginx/default.conf        # vhost на backend/public: лендинг /, SPA /board/, fastcgi php:9000
+├─ backend/                     # Laravel 13, headless API + лендинг
 │  ├─ app/
 │  │  ├─ Http/Controllers/Api/V1/   # контроллеры API
 │  │  ├─ Http/Requests/Api/V1/      # FormRequest-валидация
@@ -99,16 +105,21 @@ jwp-board/
 │  │  │  ├─ Application/Bus/        # CommandBus/QueryBus, Middleware пайпов
 │  │  │  └─ Infrastructure/Providers # BusServiceProvider (карта сообщений и пайпы)
 │  │  └─ Services/                  # аутентификация/сессии (AuthService, WebSessionService)
-│  ├─ bootstrap/app.php         # регистрация api-роутинга и middleware
+│  ├─ bootstrap/app.php         # регистрация api- и web-роутинга (web — только лендинг) и middleware
 │  ├─ config/                   # конфиги (app, database, cors, sanctum)
 │  ├─ database/{migrations,seeders,factories}
+│  ├─ public/                   # веб-корень: index.php, .htaccess (хостинг)
+│  │  └─ board/                 # сборка веб-версии (/board/, в .gitignore; make web-build)
+│  ├─ resources/views/landing.html  # разметка лендинга (/, вне веб-корня)
 │  ├─ routes/api.php            # все эндпоинты /api/v1/*
+│  ├─ routes/web.php            # только лендинг: /, редирект /board, fallback
 │  ├─ tests/{Feature,Unit}      # PHPUnit
 │  ├─ phpstan.neon.dist         # PHPStan + Larastan
 │  ├─ phpstan-baseline.neon     # принятые/унаследованные ошибки анализа
 │  └─ pint.json                 # стиль кода (Laravel Pint)
 └─ mobile/                      # Expo + React Native (NativeWind/Tailwind)
-   ├─ app/                      # экраны expo-router (сейчас заглушка)
+   ├─ app/                      # экраны expo-router
+   ├─ public/                   # статика для web-сборки; .htaccess для /board/ на хостинге
    ├─ src/api/                  # client.ts, types.ts — единственная точка обращения к API
    ├─ src/config/env.ts         # EXPO_PUBLIC_API_URL и конфигурация окружения
    ├─ global.css                # Tailwind-директивы, импорт в app/_layout.tsx
@@ -156,7 +167,7 @@ jwp-board/
 - PHP: `make sh`, `make php cmd="php -v"`, `make artisan cmd="about"`, `make composer cmd="require foo/bar"`.
 - Качество: `make test`, `make test-filter filter=HealthTest`, `make pint-test`, `make pint`, `make phpstan`, `make phpstan-baseline`, `make check`.
 - БД: `make migrate`, `make migrate-fresh`, `make seed`, `make db-shell`, `make db-test-shell`.
-- Мобилка: `make npm cmd="install"`, `make npx cmd="expo --version"`, `make typecheck`, `make lint`, `make format-check`, `make check-mobile`, `make node-shell`.
+- Мобилка: `make npm cmd="install"`, `make npx cmd="expo --version"`, `make typecheck`, `make lint`, `make format-check`, `make check-mobile`, `make web-build`, `make node-shell`.
 - Прямой `docker compose` — для диагностики (`docker compose logs php`); изменяющие команды — через Makefile.
 
 ---

@@ -1,0 +1,21 @@
+# Веб-корень проекта: лендинг (/) и собранная веб-версия приложения (/board/).
+# Разметка лендинга лежит в resources/views — вне веб-корня, поэтому прямых
+# адресов вида /landing/ у страницы нет.
+# Локально эти же правила заданы в docker/nginx/default.conf — конфиг nginx
+# повторяет поведение хостинга, чтобы результат совпадал с продакшеном.
+Options -Indexes -MultiViews
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Веб-версия приложения: статика из каталога board/ со своим .htaccess
+    # (SPA-фолбэк). На хостинге без этой строки запрос ушёл бы во фронт-контроллер.
+    RewriteCond %{REQUEST_URI} ^/board(/|$)
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^board(/.*)?$ board/index.html [L]
+
+    # Остальное — Laravel: лендинг "/" и JSON API /api/v1.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>

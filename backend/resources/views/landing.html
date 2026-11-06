@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JWP Board — персональный канбан</title>
+    <meta name="description" content="JWP Board — канбан-доска для личных целей: направления, инициативы, проекты и задачи на одном экране." />
+    <!--
+      Заглушка лендинга: статическая страница без сборки (Blade/Vite в проекте нет).
+      Палитра совпадает с mobile/tailwind.config.js (surface/app/muted/border),
+      поэтому сайт и веб-версия приложения выглядят одинаково.
+    -->
+    <style>
+      :root {
+        --color-app: #111827;
+        --color-surface: #f5f6f8;
+        --color-card: #ffffff;
+        --color-muted: #6b7280;
+        --color-subtle: #9ca3af;
+        --color-border: #e5e7eb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--color-surface);
+        color: var(--color-app);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 24px 48px;
+      }
+
+      .brand {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-muted);
+      }
+
+      h1 {
+        margin: 16px 0 8px;
+        font-size: 40px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+      }
+
+      .lead {
+        margin: 0 0 32px;
+        font-size: 18px;
+        color: var(--color-muted);
+      }
+
+      .card {
+        background: var(--color-card);
+        border: 1px solid var(--color-border);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+      }
+
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .card p {
+        margin: 0;
+        font-size: 15px;
+        color: var(--color-muted);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 20px;
+        border-radius: 10px;
+        border: 1px solid var(--color-app);
+        background: var(--color-app);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .button:hover {
+        opacity: 0.9;
+      }
+
+      .button.secondary {
+        background: transparent;
+        border-color: var(--color-border);
+        color: var(--color-app);
+      }
+
+      footer {
+        margin-top: 40px;
+        font-size: 13px;
+        color: var(--color-subtle);
+      }
+
+      @media (max-width: 480px) {
+        .wrap {
+          padding: 40px 16px 32px;
+        }
+
+        h1 {
+          font-size: 30px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="brand">JWP Board</div>
+
+      <h1>Персональный канбан</h1>
+      <p class="lead">
+        Доска для личных целей: направления, инициативы, проекты и задачи — на одном экране,
+        без лишних совещаний и таблиц.
+      </p>
+
+      <section class="card">
+        <h2>Три уровня вместо одного списка</h2>
+        <p>
+          Стратегический, тактический и операционный уровни связывают большую цель с конкретной
+          задачей. Свёрнутые уровни не мешают смотреть на то, что важно сейчас.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Карточки двигаются по правилам</h2>
+        <p>
+          Переходы между колонками проверяет сервер: карточка не уедет в работу, пока её этапы
+          не готовы. История изменений сохраняется.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Одно состояние для всех устройств</h2>
+        <p>
+          Доска хранится на сервере, поэтому в браузере и в мобильном приложении вы видите
+          одно и то же.
+        </p>
+      </section>
+
+      <div class="actions">
+        <a class="button" href="/board/">Открыть доску</a>
+      </div>
+
+      <footer>JWP Board — личный инструмент планирования.</footer>
+    </main>
+  </body>
+</html>

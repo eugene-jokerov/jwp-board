@@ -10,6 +10,8 @@
 /auth.json
 /node_modules
 /public/storage
+# Сборка веб-версии (make web-build): артефакт, на хостинг копируется отдельно.
+/public/board
 # Скомпилированные Blade-вью и прочий рантайм-кэш Laravel. IDE может добавлять
 # их в патчи как новые файлы: коммитить такой мусор нельзя.
 /storage/framework/views/*.php

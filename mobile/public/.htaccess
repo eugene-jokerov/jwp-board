@@ -1,0 +1,26 @@
+# Сборка веб-версии приложения (npx expo export, см. make web-build).
+# Это SPA: все маршруты expo-router строятся на клиенте, поэтому любой
+# несуществующий файл отдаём index.html — так /board/, /board/auth и другие
+# адреса открываются одинаково.
+#
+# Файл лежит в mobile/web-public и попадает в сборку автоматически
+# (web.output != "server"), поэтому после make web-build он оказывается
+# в backend/public/board/.htaccess вместе с index.html.
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /board/
+
+    # Существующие файлы (бандл, ассеты _expo/) отдаём как есть.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Остальное — точка входа SPA.
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# PHP внутри сборки не выполняется: index.php здесь нет и не должно быть.
+RemoveHandler .php .phtml
+RemoveType .php .phtml
