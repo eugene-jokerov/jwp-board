@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\LegalPagesController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -7,25 +8,37 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Веб-маршруты: только лендинг
+| Веб-маршруты: лендинг и юридические страницы
 |--------------------------------------------------------------------------
 | Бэкенд остаётся headless API: весь контракт приложения живёт в /api/v1.
-| Исключение — публичный сайт (лендинг). Его разметка лежит в resources/views:
-| вне веб-корня, поэтому страница доступна только по `/` и не дублируется
-| адресами вида /landing/ или /landing/index.html. Blade здесь не используется —
-| маршрут отдаёт готовый файл; HTML-ответов из контроллеров по-прежнему нет.
+| Исключение — публичный сайт: лендинг и юридические документы (политика
+| персональных данных, пользовательское соглашение, политика cookie), на
+| которые ссылается футер лендинга. Оба варианта — Blade-шаблоны
+| (resources/views, провайдер Illuminate\View\ViewServiceProvider), поэтому
+| реквизиты оператора и год в футере подставляются из config/legal.php, а не
+| правятся в разметке. Шаблоны лежат вне веб-корня: `/` — единственный адрес
+| лендинга, /landing/ и /landing/index.html уводятся фолбэком.
 |
 | Веб-версия самого приложения — статическая сборка mobile по адресу /board/.
 | Её отдаёт веб-сервер (nginx локально, .htaccess на хостинге), до Laravel
 | такие запросы не доходят: это SPA с клиентской маршрутизацией.
 */
 
-// Лендинг — статическая страница из resources/views/landing.html.
-// `->file()` транслирует поток ответа, поэтому в тесте содержимое читается из
-// файла напрямую (см. tests/Feature/LandingTest.php).
-Route::get('/', function () {
-    return response()->file(resource_path('views/landing.html'));
-})->name('landing');
+// Лендинг — Blade-шаблон resources/views/landing.blade.php.
+Route::view('/', 'landing')->name('landing');
+
+/*
+| Юридические страницы публичного сайта.
+|
+| Политика обработки персональных данных (152-ФЗ, ст. 18.1), пользовательское
+| соглашение и политика cookie. На них ссылается футер лендинга. Маршруты
+| объявлены до Route::fallback: иначе неизвестный путь уводил бы эти адреса
+| редиректом на «/». Шаблоны — resources/views/legal, реквизиты оператора
+| выводятся из config/legal.php.
+*/
+Route::get('/privacy', [LegalPagesController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms', [LegalPagesController::class, 'terms'])->name('legal.terms');
+Route::get('/cookies', [LegalPagesController::class, 'cookies'])->name('legal.cookies');
 
 /*
 | Редиректы заданы относительным Location: абсолютный адрес Laravel строит из

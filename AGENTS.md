@@ -4,11 +4,12 @@
 Проект — git-монорепозиторий: строгий бэкенд на Laravel, который отдаёт только JSON (headless API),
 и клиент на React Native (Expo). Фронт один: приложение собирается и для native (iOS/Android),
 и для web через `react-native-web`. Отдельного web-фронтенда нет, и на стороне бэкенда
-не бывает Blade-шаблонов, Vite и HTML-ответов из контроллеров.
+не бывает Vite и HTML-ответов из API-контроллеров.
 
-Исключение — публичный сайт: на `/` живёт статический лендинг (короткое описание продукта и
-переход на доску), а веб-версия приложения открывается по `/board/`. Лендинг — готовый HTML-файл в
-`backend/resources/views/landing.html`, который отдаётся как статика; веб-версия — сборка `mobile` (`make web-build`)
+Исключение — публичный сайт: на `/` живёт лендинг (описание продукта и
+переход на доску), а веб-версия приложения открывается по `/board/`. Лендинг и юридические
+страницы — Blade-шаблоны в `backend/resources/views/` (отдаются через веб-маршруты, провайдер
+`Illuminate\View\ViewServiceProvider`); веб-версия — сборка `mobile` (`make web-build`)
 в `backend/public/board/`. Подробности — в разделе 1.1.
 
 ---
@@ -24,7 +25,7 @@
 ## 1.1 Бэкенд
 
 - **Роутинг только API.** Все маршруты — в `routes/api.php`, семейство v1 — внутри `Route::prefix('v1')->group(...)`. `routes/web.php` существует **только для лендинга** (см. ниже): новых веб-маршрутов и контроллеров там быть не должно.
-- **Лендинг и веб-версия.** `GET /` отдаёт статический файл `resources/views/landing.html` (без Blade, Vite и рендера в контроллере); файл лежит **вне веб-корня**, поэтому страницы по адресам `/landing/`, `/landing/index.html` не существует — дублей у `/` нет. `/board` редиректит на `/board/`, а `/board/**` — SPA-сборка `mobile` в `public/board/`, её отдаёт веб-сервер. На хостинге маршрутизацию задаёт `.htaccess` (`public/.htaccess` и `.htaccess` внутри сборки из `mobile/public`), локально — `docker/nginx/default.conf` с той же логикой. Fallback в `routes/web.php` уводит неизвестные страницы на лендинг, но `/api/*` остаётся JSON 404.
+- **Лендинг, юридические страницы и веб-версия.** `GET /` отдаёт Blade-шаблон `resources/views/landing.blade.php` (маршрут `Route::view('/')`); файл лежит **вне веб-корня**, поэтому страниц по адресам `/landing/`, `/landing/index.html` не существует — дублей у `/` нет. Юридические документы (`GET /privacy`, `/terms`, `/cookies`) — Blade-шаблоны `resources/views/legal/*.blade.php`; отдаёт их `App\Http\Controllers\Web\LegalPagesController` через `App\Services\LegalPageService`. Общий каркас страницы — компонент `resources/views/components/legal/layout.blade.php` (шапка, `<h1>`, версия и дата редакции, футер), реквизиты оператора — `x-legal.operators` (данные из `config/legal.php`), стили — `public/css/legal.css`. Blade-провайдер подключён в `bootstrap/providers.php`. Маршруты объявлены **до** `Route::fallback`, иначе fallback уводил бы их на `/`. `/board` редиректит на `/board/`, а `/board/**` — SPA-сборка `mobile` в `public/board/`, её отдаёт веб-сервер. На хостинге маршрутизацию задаёт `.htaccess` (`public/.htaccess` и `.htaccess` внутри сборки из `mobile/public`), локально — `docker/nginx/default.conf` с той же логикой. Fallback в `routes/web.php` уводит неизвестные страницы на лендинг, но `/api/*` остаётся JSON 404.
 - **Контроллеры** — в `app/Http/Controllers/Api/V1/`, наследуются от базового `App\Http\Controllers\Controller`. Примеры имён: `HealthController`, `AuthController`, `BoardController`. Для ресурса — `index/show/store/update/destroy`.
 - **Валидация** — всегда через `FormRequest` (`app/Http/Requests/Api/V1/...`), не через `$request->validate()` в контроллере.
 - **Ответы** — через `JsonResource` (`app/Http/Resources/...`). Не возвращай Eloquent-модель напрямую: это раскрывает лишние поля (например, `password`).
@@ -105,14 +106,17 @@ jwp-board/
 │  │  │  ├─ Application/Bus/        # CommandBus/QueryBus, Middleware пайпов
 │  │  │  └─ Infrastructure/Providers # BusServiceProvider (карта сообщений и пайпы)
 │  │  └─ Services/                  # аутентификация/сессии (AuthService, WebSessionService)
-│  ├─ bootstrap/app.php         # регистрация api- и web-роутинга (web — только лендинг) и middleware
-│  ├─ config/                   # конфиги (app, database, cors, sanctum)
+│  ├─ bootstrap/app.php         # регистрация api- и web-роутинга (web — публичный сайт) и middleware
+│  ├─ config/                   # конфиги (app, database, cors, sanctum, legal)
 │  ├─ database/{migrations,seeders,factories}
 │  ├─ public/                   # веб-корень: index.php, .htaccess (хостинг)
-│  │  └─ board/                 # сборка веб-версии (/board/, в .gitignore; make web-build)
-│  ├─ resources/views/landing.html  # разметка лендинга (/, вне веб-корня)
+│  │  ├─ board/                 # сборка веб-версии (/board/, в .gitignore; make web-build)
+│  │  ├─ css/legal.css          # стили юридических страниц
+│  │  └─ images/                # скриншоты и иллюстрации лендинга (board.png)
+│  ├─ resources/views/          # Blade: landing.blade.php (/) и legal/*.blade.php (/privacy, /terms, /cookies)
+│  │  └─ components/legal/      # layout, operators (реквизиты), footer
 │  ├─ routes/api.php            # все эндпоинты /api/v1/*
-│  ├─ routes/web.php            # только лендинг: /, редирект /board, fallback
+│  ├─ routes/web.php            # публичный сайт: /, /privacy, /terms, /cookies, редирект /board, fallback
 │  ├─ tests/{Feature,Unit}      # PHPUnit
 │  ├─ phpstan.neon.dist         # PHPStan + Larastan
 │  ├─ phpstan-baseline.neon     # принятые/унаследованные ошибки анализа

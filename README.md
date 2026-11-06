@@ -156,7 +156,8 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:8080
 
 | Адрес | Что отдаётся |
 | --- | --- |
-| `/` | лендинг — статический файл `backend/resources/views/landing.html` (вне веб-корня) |
+| `/` | лендинг — Blade-шаблон `backend/resources/views/landing.blade.php` (вне веб-корня) |
+| `/privacy`, `/terms`, `/cookies` | юридические страницы — Blade-шаблоны `backend/resources/views/legal/*.blade.php`, стили `backend/public/css/legal.css` |
 | `/board/` | веб-версия приложения — сборка Expo (`web.output: "single"`, SPA) |
 | `/api/v1/*` | JSON API |
 
@@ -167,8 +168,14 @@ make web-build      # expo export --platform web -> mobile/dist -> backend/publi
 Что важно знать:
 
 - Сборка кладётся в `backend/public/board/` и **в git не попадает** (`backend/.gitignore`).
-- Разметка лендинга лежит в `backend/resources/views/landing.html` — вне веб-корня, поэтому `/`
+- Лендинг — Blade-шаблон `backend/resources/views/landing.blade.php` вне веб-корня, поэтому `/`
   единственный адрес страницы (`/landing/` и `/landing/index.html` редиректят на `/`).
+- Юридические страницы (`/privacy`, `/terms`, `/cookies`) — Blade-шаблоны
+  `backend/resources/views/legal/*.blade.php`. Общий каркас — компонент `x-legal.layout`, реквизиты
+  оператора — `x-legal.operators`, значения приходят из `config/legal.php` (переменные `LEGAL_*` в
+  `backend/.env`, шаблон — `backend/.env.example`); пока они пусты, на страницах выводится
+  пометка «не указан» — перед публикацией их нужно заполнить. Blade подключён провайдером
+  `Illuminate\View\ViewServiceProvider` в `bootstrap/providers.php`.
 - Маршрутизацию задаёт веб-сервер: локально — `docker/nginx/default.conf`, на виртуальном хостинге —
   `.htaccess` (нужен включённый `mod_rewrite`):
   - `backend/public/.htaccess` — `/board/**` отдаётся из сборки, остальное уходит в Laravel;

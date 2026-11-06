@@ -33,5 +33,14 @@
         <env name="SESSION_DRIVER" value="array"/>
         <env name="SESSION_ENCRYPT" value="false"/>
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:8081"/>
+        <!-- Реквизиты оператора для юридических страниц: тесты не зависят от .env. -->
+        <env name="LEGAL_OPERATOR_NAME" value="ООО «Тестовая организация»"/>
+        <env name="LEGAL_OPERATOR_INN" value="0000000000"/>
+        <env name="LEGAL_OPERATOR_OGRN" value="0000000000000"/>
+        <env name="LEGAL_OPERATOR_ADDRESS" value="г. Москва, ул. Тестовая, д. 1"/>
+        <env name="LEGAL_CONTACT_EMAIL" value="privacy@example.test"/>
+        <env name="LEGAL_EFFECTIVE_DATE" value="2026-11-11"/>
+        <env name="LEGAL_VERSION" value="1.0"/>
+        <env name="LEGAL_RKN_NOTICE" value="уведомление подано"/>
     </php>
 </phpunit>

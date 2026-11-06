@@ -19,23 +19,111 @@ final class LandingTest extends TestCase
         $response->assertOk();
         self::assertStringContainsString('text/html', (string) $response->headers->get('content-type'));
 
-        // Ответ отдаётся потоком (response()->file), поэтому содержимое
-        // проверяем по самому файлу лендинга.
-        $html = (string) file_get_contents(resource_path('views/landing.html'));
+        $html = (string) $response->getContent();
 
         self::assertStringContainsString('JWP Board', $html);
         self::assertStringContainsString('href="/board/"', $html);
+        self::assertStringContainsString('Посмотреть демо', $html);
+        self::assertStringContainsString('src="/images/board.png"', $html);
+    }
+
+    public function test_landing_substitutes_year(): void
+    {
+        // Год копирайта вычисляется шаблоном (now()), а не правится руками:
+        // в готовой странице не должно остаться незаполненных конструкций.
+        $html = (string) $this->get('/')->getContent();
+
+        self::assertStringContainsString('© '.now()->format('Y').' JWP Board', $html);
+    }
+
+    public function test_views_are_rendered_by_blade(): void
+    {
+        // Публичный сайт отдаётся Blade-шаблонами: директивы и компоненты
+        // должны быть скомпилированы, а не попасть в ответ как текст.
+        $html = (string) $this->get('/privacy')->getContent();
+
+        foreach (['@props', '@php', 'x-legal.layout', '{{', '{!!'] as $marker) {
+            self::assertStringNotContainsString($marker, $html, "В ответе остался Blade-маркер {$marker}");
+        }
+    }
+
+    public function test_landing_links_to_legal_pages(): void
+    {
+        $html = (string) $this->get('/')->getContent();
+
+        foreach (['/privacy', '/terms', '/cookies'] as $path) {
+            self::assertStringContainsString('href="'.$path.'"', $html);
+        }
+    }
+
+    public function test_legal_pages_are_available(): void
+    {
+        foreach (['/privacy', '/terms', '/cookies'] as $path) {
+            $response = $this->get($path);
+
+            $response->assertOk();
+            self::assertStringContainsString(
+                'text/html',
+                (string) $response->headers->get('content-type'),
+                "Страница {$path} должна отдаваться как HTML"
+            );
+
+            $html = (string) $response->getContent();
+
+            // Реквизиты выводятся шаблоном из config/legal.php, а не лежат
+            // в разметке: в ответе не должно остаться Blade-подстановок.
+            self::assertStringNotContainsString('{{', $html, "На странице {$path} остались подстановки");
+        }
+    }
+
+    public function test_legal_pages_mark_missing_operator_fields(): void
+    {
+        // Незаполненные реквизиты показываются пометкой, а не пустой ячейкой:
+        // это защищает от публикации документа без данных оператора.
+        config(['legal.operator.name' => null, 'legal.contact_email' => '']);
+
+        $html = (string) $this->get('/privacy')->getContent();
+
+        self::assertStringContainsString('<dd>не указан</dd>', $html);
+    }
+
+    public function test_privacy_page_uses_operator_config(): void
+    {
+        config([
+            'legal.operator.name' => 'ООО «Тест»',
+            'legal.contact_email' => 'privacy@example.test',
+        ]);
+
+        $html = (string) $this->get('/privacy')->getContent();
+
+        self::assertStringContainsString('ООО «Тест»', $html);
+        self::assertStringContainsString('privacy@example.test', $html);
+        self::assertStringContainsString('152-ФЗ', $html);
+    }
+
+    public function test_legal_pages_are_not_redirected_by_fallback(): void
+    {
+        // Регрессия на порядок маршрутов: fallback уводит неизвестные страницы
+        // на «/», и юридические адреса должны быть объявлены раньше него.
+        foreach (['/privacy', '/terms', '/cookies'] as $path) {
+            self::assertSame(200, $this->get($path)->getStatusCode(), "{$path} не должен редиректить");
+        }
     }
 
     public function test_landing_has_no_duplicate_url(): void
     {
-        // Разметка лендинга живёт вне веб-корня: прямых адресов к файлу нет,
-        // иначе одна и та же страница открывалась бы по нескольким URL.
+        // Шаблоны публичного сайта живут вне веб-корня: прямых адресов к файлам
+        // нет, иначе одна и та же страница открывалась бы по нескольким URL.
+        // Юридические страницы тоже лежат в resources/views/legal — дублей
+        // вида /legal/privacy.blade.php быть не должно.
         self::assertFileDoesNotExist(public_path('landing'));
-        self::assertFileExists(resource_path('views/landing.html'));
+        self::assertFileDoesNotExist(public_path('legal'));
+        self::assertFileExists(resource_path('views/landing.blade.php'));
+        self::assertFileExists(resource_path('views/legal/privacy.blade.php'));
 
         $this->get('/landing/')->assertStatus(302);
         $this->get('/landing/index.html')->assertStatus(302);
+        $this->get('/legal/privacy.html')->assertStatus(302);
     }
 
     public function test_board_without_trailing_slash_redirects(): void

@@ -16,12 +16,13 @@ use Illuminate\Http\Response;
 
 /*
 |--------------------------------------------------------------------------
-| Bootstrap приложения (headless API + лендинг)
+| Bootstrap приложения (headless API + публичный сайт)
 |--------------------------------------------------------------------------
 | Префикс /api для routes/api.php добавляется фреймворком автоматически.
 | Веб-роутинг существует только для публичного сайта: routes/web.php отдаёт
-| статический лендинг из public/landing. Blade-шаблонов в проекте нет,
-| а веб-версия приложения (/board/) — статика и до Laravel не доходит.
+| Blade-шаблоны лендинга и юридических страниц (resources/views). Веб-версия
+| приложения (/board/) — статика и до Laravel не доходит. Blade-провайдер
+| подключён в bootstrap/providers.php (Illuminate\View\ViewServiceProvider).
 */
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
