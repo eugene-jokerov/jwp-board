@@ -30,26 +30,17 @@ final class RegisterUserCommandHandlerTest extends TestCase
         self::assertSame(['new@example.com'], $repository->created);
     }
 
-    public function test_command_defaults_device_name_to_mobile(): void
+    public function test_command_normalizes_email_and_ignores_device_name(): void
     {
+        // Имя устройства — забота auth-адаптера, а не команды регистрации:
+        // лишние ключи payload не должны влиять на сценарий.
         $command = RegisterUserCommand::fromArray([
-            'email' => 'device@example.com',
-            'password' => 'secret-password',
-            'device_name' => null,
-        ]);
-
-        self::assertSame('mobile', $command->deviceName);
-    }
-
-    public function test_command_keeps_explicit_device_name(): void
-    {
-        $command = RegisterUserCommand::fromArray([
-            'email' => 'device@example.com',
+            'email' => '  Device@Example.com ',
             'password' => 'secret-password',
             'device_name' => 'phpunit',
         ]);
 
-        self::assertSame('phpunit', $command->deviceName);
+        self::assertSame('device@example.com', $command->email->value());
     }
 
     public function test_rejects_already_registered_email(): void

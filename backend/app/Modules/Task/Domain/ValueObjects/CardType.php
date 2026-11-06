@@ -28,22 +28,6 @@ enum CardType: string
     }
 
     /**
-     * На карточки этого типа ссылаются через `project_id`.
-     */
-    public function isProject(): bool
-    {
-        return $this === self::Project;
-    }
-
-    /**
-     * На карточки этого типа ссылаются через `initiative_id`.
-     */
-    public function isInitiative(): bool
-    {
-        return $this === self::Initiative;
-    }
-
-    /**
      * Подпись типа для сообщений об ошибках.
      */
     public function label(): string

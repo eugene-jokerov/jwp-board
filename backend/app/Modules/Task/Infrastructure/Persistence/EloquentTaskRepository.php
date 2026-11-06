@@ -52,7 +52,8 @@ final class EloquentTaskRepository implements TaskRepository
         foreach (['direction_id', 'initiative_id', 'project_id'] as $field) {
             $value = $filters[$field] ?? null;
 
-            if ($value !== null) {
+            // 0 и отрицательные — не идентификаторы: фильтр не применяем.
+            if ($value !== null && (int) $value > 0) {
                 $query->where($field, (int) $value);
             }
         }
@@ -65,6 +66,39 @@ final class EloquentTaskRepository implements TaskRepository
         return $this->childrenQuery($task)
             ->where('column', CardColumn::InProgress->value)
             ->count();
+    }
+
+    /**
+     * Дети в работе для пачки карточек: два GROUP BY-запроса (проекты по
+     * initiative_id и задачи по project_id) вместо count() на каждую карточку.
+     *
+     * @param  list<Task>  $tasks
+     * @return array<int, int>
+     */
+    public function countChildrenInProgressFor(array $tasks): array
+    {
+        $initiativeIds = [];
+        $projectIds = [];
+
+        foreach ($tasks as $task) {
+            match ($task->type) {
+                CardType::Initiative => $initiativeIds[] = (int) $task->id,
+                CardType::Project => $projectIds[] = (int) $task->id,
+                CardType::Task => null,
+            };
+        }
+
+        $counts = array_fill_keys(array_merge($initiativeIds, $projectIds), 0);
+
+        if ($initiativeIds !== []) {
+            $this->countByParent('initiative_id', $initiativeIds, $counts);
+        }
+
+        if ($projectIds !== []) {
+            $this->countByParent('project_id', $projectIds, $counts);
+        }
+
+        return $counts;
     }
 
     public function countChildren(Task $task): int
@@ -130,5 +164,27 @@ final class EloquentTaskRepository implements TaskRepository
             CardType::Project => Task::query()->where('project_id', $task->id),
             CardType::Task => Task::query()->whereRaw('1 = 0'),
         };
+    }
+
+    /**
+     * Посчитать детей в работе по родителям и дописать в $counts.
+     *
+     * @param  'initiative_id'|'project_id'  $parentField
+     * @param  list<int>  $parentIds
+     * @param  array<int, int>  $counts
+     */
+    private function countByParent(string $parentField, array $parentIds, array &$counts): void
+    {
+        $rows = Task::query()
+            ->selectRaw($parentField.' as parent_id, count(*) as aggregate')
+            ->whereIn($parentField, $parentIds)
+            ->where('column', CardColumn::InProgress->value)
+            ->groupBy($parentField)
+            ->toBase()
+            ->get();
+
+        foreach ($rows as $row) {
+            $counts[(int) $row->parent_id] = (int) $row->aggregate;
+        }
     }
 }

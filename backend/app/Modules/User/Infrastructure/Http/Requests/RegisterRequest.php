@@ -10,6 +10,10 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * Идентификация пользователя — только email и пароль, поэтому поля `name` нет.
  * Подтверждение пароля обязательно: правило `confirmed` требует `password_confirmation`.
+ *
+ * Имени устройства здесь нет: оно относится к выдаче Bearer-токена и
+ * передаётся при входе (LoginRequest), а регистрация веб-клиента обходится
+ * вовсе без токена.
  */
 final class RegisterRequest extends FormRequest
 {
@@ -36,6 +40,8 @@ final class RegisterRequest extends FormRequest
                 'same:password_confirmation',
             ],
             'password_confirmation' => ['required', 'string', 'min:'.Password::MIN_LENGTH],
+            // Имя устройства не идёт в команду: контроллер использует его
+            // только как метку Bearer-токена, но валидировать всё равно нужно.
             'device_name' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
@@ -78,14 +84,13 @@ final class RegisterRequest extends FormRequest
     /**
      * Провалидированные данные для команды регистрации.
      *
-     * @return array{email: string, password: string, device_name?: string|null}
+     * @return array{email: string, password: string}
      */
     public function toCommandPayload(): array
     {
         return [
             'email' => $this->string('email')->toString(),
             'password' => $this->string('password')->toString(),
-            'device_name' => $this->input('device_name'),
         ];
     }
 }

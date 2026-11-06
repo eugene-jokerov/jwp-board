@@ -25,6 +25,9 @@ interface TaskRepository
     /**
      * Карточки пользователя с фильтрами, в порядке создания.
      *
+     * Фильтр с null не применяется; числовые фильтры применяются только
+     * при значении > 0 (0 и отрицательные не сужают выборку).
+     *
      * @param  array{type?: CardType|null, column?: CardColumn|null, direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $filters
      * @return list<Task>
      */
@@ -34,6 +37,17 @@ interface TaskRepository
      * Дочерние карточки в работе: проекты инициативы или задачи проекта.
      */
     public function countChildrenInProgress(Task $task): int;
+
+    /**
+     * Количество детей в работе для пачки карточек — одним запросом.
+     *
+     * Список карточек спрашивает признак для каждой строки, поэтому пакетный
+     * метод нужен, чтобы не делать count() на карточку.
+     *
+     * @param  list<Task>  $tasks
+     * @return array<int, int> id карточки => количество её детей в работе
+     */
+    public function countChildrenInProgressFor(array $tasks): array;
 
     /**
      * Количество дочерних карточек в любой колонке.

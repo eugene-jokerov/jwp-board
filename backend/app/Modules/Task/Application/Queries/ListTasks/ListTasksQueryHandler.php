@@ -38,15 +38,21 @@ final readonly class ListTasksQueryHandler
         ]);
 
         $colors = $this->colors($query->userId);
+        $result = [];
 
-        return array_map(
-            fn ($task): TaskResult => TaskResult::fromTask(
+        // Доступные переходы считаются пачкой: один запрос на весь список,
+        // а не count() на каждую карточку.
+        foreach ($this->policy->allowedTransitionsFor($tasks) as $row) {
+            $task = $row['task'];
+
+            $result[] = TaskResult::fromTask(
                 $task,
-                $this->policy->allowedTransitions($task),
+                $row['transitions'],
                 $task->direction_id === null ? null : ($colors[$task->direction_id] ?? null),
-            ),
-            $tasks,
-        );
+            );
+        }
+
+        return $result;
     }
 
     /**

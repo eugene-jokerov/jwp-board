@@ -33,17 +33,31 @@ final readonly class TaskEditor
      * @param  array{title?: string|null, description?: string|null, column?: CardColumn|null}  $fields
      *
      * @throws InvalidHierarchy если набор ссылок недопустим для типа карточки
+     *                          или у карточки с детьми меняется родитель
      * @throws ColumnChangeBlocked если смену колонки блокируют дети в работе
      */
     public function update(Task $task, array $links, array $fields): Task
     {
         $changes = [];
 
-        $resolved = $this->placement->resolveForUpdate($task, $this->mergeLinks($task, $links));
+        $merged = $this->mergeLinks($task, $links);
+        $resolved = $this->placement->resolveForUpdate($task, $merged);
 
         foreach ($resolved as $field => $value) {
             if ($task->{$field} !== $value) {
                 $changes[$field] = $value;
+            }
+        }
+
+        // Дети наследуют direction_id и initiative_id карточки. Если сменить
+        // ссылку на родителя, у них останется денормализация старой ветки —
+        // карточки «уедут» на чужую доску. Поэтому менять родителя можно
+        // только у карточки без детей.
+        if ($this->parentChanged($task, $merged)) {
+            $children = $this->tasks->countChildren($task);
+
+            if ($children > 0) {
+                throw InvalidHierarchy::parentLockedByChildren($task->type, (int) $task->id, $children);
             }
         }
 
@@ -64,6 +78,20 @@ final readonly class TaskEditor
         }
 
         return $this->tasks->update($task, $changes);
+    }
+
+    /**
+     * Переданная ссылка на родителя отличается от текущей.
+     *
+     * Дети ссылаются на карточку через initiative_id (проекты) или project_id
+     * (задачи), поэтому достаточно сравнить эти два поля.
+     *
+     * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $merged
+     */
+    private function parentChanged(Task $task, array $merged): bool
+    {
+        return ($merged['initiative_id'] ?? null) !== $task->initiative_id
+            || ($merged['project_id'] ?? null) !== $task->project_id;
     }
 
     /**

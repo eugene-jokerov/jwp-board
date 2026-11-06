@@ -50,7 +50,39 @@ final readonly class ColumnTransitionPolicy
      */
     public function allowedTransitions(Task $task): array
     {
-        if ($this->blockingChildren($task) > 0) {
+        return $this->transitionsFor($task, $this->blockingChildren($task));
+    }
+
+    /**
+     * Колонки для пачки карточек: признак «есть дети в работе» считается
+     * одним запросом на весь список (см. TaskRepository::countChildrenInProgressFor).
+     *
+     * @param  list<Task>  $tasks
+     * @return list<array{task: Task, transitions: list<CardColumn>}>
+     */
+    public function allowedTransitionsFor(array $tasks): array
+    {
+        $children = $this->tasks->countChildrenInProgressFor($tasks);
+        $result = [];
+
+        foreach ($tasks as $task) {
+            $result[] = [
+                'task' => $task,
+                'transitions' => $this->transitionsFor($task, $children[(int) $task->id] ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Список переходов по уже посчитанному числу блокирующих детей.
+     *
+     * @return list<CardColumn>
+     */
+    private function transitionsFor(Task $task, int $blockingChildren): array
+    {
+        if ($blockingChildren > 0) {
             return [$task->column];
         }
 

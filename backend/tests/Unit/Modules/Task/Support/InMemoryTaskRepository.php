@@ -85,6 +85,17 @@ final class InMemoryTaskRepository implements TaskRepository
         return $this->childrenInProgress[(int) $task->id] ?? 0;
     }
 
+    public function countChildrenInProgressFor(array $tasks): array
+    {
+        $counts = [];
+
+        foreach ($tasks as $task) {
+            $counts[(int) $task->id] = $this->countChildrenInProgress($task);
+        }
+
+        return $counts;
+    }
+
     public function countChildren(Task $task): int
     {
         return $this->children[(int) $task->id] ?? 0;

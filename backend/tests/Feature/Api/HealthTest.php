@@ -17,8 +17,10 @@ final class HealthTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'ok')
             ->assertJsonStructure([
-                'data' => ['status', 'environment', 'timestamp'],
-            ]);
+                'data' => ['status', 'timestamp'],
+            ])
+            // Окружение — внутренняя конфигурация, публичный эндпоинт его не раскрывает.
+            ->assertJsonMissingPath('data.environment');
     }
 
     public function test_unknown_api_route_returns_json_404(): void

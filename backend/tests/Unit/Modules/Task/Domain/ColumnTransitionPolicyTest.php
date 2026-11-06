@@ -82,4 +82,27 @@ final class ColumnTransitionPolicyTest extends TestCase
         // Исключения нет: карточку без детей удалять можно.
         self::assertSame(0, (new InMemoryTaskRepository)->countChildren($task));
     }
+
+    /**
+     * Список карточек считает переходы пачкой: блокировка одной карточки
+     * не должна влиять на остальные.
+     */
+    public function test_allowed_transitions_for_batch_mix_blocked_and_free_cards(): void
+    {
+        $repository = new InMemoryTaskRepository;
+        $repository->setChildren(1, 1, 1);
+        $policy = new ColumnTransitionPolicy($repository);
+
+        $blocked = InMemoryTaskRepository::task(1, 10, ['type' => CardType::Project->value, 'column' => 'in_progress']);
+        $free = InMemoryTaskRepository::task(2, 10, ['type' => CardType::Project->value, 'column' => 'in_progress']);
+        $operational = InMemoryTaskRepository::task(3, 10, ['column' => 'in_progress']);
+
+        $rows = $policy->allowedTransitionsFor([$blocked, $free, $operational]);
+
+        self::assertCount(3, $rows);
+        self::assertSame([CardColumn::InProgress], $rows[0]['transitions']);
+        self::assertSame(CardColumn::ordered(), $rows[1]['transitions']);
+        self::assertSame(CardColumn::ordered(), $rows[2]['transitions']);
+        self::assertSame($free, $rows[1]['task']);
+    }
 }

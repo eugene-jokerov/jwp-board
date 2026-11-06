@@ -35,27 +35,35 @@ final class InvalidHierarchy extends InvalidArgumentException
     }
 
     /**
-     * Родительская карточка не того типа.
-     */
-    public static function wrongParentType(CardType $expected, CardType $actual): self
-    {
-        return new self(sprintf(
-            'Родительская карточка должна быть типа «%s», а указана «%s».',
-            $expected->label(),
-            $actual->label(),
-        ));
-    }
-
-    /**
      * Денормализованное поле не совпадает с родителем.
+     *
+     * null трактуется как «у родителя значения нет»: null — не идентификатор,
+     * поэтому в сообщении он называется словом, а не «null».
      */
     public static function fieldMismatch(string $field, ?int $expected, ?int $actual): self
     {
         return new self(sprintf(
             'Поле %s не совпадает с родительской карточкой: ожидалось %s, передано %s.',
             $field,
-            $expected === null ? 'null' : (string) $expected,
-            $actual === null ? 'null' : (string) $actual,
+            $expected === null ? 'пустое значение' : (string) $expected,
+            $actual === null ? 'пустое значение' : (string) $actual,
+        ));
+    }
+
+    /**
+     * У карточки есть дети, поэтому её ссылка на родителя меняться не может.
+     *
+     * Дети наследуют направление и инициативу от карточки. Если отвязать
+     * родителя, у детей останется денормализация от старой ветки: они
+     * пропадут с доски родителя и покажутся в чужом направлении.
+     */
+    public static function parentLockedByChildren(CardType $type, int $id, int $children): self
+    {
+        return new self(sprintf(
+            'У карточки «%s» (%d) есть дочерние карточки (%d): сначала перенесите или удалите их.',
+            $type->label(),
+            $id,
+            $children,
         ));
     }
 

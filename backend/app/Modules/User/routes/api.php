@@ -14,5 +14,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     // Регистрация доступна без аутентификации: возвращает Bearer-токен.
-    Route::post('user/register', RegisterController::class)->name('api.v1.user.register');
+    // throttle:auth — лимитер из AppServiceProvider (защита от массовых регистраций).
+    Route::post('user/register', RegisterController::class)
+        ->middleware('throttle:auth')
+        ->name('api.v1.user.register');
 });

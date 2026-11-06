@@ -18,14 +18,6 @@ enum CardColumn: string
     case Canceled = 'canceled';
 
     /**
-     * Карточка взята в работу.
-     */
-    public function isInProgress(): bool
-    {
-        return $this === self::InProgress;
-    }
-
-    /**
      * Подпись колонки для интерфейса и сообщений об ошибках.
      */
     public function label(): string

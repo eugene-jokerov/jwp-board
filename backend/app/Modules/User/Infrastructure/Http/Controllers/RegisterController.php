@@ -32,13 +32,17 @@ final class RegisterController extends Controller
      */
     public function __invoke(RegisterRequest $request): JsonResponse
     {
-        $payload = $request->toCommandPayload();
-
         /** @var RegistrationResult $result */
-        $result = $this->bus->dispatch(RegisterUserCommand::fromArray($payload));
+        $result = $this->bus->dispatch(
+            RegisterUserCommand::fromArray($request->toCommandPayload()),
+        );
+
+        // Имя устройства нужно только для токена: клиент может прислать его
+        // при регистрации, иначе токен помечается как мобильный.
+        $deviceName = $request->string('device_name')->toString() ?: 'mobile';
 
         return (new AuthTokenResource($result->user))
-            ->withToken($this->auth->issueToken($result->user, $payload['device_name'] ?: 'mobile'))
+            ->withToken($this->auth->issueToken($result->user, $deviceName))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }

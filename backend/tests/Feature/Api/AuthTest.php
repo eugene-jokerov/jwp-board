@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
 use Tests\TestCase;
 
 /**
@@ -93,5 +94,24 @@ final class AuthTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/auth/me')
             ->assertUnauthorized();
+    }
+
+    /**
+     * Перебор пароля должен упираться в лимитер, а не в БД.
+     */
+    public function test_login_is_rate_limited(): void
+    {
+        // Лимитер считает по IP: 10 попыток в минуту.
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
+            $this->postJson('/api/v1/auth/login', [
+                'email' => 'brute@jwp-board.local',
+                'password' => 'wrong-password',
+            ])->assertUnauthorized();
+        }
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'brute@jwp-board.local',
+            'password' => 'wrong-password',
+        ])->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
     }
 }

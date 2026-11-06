@@ -3,12 +3,13 @@
 namespace App\Modules\User\Infrastructure\Providers;
 
 use App\Modules\User\Domain\Contracts\UserRepository;
-use App\Modules\User\Domain\Services\UserRegistrar;
 use App\Modules\User\Infrastructure\Persistence\EloquentUserRepository;
 use Illuminate\Support\ServiceProvider;
 
 /**
  * Привязка портов модуля User к инфраструктурным адаптерам.
+ *
+ * UserRegistrar зависит только от порта и разрешается автовайрингом.
  */
 final class UserServiceProvider extends ServiceProvider
 {
@@ -25,7 +26,6 @@ final class UserServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // UserRegistrar не требует конфигурации: зависимости приходят через DI.
-        $this->app->bind(UserRegistrar::class);
+        //
     }
 }

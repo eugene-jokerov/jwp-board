@@ -56,6 +56,11 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
         return $this->inner->countChildrenInProgress($task);
     }
 
+    public function countChildrenInProgressFor(array $tasks): array
+    {
+        return $this->inner->countChildrenInProgressFor($tasks);
+    }
+
     public function countChildren(Task $task): int
     {
         return $this->inner->countChildren($task);

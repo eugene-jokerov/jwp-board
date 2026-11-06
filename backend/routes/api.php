@@ -23,10 +23,13 @@ Route::prefix('v1')->group(function (): void {
     Route::get('health', HealthController::class)->name('api.v1.health');
 
     // Аутентификация по токенам Sanctum (мобильный клиент).
-    Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
+    // throttle:auth — защита от перебора пароля (лимитер в AppServiceProvider).
+    Route::post('auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:auth')
+        ->name('api.v1.auth.login');
 
     // Аутентификация веб-клиента: сессия в HttpOnly-cookie вместо токена.
-    Route::prefix('auth/web')->group(function (): void {
+    Route::prefix('auth/web')->middleware('throttle:auth')->group(function (): void {
         Route::post('login', [WebAuthController::class, 'login'])->name('api.v1.auth.web.login');
         Route::post('register', [WebAuthController::class, 'register'])->name('api.v1.auth.web.register');
     });

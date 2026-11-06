@@ -239,4 +239,122 @@ final class TasksTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.type', 'task');
     }
+
+    /**
+     * Опечатка в фильтре — ошибка клиента, а не тихо отключённый фильтр:
+     * иначе доска покажет лишние карточки и баг останется незамеченным.
+     */
+    public function test_index_rejects_unknown_filter_values(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?type=iniciatives')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['type']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=done')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['column']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?direction_id=abc')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['direction_id']);
+    }
+
+    public function test_index_without_filters_returns_all_cards(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    /**
+     * Дети наследуют направление и инициативу карточки: отвязка родителя
+     * оставила бы у них денормализацию старой ветки.
+     */
+    public function test_card_with_children_cannot_be_unlinked_from_initiative(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        Task::factory()->task($project)->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$project->id, ['initiative_id' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['hierarchy']);
+
+        $this->assertDatabaseHas('tasks', [
+            'id' => $project->id,
+            'initiative_id' => $initiative->id,
+            'direction_id' => $direction->id,
+        ]);
+    }
+
+    public function test_card_with_children_cannot_be_unlinked_from_project(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $task = Task::factory()->task($project)->create(['user_id' => $user->id]);
+        Task::factory()->task($task)->create(['user_id' => $user->id]);
+
+        // Задача стала родителем: у неё есть своя задача, хотя по типу она
+        // операционная. Дети ищутся по ссылке project_id, поэтому запрет
+        // срабатывает до проверки иерархии.
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['project_id' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['hierarchy']);
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'project_id' => $project->id]);
+    }
+
+    public function test_card_without_children_can_be_unlinked_from_initiative(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+
+        // Проект остаётся без инициативы и, значит, без направления:
+        // клиент передаёт явный null в direction_id вместе с отвязкой.
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$project->id, ['initiative_id' => null, 'direction_id' => null])
+            ->assertOk()
+            ->assertJsonPath('data.initiative_id', null)
+            ->assertJsonPath('data.direction_id', null)
+            ->assertJsonPath('data.color', null);
+    }
+
+    /**
+     * Титул из пробелов проходит правило `max`, но не value object:
+     * ответ должен остаться 422, а не превратиться в 500.
+     */
+    public function test_blank_title_is_rejected_on_create_and_update(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, ['type' => 'task', 'column' => 'backlog', 'title' => '   '])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title']);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => '   '])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title']);
+    }
 }
