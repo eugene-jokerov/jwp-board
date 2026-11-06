@@ -6,16 +6,27 @@
  * (её открывает экран, отсюда передаём только обработчик).
  *
  * На широком экране уровень — таблица: заголовки колонок печатаются один раз
- * сверху, ниже идут четыре монолитные колонки на всю высоту. Карточки внутри
- * колонок выложены строками по свимлайнам (у каждой группы своя высота), поэтому
- * карточки стоят напротив своего названия, а не уезжают потоком вниз.
+ * сверху, ниже идут колонки, выложенные строками по свимлайнам (у каждой группы
+ * своя высота), поэтому карточки стоят напротив своего названия, а не уезжают
+ * потоком вниз.
+ *
+ * Строка свимлайна — один flex-ряд (`items-stretch`): название и группы карточек
+ * всех колонок лежат в нём вместе. Высоту ряда задаёт самая высокая группа, а
+ * ячейка названия тянется по ней силами флексбокса — без измерения через
+ * `onLayout`. Раньше название и колонки были двумя независимыми стеками, и высоту
+ * названия синхронизировал `onLayout` группы карточек: при добавлении карточки в
+ * пустой свимлайн его размер приходил с устаревшими данными, повторного layout
+ * не было, и название оставалось минимальной высоты — до перезагрузки страницы.
+ *
+ * Фон и рамку колонок рисует подложка, растянутая за рядами на всю высоту уровня:
+ * ряды прозрачны, поэтому колонка выглядит одной плитой, а не набором ячеек.
+ *
  * Колонки делят свободную ширину поровну и растут вместе с окном (см. COLUMN_PANEL).
  * Любую колонку можно свернуть — она схлопывается в узкую полосу с вертикальным
  * названием и шевроном «развернуть».
  * На телефоне — аккордеон (сворачивание колонок там не нужно: они и так в строках).
  */
 
-import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardCard } from './BoardCard';
@@ -47,8 +58,11 @@ function widthOfLaneTitle(width: number): string {
   return width > WIDE_MIN_WIDTH ? LANE_TITLE_WIDTH_WIDE : LANE_TITLE_WIDTH;
 }
 
-/** Минимальная высота ячейки названия свимлайна до первого измерения раскладки. */
-const LANE_TITLE_MIN_HEIGHT = 56;
+/** Минимальная высота строки свимлайна: не ниже строки названия до первой карточки. */
+const LANE_ROW_MIN_HEIGHT = 56;
+
+/** Ряд свимлайна: название и группы всех колонок в одной flex-строке. */
+const LANE_ROW = 'w-full flex-row items-stretch gap-2';
 
 /** Заголовок колонки: название и счётчик слева, иконки меню и сворачивания справа. */
 const COLUMN_TITLE_CLASS = 'flex-row items-center justify-between gap-1 px-0.5';
@@ -77,6 +91,27 @@ const COLLAPSED_LABEL_WIDTH = 200;
 /** Высота строки надписи: после поворота это её видимая толщина. */
 const COLLAPSED_LABEL_HEIGHT = 16;
 
+/** Ячейка названия свимлайна: тянется по высоте ряда силами флексбокса. */
+const LANE_TITLE_CELL = 'justify-start rounded-lg bg-surface px-2.5 py-2';
+
+/**
+ * Колонка в ряду свимлайна: только отступы и раскладка карточек.
+ *
+ * Фон и рамку рисует подложка колонки за рядами (`COLUMN_BACKDROP`), поэтому
+ * здесь их нет: иначе на стыках строк появились бы двойные рамки и ячейки
+ * выглядели бы отдельными плитками вместо одной колонки на всю высоту доски.
+ */
+const LANE_COLUMN_CELL = 'gap-2 p-2';
+
+/**
+ * Подложка колонки: одна плитка на всю высоту доски, нарисованная за рядами.
+ *
+ * Ряды свимлайнов (название + группы карточек) лежат поверх неё абсолютным слоем
+ * и сами прозрачны — так колонка читается как монолит, но высоту названия
+ * по-прежнему даёт флексбокс ряда, без измерения через `onLayout`.
+ */
+const COLUMN_BACKDROP = 'rounded-lg border border-card-line bg-card';
+
 /**
  * Свёрнутая колонка: узкая полоса на всю высоту доски.
  *
@@ -90,7 +125,7 @@ const COLLAPSED_LABEL_HEIGHT = 16;
 function CollapsedColumn({ label, onExpand }: { label: string; onExpand: () => void }) {
   return (
     <View
-      className="shrink-0 overflow-hidden rounded-lg border border-card-line bg-card"
+      className="pointer-events-auto shrink-0 self-stretch overflow-hidden rounded-lg border border-card-line bg-card"
       style={{ width: COLLAPSED_COLUMN_WIDTH, minHeight: COLUMN_MIN_HEIGHT }}
     >
       <Pressable
@@ -227,28 +262,6 @@ export function BoardLevel({
   // Кнопка «+» в заголовке свимлайна создаёт карточку в первой колонке доски.
   const firstColumnId = COLUMNS[0].id;
 
-  /**
-   * Измеренные высоты блоков карточек по свимлайнам.
-   *
-   * Карточки переменной высоты (название в 1–3 строки), поэтому высоту ячейки
-   * названия нельзя посчитать заранее — её даёт раскладка группы карточек
-   * в самой широкой колонке свимлайна.
-   */
-  const [laneHeights, setLaneHeights] = useState<Record<string, number>>({});
-
-  /**
-   * Запоминаем высоту группы карточек свимлайна.
-   *
-   * В группу пишется последнее измерение: оно и есть её текущая высота.
-   * Раньше меньшее измерение игнорировалось, чтобы ячейка названия «не
-   * сжималась» на промежуточном layout, но из-за этого после удаления карточки
-   * (или переноса) высота оставалась прежней — колонка не адаптировалась.
-   * Высоту ячейки названия задаёт самая высокая группа: её выбирает `laneHeights`.
-   */
-  const reportLaneHeight = (laneId: string, height: number) => {
-    setLaneHeights((prev) => (prev[laneId] === height ? prev : { ...prev, [laneId]: height }));
-  };
-
   const laneForm = (
     <View className="flex-row items-center gap-2">
       <Pressable
@@ -356,13 +369,15 @@ export function BoardLevel({
               />
             ))
           ) : (
-            <>
+            // Контейнер широкой раскладки держит подложку колонок: она лежит
+            // абсолютом за рядами свимлайнов и тянется на всю их высоту.
+            <View className="relative gap-2">
               {/* Шапка печатается один раз на уровень: дальше колонки идут сквозь
                   все свимлайны без повторения названий. Счётчик стоит рядом с
                   названием, у правого края — меню (пока заглушка) и сворачивание.
                   У свёрнутой колонки в шапке остаётся только шеврон «развернуть»:
                   он стоит над узкой полосой. */}
-              <View className="w-full flex-row gap-2">
+              <View className="z-10 w-full flex-row gap-2">
                 <View className={laneTitleWidth} />
 
                 {COLUMNS.map((column) => {
@@ -430,72 +445,74 @@ export function BoardLevel({
                 })}
               </View>
 
-              {/* Тело: панель названий и четыре колонки-панели на всю высоту.
-                  Каждый свимлайн в колонке — группа с собственной высотой, поэтому
-                  карточки стоят напротив своего названия, а не потоком вниз. */}
-              <View className="w-full flex-row items-start gap-2">
-                <View className={['gap-2', laneTitleWidth].join(' ')}>
-                  {lanes.map((lane) => (
-                    <View
-                      key={lane.id}
-                      style={{ minHeight: laneHeights[lane.id] ?? LANE_TITLE_MIN_HEIGHT }}
-                      className="justify-start rounded-lg bg-surface px-2.5 py-2"
-                    >
-                      <SwimlaneHeader
-                        title={lane.title}
-                        color={lane.color}
-                        count={lane.cards.length}
-                        addLabel="Добавить карточку"
-                        canAdd={canCreate}
-                        canAddInLane={canAddInLane(lane)}
-                        onAddCard={() => onAddCard(lane.parentId, firstColumnId)}
-                      />
-                    </View>
-                  ))}
-                </View>
+              {/* Тело: строки по свимлайнам поверх подложки колонок.
+                  В каждом ряду название и группы карточек всех четырёх колонок
+                  лежат вместе (`items-stretch`), поэтому высоту названия даёт самая
+                  высокая группа — флексбокс подтягивает её сразу, как только в
+                  свимлайне появилась карточка.
+                  Подложка (`COLUMN_BACKDROP`) растянута на всю высоту тела и кладётся
+                  под рядами: рамка и заливка колонки не режутся на стыках строк,
+                  поэтому колонки выглядят монолитными, как плита в Jira. Высота
+                  тела не ниже `COLUMN_MIN_HEIGHT`: колонки высокие даже на почти
+                  пустой доске.
+                  Подложка живёт внутри тела, а не на уровне целиком: иначе её
+                  плитки накрыли бы шапку с названиями колонок и кнопками. */}
+              <View className="relative w-full gap-2" style={{ minHeight: COLUMN_MIN_HEIGHT }}>
+                {/* Слой подложки: развёрнутая колонка — одна плитка на всю высоту,
+                    свёрнутая — одна полоса на всю высоту (см. CollapsedColumn).
+                    `pointer-events-none` — слой декоративный и не должен
+                    перехватывать клики по карточкам; свёрнутая полоса возвращает
+                    себе клики через `pointer-events-auto`.
+                    Свёрнутая колонка живёт здесь, а не в рядах свимлайнов: она
+                    одна на всю доску, с названием по центру высоты, а в ряду
+                    остаётся только распорка её ширины. */}
+                <View className="pointer-events-none absolute inset-x-0 bottom-0 top-0 flex-row gap-2">
+                  <View className={laneTitleWidth} />
 
-                {COLUMNS.map((column) => {
-                  // Свёрнутая колонка — узкая полоса на всю высоту доски
-                  // с вертикальным названием (см. CollapsedColumn).
-                  if (collapsedColumns[column.id] === true) {
-                    return (
+                  {COLUMNS.map((column) =>
+                    collapsedColumns[column.id] === true ? (
                       <CollapsedColumn
                         key={column.id}
                         label={column.label}
                         onExpand={() => onToggleCollapsed(column.id)}
                       />
-                    );
-                  }
+                    ) : (
+                      <View key={column.id} className={[COLUMN_BACKDROP, COLUMN_PANEL].join(' ')} />
+                    ),
+                  )}
+                </View>
 
-                  return (
-                    <View
-                      key={column.id}
-                      className={['gap-2 rounded-lg border border-card-line bg-card p-2', COLUMN_PANEL].join(' ')}
-                      style={{ minHeight: COLUMN_MIN_HEIGHT }}
-                    >
-                      {lanes.map((lane) => {
-                        const laneCards = lane.cards.filter((card) => card.column === column.id);
+                <View className="w-full gap-2">
+                  {lanes.map((lane) => (
+                    <View key={lane.id} className={LANE_ROW} style={{ minHeight: LANE_ROW_MIN_HEIGHT }}>
+                      <View className={[laneTitleWidth, LANE_TITLE_CELL].join(' ')}>
+                        <SwimlaneHeader
+                          title={lane.title}
+                          color={lane.color}
+                          count={lane.cards.length}
+                          addLabel="Добавить карточку"
+                          canAdd={canCreate}
+                          canAddInLane={canAddInLane(lane)}
+                          onAddCard={() => onAddCard(lane.parentId, firstColumnId)}
+                        />
+                      </View>
 
-                        // Пустая группа сохраняет высоту строки: иначе карточки следующих
-                        // свимлайнов поднимутся и уедут из-под своего названия. Высота берётся
-                        // из измерений групп этого свимлайна (после удаления карточки она
-                        // тоже уменьшается) и не опускается ниже строки названия.
-                        if (laneCards.length === 0) {
+                      {COLUMNS.map((column) => {
+                        // Свёрнутая колонка нарисована один раз в подложке на всю
+                        // высоту доски, поэтому в ряду остаётся только распорка её
+                        // ширины: без неё ячейки разъехались бы с подложкой.
+                        if (collapsedColumns[column.id] === true) {
                           return (
-                            <View key={lane.id} style={{ minHeight: laneHeights[lane.id] ?? LANE_TITLE_MIN_HEIGHT }} />
+                            <View key={column.id} className="shrink-0" style={{ width: COLLAPSED_COLUMN_WIDTH }} />
                           );
                         }
 
-                        // Высоту группы задаёт контент: карточки переменной высоты, и
-                        // после удаления или переноса она должна уменьшаться. Ячейка
-                        // названия свимлайна при этом тянется по самой высокой группе —
-                        // это делает `laneHeights` в панели названий.
+                        const laneCards = lane.cards.filter((card) => card.column === column.id);
+
+                        // Фон и рамку даёт подложка ряда, поэтому ячейка прозрачна:
+                        // пустая группа просто растягивается по высоте ряда.
                         return (
-                          <View
-                            key={lane.id}
-                            className="gap-2"
-                            onLayout={(event) => reportLaneHeight(lane.id, event.nativeEvent.layout.height)}
-                          >
+                          <View key={column.id} className={[LANE_COLUMN_CELL, COLUMN_PANEL].join(' ')}>
                             {laneCards.map((card) => (
                               <BoardCard
                                 key={card.id}
@@ -512,10 +529,10 @@ export function BoardLevel({
                         );
                       })}
                     </View>
-                  );
-                })}
+                  ))}
+                </View>
               </View>
-            </>
+            </View>
           )}
         </View>
       )}
