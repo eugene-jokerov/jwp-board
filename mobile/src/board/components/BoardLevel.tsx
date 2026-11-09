@@ -6,17 +6,22 @@
  * (её открывает экран, отсюда передаём только обработчик).
  *
  * На широком экране уровень — таблица: заголовки колонок печатаются один раз
- * сверху, ниже идут колонки, выложенные строками по свимлайнам (у каждой группы
- * своя высота), поэтому карточки стоят напротив своего названия, а не уезжают
- * потоком вниз.
+ * сверху, ниже идут открытые колонки (Беклог, В работе), выложенные строками по
+ * свимлайнам (у каждой группы своя высота), поэтому карточки стоят напротив
+ * своего названия, а не уезжают потоком вниз.
  *
  * Строка свимлайна — один flex-ряд (`items-stretch`): название и группы карточек
- * всех колонок лежат в нём вместе. Высоту ряда задаёт самая высокая группа, а
+ * открытых колонок лежат в нём вместе. Высоту ряда задаёт самая высокая группа, а
  * ячейка названия тянется по ней силами флексбокса — без измерения через
  * `onLayout`. Раньше название и колонки были двумя независимыми стеками, и высоту
  * названия синхронизировал `onLayout` группы карточек: при добавлении карточки в
  * пустой свимлайн его размер приходил с устаревшими данными, повторного layout
  * не было, и название оставалось минимальной высоты — до перезагрузки страницы.
+ *
+ * Закрытые колонки (Готово, Отмена) свимлайнами не разложены: это простые списки,
+ * которые идут сверху вниз поверх рядов, поэтому положение карточки там не зависит
+ * от того, в каком свимлайне она лежит. Высота их списков и задаёт высоту плиты
+ * колонки (`closedColumnsHeight`): подложка и открытые колонки растягиваются по ней.
  *
  * Фон и рамку колонок рисует подложка, растянутая за рядами на всю высоту уровня:
  * ряды прозрачны, поэтому колонка выглядит одной плитой, а не набором ячеек.
@@ -27,13 +32,14 @@
  * На телефоне — аккордеон (сворачивание колонок там не нужно: они и так в строках).
  */
 
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardCard } from './BoardCard';
 import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './BoardIcons';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
-import { columnCount, type CardAction } from '../derive';
+import { columnCount, isClosedColumn, type CardAction } from '../derive';
 import { hasParent } from '../mappers';
 import {
   COLUMNS,
@@ -55,16 +61,34 @@ import {
  * мониторах колонки упираются в предел и справа остаётся свободное место.
  * Один класс используют и шапка колонок, и тело — иначе заголовки разъедутся
  * с самими колонками.
+ *
+ * Рядом лежат те же размеры числами: слой списков закрытых колонок позиционный,
+ * ему нужны явные отступы и ширина распорок (см. `CLOSED_COLUMN_SLOT`). Панель
+ * названий переключается по ширине окна (классы элементов), а числа для слоя
+ * считаются от ширины контейнера колонок.
  */
+const LANE_TITLE_BASE_WIDTH = 160;
+const LANE_TITLE_WIDE_WIDTH = 210;
 const LANE_TITLE_WIDTH = 'shrink-0 w-40';
 const LANE_TITLE_WIDTH_WIDE = 'shrink-0 w-[210px]';
+const COLUMN_PANEL_MAX_WIDTH = 380;
 const COLUMN_PANEL = 'min-w-0 flex-1 max-w-[380px]';
+
+/** Порядок колонок доски по id: индекс — позиция в раскладке. */
+const COLUMN_IDS = COLUMNS.map((column) => column.id);
+
+/** Зазор между панелью названий, колонками и рядами (`gap-2`). */
+const LAYOUT_GAP = 8;
 
 /** С этой ширины окна панель названий свимлайнов шире на 50 px. */
 const WIDE_MIN_WIDTH = 1280;
 
 function widthOfLaneTitle(width: number): string {
   return width > WIDE_MIN_WIDTH ? LANE_TITLE_WIDTH_WIDE : LANE_TITLE_WIDTH;
+}
+
+function laneTitleSizeOf(width: number): number {
+  return width > WIDE_MIN_WIDTH ? LANE_TITLE_WIDE_WIDTH : LANE_TITLE_BASE_WIDTH;
 }
 
 /**
@@ -117,6 +141,22 @@ const COLLAPSED_LABEL_HEIGHT = 16;
 const LANE_TITLE_CELL = 'justify-start rounded-lg bg-surface px-2.5 py-2';
 
 /**
+ * Контейнер колонок: шапка и ряды свимлайнов.
+ *
+ * `min-w-0` — колонки не должны быть шире своей области: у флекс-элемента
+ * минимальная ширина по умолчанию равна содержимому (`min-width: auto`), поэтому
+ * длинные карточки закрытых колонок расширяли ряд и колонки выезжали за плитку —
+ * правый отступ уходил за край уровня. `overflow-x-hidden` страхует от того же на
+ * уровне обрезки по горизонтали.
+ */
+const COLUMN_CONTAINER = 'relative min-w-0 overflow-x-hidden gap-2';
+
+/**
+ * Ряд колонок в шапке уровня: та же ширина, что у рядов свимлайнов.
+ */
+const COLUMN_HEADER_ROW = 'z-10 w-full min-w-0 flex-row gap-2';
+
+/**
  * Колонка в ряду свимлайна: только отступы и раскладка карточек.
  *
  * Фон и рамку рисует подложка колонки за рядами (`COLUMN_BACKDROP`), поэтому
@@ -124,6 +164,60 @@ const LANE_TITLE_CELL = 'justify-start rounded-lg bg-surface px-2.5 py-2';
  * выглядели бы отдельными плитками вместо одной колонки на всю высоту доски.
  */
 const LANE_COLUMN_CELL = 'gap-2 p-2';
+
+/**
+ * Слот закрытой колонки в слое списков.
+ *
+ * Слой позиционный, а не флексбокс: флексбокс раздаёт место только своим детям и
+ * не знает о колонках, которые остались в рядах свимлайнов, из-за чего списки
+ * съезжали влево на первые колонки. Поэтому каждая колонка получает место
+ * абсолютно (`left`/`width` из `closedColumnBox`), а список внутри прозрачен:
+ * его `pointer-events-none` не мешает кликам по карточкам свимлайнов, клики
+ * возвращают сами карточки и отступ слота.
+ */
+const CLOSED_COLUMN_SLOT = 'pointer-events-none absolute top-0';
+
+/**
+ * Места развёрнутых закрытых колонок в слое списков: левый край и ширина.
+ *
+ * Повторяет раскладку шапки и рядов: свободное место после панели названий
+ * делится поровну между колонками, но не больше `COLUMN_PANEL_MAX_WIDTH`;
+ * свёрнутая колонка занимает узкую полосу `COLLAPSED_COLUMN_WIDTH`. Ширина
+ * контейнера берётся его собственная, поэтому посчитанные места совпадают с
+ * плитками подложки, которые раскладывает флексбокс.
+ */
+function layoutOfClosedColumns(
+  containerWidth: number,
+  collapsedColumns: CollapsedColumns,
+): Partial<Record<ColumnId, { left: number; width: number }>> {
+  // Слой слотов лежит в том же контейнере, что и слой подложки, у которого нет
+  // собственных отступов: место колонки отсчитывается от панели названий и
+  // зазора после неё. Внутренний отступ колонки (`p-2`) сюда не входит — его
+  // даёт поле самой колонки в ряду, а не внешняя раскладка.
+  const available = Math.max(0, containerWidth - laneTitleSizeOf(containerWidth) - LAYOUT_GAP * COLUMNS.length);
+  const titleWidth = laneTitleSizeOf(containerWidth);
+  const expandedWidth = Math.min(available / COLUMNS.length, COLUMN_PANEL_MAX_WIDTH);
+  const boxes: Partial<Record<ColumnId, { left: number; width: number }>> = {};
+  let offset = 0;
+
+  COLUMNS.forEach((column, index) => {
+    const collapsed = collapsedColumns[column.id] === true;
+    const width = collapsed ? COLLAPSED_COLUMN_WIDTH : expandedWidth;
+    // Первая колонка стоит сразу за панелью названий, каждая следующая — через зазор.
+    const left = titleWidth + LAYOUT_GAP + offset;
+
+    if (isClosedColumn(column.id) && !collapsed) {
+      boxes[column.id] = { left, width };
+    }
+
+    // Свёрнутая колонка нарисована полосой в подложке, но её ширину всё равно
+    // надо учесть: следующие колонки стоят за ней. Зазор прибавляется к каждой,
+    // включая последнюю: во флексбоксе `gap-2` одинаков между всеми колонками.
+    offset += width + LAYOUT_GAP;
+  });
+
+  return boxes;
+}
 
 /**
  * Подложка колонки: одна плитка на всю высоту доски, нарисованная за рядами.
@@ -288,10 +382,70 @@ export function BoardLevel({
   const total = lanes.reduce((sum, lane) => sum + lane.cards.length, 0);
   // Тип карточки уровня — ключ пары в `closedTotals`.
   const kindOfLevel = levelKindOf(level.id);
-  // Широкая панель названий на больших окнах: шапка и тело берут один класс.
-  const laneTitleWidth = widthOfLaneTitle(width);
   // Кнопка «+» в заголовке свимлайна создаёт карточку в первой колонке доски.
   const firstColumnId = COLUMNS[0].id;
+
+  // Открытые колонки раскладываются по свимлайнам, закрытые — простыми списками.
+  const openColumns = COLUMNS.filter((column) => !isClosedColumn(column.id));
+
+  /**
+   * Карточки закрытых колонок подряд по всем свимлайнам: порядок свимлайнов и
+   * карточек в них — тот же, что задаёт экран (`lanes`).
+   */
+  const closedCards = lanes.flatMap((lane) => lane.cards.filter((card) => isClosedColumn(card.column)));
+
+  /**
+   * Ширина контейнера колонок — основа расчёта мест в слое списков.
+   *
+   * Его ширина меньше ширины окна (внешние отступы уровня и заголовки), а у
+   * `useWindowDimensions` она ещё и округлена до целых пикселей. Поэтому
+   * позицию слоя считаем по фактической ширине контейнера, а ширину окна берём
+   * только до первого `onLayout` — до него слой ещё не стоит в плитке.
+   */
+  const [columnsContainerWidth, setColumnsContainerWidth] = useState<number | null>(null);
+  const layoutWidth = columnsContainerWidth ?? width;
+
+  // Широкая панель названий на больших окнах: шапка, ряды и расчёт слоя
+  // закрытых колонок берут одну и ту же основу — ширину контейнера.
+  const laneTitleWidth = widthOfLaneTitle(layoutWidth);
+
+  /**
+   * Высота каждого списка закрытой колонки: по ним считается высота уровня.
+   *
+   * Слой списков абсолютный, поэтому сам он тело не растягивает. Высоту меряем
+   * через `onLayout` и берём максимум: плита «Готово»/«Отмены» растёт вместе с
+   * карточками, а подложка и открытые колонки тянутся за ней. Хранится по
+   * колонкам, чтобы уменьшение одной не затирало высоту другой.
+   */
+  const [closedColumnsHeights, setClosedColumnsHeights] = useState<Record<string, number>>({});
+
+  /**
+   * Места развёрнутых закрытых колонок в слое списков: левый край и ширина.
+   *
+   * Ширину каждой колонки задаёт флексбокс шапки и рядов: свободное место после
+   * панели названий делится поровну между колонками, но не больше
+   * `COLUMN_PANEL_MAX_WIDTH`; свёрнутая колонка занимает узкую полосу. Поэтому
+   * место колонки считается явно — флексбокс слоя не знал бы о колонках,
+   * оставшихся в рядах свимлайнов, и его дети съезжали бы влево.
+   */
+  const closedColumnBoxes = layoutOfClosedColumns(layoutWidth, collapsedColumns);
+
+  /**
+   * Высота уровня по спискам закрытых колонок: самая длинная из них.
+   *
+   * Пустой уровень (списки ещё не измерены) остаётся на `COLUMN_MIN_HEIGHT`.
+   */
+  const closedColumnsHeight = Math.max(0, ...Object.values(closedColumnsHeights));
+
+  /**
+   * Запомнить высоту списка закрытой колонки.
+   *
+   * Высота хранится по колонке, а не общим максимумом: если карточки убрали из
+   * «Отмены», уровень не должен оставаться растянутым по её прежней высоте.
+   */
+  const handleClosedColumnLayout = useCallback((columnId: ColumnId, height: number) => {
+    setClosedColumnsHeights((prev) => (prev[columnId] === height ? prev : { ...prev, [columnId]: height }));
+  }, []);
 
   const laneForm = (
     <View className="flex-row items-center gap-2">
@@ -403,14 +557,19 @@ export function BoardLevel({
             ))
           ) : (
             // Контейнер широкой раскладки держит подложку колонок: она лежит
-            // абсолютом за рядами свимлайнов и тянется на всю их высоту.
-            <View className="relative gap-2">
+            // абсолютом за рядами свимлайнов и тянется на всю их высоту. Его
+            // ширина — основа расчёта мест закрытых колонок: своя ширина точнее
+            // ширины окна, из которой ещё вычтены отступы уровня.
+            <View
+              className={COLUMN_CONTAINER}
+              onLayout={(event) => setColumnsContainerWidth(event.nativeEvent.layout.width)}
+            >
               {/* Шапка печатается один раз на уровень: дальше колонки идут сквозь
                   все свимлайны без повторения названий. Счётчик стоит рядом с
                   названием, у правого края — меню (пока заглушка) и сворачивание.
                   У свёрнутой колонки в шапке остаётся только шеврон «развернуть»:
                   он стоит над узкой полосой. */}
-              <View className="z-10 w-full flex-row gap-2">
+              <View className={COLUMN_HEADER_ROW}>
                 <View className={laneTitleWidth} />
 
                 {COLUMNS.map((column) => {
@@ -479,8 +638,8 @@ export function BoardLevel({
                 })}
               </View>
 
-              {/* Тело: строки по свимлайнам поверх подложки колонок.
-                  В каждом ряду название и группы карточек всех четырёх колонок
+              {/* Тело: строки по свимлайнам и списки закрытых колонок поверх подложки.
+                  В каждом ряду название и группы карточек открытых колонок
                   лежат вместе (`items-stretch`), поэтому высоту названия даёт самая
                   высокая группа — флексбокс подтягивает её сразу, как только в
                   свимлайне появилась карточка.
@@ -488,10 +647,14 @@ export function BoardLevel({
                   под рядами: рамка и заливка колонки не режутся на стыках строк,
                   поэтому колонки выглядят монолитными, как плита в Jira. Высота
                   тела не ниже `COLUMN_MIN_HEIGHT`: колонки высокие даже на почти
-                  пустой доске.
+                  пустой доске. Если карточек в «Готово»/«Отмене» больше, чем в
+                  беклоге, высоту задают их списки (`closedColumnsHeight`).
                   Подложка живёт внутри тела, а не на уровне целиком: иначе её
                   плитки накрыли бы шапку с названиями колонок и кнопками. */}
-              <View className="relative w-full gap-2" style={{ minHeight: COLUMN_MIN_HEIGHT }}>
+              <View
+                className="relative w-full gap-2"
+                style={{ minHeight: Math.max(COLUMN_MIN_HEIGHT, closedColumnsHeight) }}
+              >
                 {/* Слой подложки: развёрнутая колонка — одна плитка на всю высоту,
                     свёрнутая — одна полоса на всю высоту (см. CollapsedColumn).
                     `pointer-events-none` — слой декоративный и не должен
@@ -516,9 +679,75 @@ export function BoardLevel({
                   )}
                 </View>
 
+                {/* Списки закрытых колонок: карточки «Готово» и «Отмены» идут подряд
+                    сверху вниз, независимо от свимлайнов, в которых они лежат.
+                    Слой абсолютный и начинается от верха тела, поэтому первого
+                    свимлайна карточки не ждут. Место каждой колонки считается явно
+                    (`closedColumnBoxes`): флексбокс слоя не знал бы о колонках,
+                    оставшихся в рядах свимлайнов, и списки съезжали влево,
+                    накрывая первые колонки. Ширина слота фиксирована, поэтому
+                    карточки не могут вытолкнуть его отступы наружу. */}
+                <View className="pointer-events-none absolute inset-0">
+                  {COLUMN_IDS.map((columnId) => {
+                    const box = closedColumnBoxes[columnId];
+
+                    // Свёрнутая закрытая колонка рисуется полосой в подложке.
+                    if (box === undefined) {
+                      return null;
+                    }
+
+                    const columnCards = closedCards.filter((card) => card.column === columnId);
+
+                    return (
+                      <View
+                        key={columnId}
+                        className={CLOSED_COLUMN_SLOT}
+                        style={{ left: box.left, width: box.width, overflow: 'hidden' }}
+                      >
+                        {/* Список не должен расширяться от содержимого: у
+                            флекс-элемента по умолчанию `min-width: auto`, и
+                            длинное название карточки растягивало её до своей
+                            минимальной ширины. Тогда карточка занимала всю
+                            ширину слота и `p-2` схлопывался — так «Отмена» с
+                            длинными названиями оставалась без отступов.
+                            `overflow: hidden` на слоте и `minWidth: 0` со
+                            `width: 100%` здесь держат карточки в контентной
+                            ширине списка. */}
+                        <View
+                          className="gap-2 p-2"
+                          style={{ width: '100%', minWidth: 0 }}
+                          onLayout={(event) => handleClosedColumnLayout(columnId, event.nativeEvent.layout.height)}
+                        >
+                          {columnCards.length === 0 ? (
+                            // Та же плашка, что в аккордеоне телефона: пустая
+                            // закрытая колонка не остаётся без подсказки, когда
+                            // её высота стала самостоятельной.
+                            <View className="items-center rounded border border-dashed border-card-line px-2 py-3">
+                              <Text className="text-xs text-subtle">Пусто</Text>
+                            </View>
+                          ) : null}
+
+                          {columnCards.map((card) => (
+                            <BoardCard
+                              key={card.id}
+                              title={card.title}
+                              color={card.color}
+                              hasParent={hasParent(card)}
+                              kind={card.kind}
+                              action={cardAction(card)}
+                              onAction={() => onCardAction(card)}
+                              onPress={() => onOpenCard(card)}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+
                 <View className="w-full gap-2">
                   {lanes.map((lane) => (
-                    <View key={lane.id} className={LANE_ROW} style={{ minHeight: LANE_ROW_MIN_HEIGHT }}>
+                    <View key={lane.id} className={LANE_ROW} style={{ minHeight: LANE_ROW_MIN_HEIGHT, minWidth: 0 }}>
                       <View className={[laneTitleWidth, LANE_TITLE_CELL].join(' ')}>
                         <SwimlaneHeader
                           title={lane.title}
@@ -531,7 +760,9 @@ export function BoardLevel({
                         />
                       </View>
 
-                      {COLUMNS.map((column) => {
+                      {/* В ряду только открытые колонки: закрытые нарисованы списками
+                          поверх рядов и от свимлайна не зависят. */}
+                      {openColumns.map((column) => {
                         // Свёрнутая колонка нарисована один раз в подложке на всю
                         // высоту доски, поэтому в ряду остаётся только распорка её
                         // ширины: без неё ячейки разъехались бы с подложкой.

@@ -53,9 +53,13 @@ export function BoardCard({ title, color, hasParent, kind, action, onAction, onP
     <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
       {/* Полоса цвета родителя — единственный цветной акцент карточки.
           У карточки без родителя резолвер отдаёт служебный c0. */}
-      <View className="w-1" style={{ backgroundColor: directionColorHex(color) }} />
+      <View className="w-1 shrink-0" style={{ backgroundColor: directionColorHex(color) }} />
 
-      <View className="flex-1 gap-1.5 px-2.5 py-2">
+      {/* `min-w-0` — длинное название не расширяет карточку: у флекс-элемента
+          минимальная ширина по умолчанию равна содержимому, из-за чего карточка
+          в узкой колонке вылезала за её отступы. Название обрезается по
+          `numberOfLines`. */}
+      <View className="min-w-0 flex-1 gap-1.5 px-2.5 py-2">
         {/* Открытие карточки — отдельная область над названием: кнопка-иконка
             действия стоит рядом, а не внутри, иначе на web получится
             <button> внутри <button>. */}
