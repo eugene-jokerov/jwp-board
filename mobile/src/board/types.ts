@@ -72,6 +72,16 @@ export interface Direction {
 /** Родитель, которого можно выбрать в форме: карточка или направление. */
 export type ParentOptionModel = Card | Direction;
 
+/**
+ * Полное число карточек по паре «колонка + уровень» (`meta.closed_totals`).
+ *
+ * Заполнены только закрытые колонки: их список на первичной загрузке урезан,
+ * и длина загруженного массива не равна общему числу карточек. У открытых
+ * колонок карточки приходят целиком, поэтому счётчик считается по массиву,
+ * а ключа здесь нет.
+ */
+export type ClosedTotals = Partial<Record<ColumnId, Partial<Record<CardKind, number>>>>;
+
 /** Порядок колонок слева направо: по нему считаются соседние колонки. */
 export const COLUMNS: readonly BoardColumn[] = [
   { id: 'backlog', label: 'Беклог' },

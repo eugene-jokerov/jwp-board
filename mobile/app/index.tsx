@@ -231,7 +231,7 @@ export default function HomeScreen() {
 
   // Доска: карточки, направления и все изменения живут в API (src/board/store.ts).
   const board = useBoard();
-  const { cards, directions, isLoading, loadError, reload } = board;
+  const { cards, directions, closedTotals, isLoading, loadError, reload } = board;
 
   /**
    * Свёрнутые уровни и колонки — настройки пользователя: они сохраняются на
@@ -434,6 +434,7 @@ export default function HomeScreen() {
               key={level.id}
               level={level}
               lanes={lanes}
+              closedTotals={closedTotals}
               collapsed={collapsedLevels[level.id] === true}
               onToggle={() => toggleLevel(level.id)}
               compact={compact}

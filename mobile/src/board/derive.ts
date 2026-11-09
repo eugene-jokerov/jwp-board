@@ -8,7 +8,78 @@
  * карточки `allowedTransitions`, и интерфейс показывает переходы только по нему.
  */
 
-import { COLUMNS, type Card, type CardKind, type ColumnId, type Direction } from './types';
+import { COLUMNS, type Card, type CardKind, type ClosedTotals, type ColumnId, type Direction } from './types';
+
+/**
+ * Закрытые колонки: карточки в них только накапливаются, а список на
+ * первичной загрузке урезан — полное число приходит отдельно, в `closedTotals`.
+ */
+const CLOSED_COLUMNS: readonly ColumnId[] = ['complete', 'canceled'];
+
+/** Закрыта ли колонка: у закрытых счётчик берётся не из загруженного списка. */
+export function isClosedColumn(column: ColumnId): boolean {
+  return CLOSED_COLUMNS.includes(column);
+}
+
+/**
+ * Число карточек колонки уровня для бейджа.
+ *
+ * Открытые колонки приходят целиком — считаем загруженные карточки. В «Готово»
+ * и «Отмене» их только порция (сервер режет пару «уровень + колонка»), поэтому
+ * бейдж берёт полное число из `closedTotals`; если счётчик ещё не пришёл или
+ * отстал от выборки, показываем не меньше загруженного — список не может быть
+ * длиннее счётчика.
+ */
+export function columnCount(loaded: number, column: ColumnId, kind: CardKind, totals: ClosedTotals): number {
+  if (!isClosedColumn(column)) {
+    return loaded;
+  }
+
+  const total = totals[column]?.[kind] ?? 0;
+
+  return total > loaded ? total : loaded;
+}
+
+/**
+ * Счётчики закрытых колонок после изменения одной карточки.
+ *
+ * Доска не перечитывается на каждое действие: ответ API содержит только саму
+ * карточку, а `meta` в нём нет. Поэтому счётчики правятся локально на ту же
+ * единицу, на которую изменилась пара: при смене колонки — убывает в старой
+ * паре и растёт в новой, создание только прибавляет, удаление только убавляет.
+ * Открытые колонки в счётчиках не участвуют — там карточки считаются по массиву.
+ *
+ * @param from колонка, где карточка была (для создания — та же, что `to`)
+ * @param to колонка, где карточка оказалась (для удаления — та же, что `from`)
+ */
+export function shiftClosedTotals(
+  totals: ClosedTotals,
+  kind: CardKind,
+  from: ColumnId | null,
+  to: ColumnId | null,
+): ClosedTotals {
+  const next = { ...totals };
+
+  const shift = (column: ColumnId | null, delta: number) => {
+    if (column === null || !isClosedColumn(column)) {
+      return;
+    }
+
+    const byKind = next[column] ?? {};
+    const value = (byKind[kind] ?? 0) + delta;
+
+    // Счётчик не уходит в минус: отрицательное число означало бы, что на сервере
+    // карточек пары меньше, чем клиент успел нарисовать.
+    next[column] = { ...byKind, [kind]: value > 0 ? value : 0 };
+  };
+
+  if (from !== to) {
+    shift(from, -1);
+    shift(to, 1);
+  }
+
+  return next;
+}
 
 /** Индекс колонки в фиксированном порядке доски. */
 function columnIndex(column: ColumnId): number {

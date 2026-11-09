@@ -2,6 +2,10 @@
  * Колонка телефона: свёрнутый в строку блок (аккордеон) — заголовок со счётчиком
  * раскрывает карточки. На широком экране колонки раскладывает `BoardLevel`:
  * ячейки сетки шире и место для кнопки создания там не нужно.
+ *
+ * Бейдж показывает полное число карточек колонки: в «Готово» и «Отмене» загружена
+ * лишь порция списка, поэтому число приходит снаружи (см. `columnCount`), а не
+ * считается по массиву карточек.
  */
 
 import { Pressable, Text, View } from 'react-native';
@@ -15,6 +19,11 @@ import type { BoardColumn as BoardColumnModel, Card } from '../types';
 interface BoardColumnProps {
   column: BoardColumnModel;
   cards: readonly Card[];
+  /**
+   * Число карточек колонки для бейджа. В «Готово» и «Отмене» это полное число
+   * из `meta.closed_totals`, а не длина загруженной порции карточек.
+   */
+  count: number;
   expanded: boolean;
   onToggle: () => void;
   canCreate: boolean;
@@ -31,6 +40,7 @@ interface BoardColumnProps {
 export function BoardColumn({
   column,
   cards,
+  count,
   expanded,
   onToggle,
   canCreate,
@@ -45,7 +55,7 @@ export function BoardColumn({
       <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">{column.label}</Text>
 
       <View className="rounded-full bg-lane px-1.5 py-0.5">
-        <Text className="text-[10px] font-semibold text-muted">{cards.length}</Text>
+        <Text className="text-[10px] font-semibold text-muted">{count}</Text>
       </View>
     </View>
   );

@@ -33,9 +33,18 @@ import { BoardCard } from './BoardCard';
 import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './BoardIcons';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
-import type { CardAction } from '../derive';
+import { columnCount, type CardAction } from '../derive';
 import { hasParent } from '../mappers';
-import { COLUMNS, type BoardLevel as BoardLevelModel, type Card, type ColumnId } from '../types';
+import {
+  COLUMNS,
+  KIND_LEVEL,
+  type BoardLevel as BoardLevelModel,
+  type Card,
+  type CardKind,
+  type ClosedTotals,
+  type ColumnId,
+  type LevelId,
+} from '../types';
 
 /**
  * Раскладка широкого режима.
@@ -56,6 +65,19 @@ const WIDE_MIN_WIDTH = 1280;
 
 function widthOfLaneTitle(width: number): string {
   return width > WIDE_MIN_WIDTH ? LANE_TITLE_WIDTH_WIDE : LANE_TITLE_WIDTH;
+}
+
+/**
+ * Тип карточки уровня по его id: тот же словарь, что ключи `closedTotals`.
+ *
+ * Обратное к `KIND_LEVEL` отображение, а не вторая таблица: уровни и типы
+ * карточек совпадают один в один, поэтому у каждого уровня всегда есть тип.
+ */
+function levelKindOf(level: LevelId): CardKind {
+  const entry = (Object.entries(KIND_LEVEL) as [CardKind, LevelId][]).find(([, id]) => id === level);
+
+  // Недостижимо при полном KIND_LEVEL, но ветка нужна: find возвращает undefined.
+  return entry?.[0] ?? 'initiative';
 }
 
 /** Минимальная высота строки свимлайна: не ниже строки названия до первой карточки. */
@@ -202,6 +224,12 @@ export interface LevelCreateHintModel {
 interface BoardLevelProps {
   level: BoardLevelModel;
   lanes: readonly SwimlaneModel[];
+  /**
+   * Полное число карточек закрытых колонок по парам «уровень + колонка»
+   * (`meta.closed_totals`). В «Готово» и «Отмене» сервер отдаёт лишь порцию
+   * карточек, поэтому бейдж колонки берёт счётчик отсюда.
+   */
+  closedTotals: ClosedTotals;
   collapsed: boolean;
   onToggle: () => void;
   compact: boolean;
@@ -238,6 +266,7 @@ interface BoardLevelProps {
 export function BoardLevel({
   level,
   lanes,
+  closedTotals,
   collapsed,
   onToggle,
   compact,
@@ -257,6 +286,8 @@ export function BoardLevel({
   createHint,
 }: BoardLevelProps) {
   const total = lanes.reduce((sum, lane) => sum + lane.cards.length, 0);
+  // Тип карточки уровня — ключ пары в `closedTotals`.
+  const kindOfLevel = levelKindOf(level.id);
   // Широкая панель названий на больших окнах: шапка и тело берут один класс.
   const laneTitleWidth = widthOfLaneTitle(width);
   // Кнопка «+» в заголовке свимлайна создаёт карточку в первой колонке доски.
@@ -359,6 +390,8 @@ export function BoardLevel({
                 title={lane.title}
                 color={lane.color}
                 cards={lane.cards}
+                kind={kindOfLevel}
+                closedTotals={closedTotals}
                 expandedColumns={expandedColumns}
                 onToggleColumn={onToggleColumn}
                 canCreate={canAddInLane(lane)}
@@ -381,10 +414,11 @@ export function BoardLevel({
                 <View className={laneTitleWidth} />
 
                 {COLUMNS.map((column) => {
-                  const count = lanes.reduce(
+                  const loaded = lanes.reduce(
                     (sum, lane) => sum + lane.cards.filter((card) => card.column === column.id).length,
                     0,
                   );
+                  const count = columnCount(loaded, column.id, kindOfLevel, closedTotals);
                   const isCollapsed = collapsedColumns[column.id] === true;
 
                   if (isCollapsed) {

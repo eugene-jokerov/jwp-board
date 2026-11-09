@@ -22,6 +22,7 @@ import type {
   Task,
   TaskCreateInput,
   TaskListFilters,
+  TaskListPayload,
   TaskUpdateInput,
   User,
   UserPayload,
@@ -259,16 +260,19 @@ export async function deleteDirection(token: string | null, directionId: number)
   await request<void>(`/directions/${directionId}`, { method: 'DELETE', ...authHeaders(token) });
 }
 
-/** Список карточек с фильтрами доски. */
-export async function fetchTasks(token: string | null, filters: TaskListFilters = {}): Promise<Task[]> {
+/**
+ * Список карточек с фильтрами доски — вместе со счётчиками `meta`.
+ *
+ * Карточки закрытых колонок на первичной загрузке урезаны, поэтому их полное
+ * число нужно брать из `meta.closed_totals`, а не из длины `data`.
+ */
+export async function fetchTasks(token: string | null, filters: TaskListFilters = {}): Promise<TaskListPayload> {
   const query = Object.entries(filters)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
     .join('&');
 
-  const response = await request<DataResponse<Task[]>>(`/tasks${query ? `?${query}` : ''}`, authHeaders(token));
-
-  return response.data;
+  return request<TaskListPayload>(`/tasks${query ? `?${query}` : ''}`, authHeaders(token));
 }
 
 /** Создание карточки. */

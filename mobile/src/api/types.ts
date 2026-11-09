@@ -121,6 +121,33 @@ export interface UserSettingEntry {
 /** Набор настроек для сохранения: ключ => значение (уйдёт на сервер как JSON). */
 export type UserSettingsInput = Record<string, unknown>;
 
+/**
+ * Счётчики списка карточек (`meta` рядом с `data`).
+ *
+ * `columns` — сколько карточек под фильтром в каждой колонке, `closed_totals` —
+ * полное число карточек по паре «уровень + закрытая колонка». В закрытых
+ * колонках сам список на первичной загрузке урезан (`data` содержит не больше
+ * 10 карточек пары), поэтому полное число берётся из `closed_totals`, а не из
+ * длины полученного массива.
+ */
+export interface TaskListMeta {
+  /** Всего карточек под фильтром. */
+  total: number;
+  /** Число карточек каждой колонки под фильтром. */
+  columns: Record<CardColumn, number>;
+  /**
+   * Закрытые колонки: «Готово» и «Отмена» → «тип карточки → всего карточек».
+   * Ключи всегда присутствуют (сервер подставляет нули), тип — все три.
+   */
+  closed_totals: Record<'complete' | 'canceled', Partial<Record<CardType, number>>>;
+}
+
+/** Ответ списка карточек: данные и счётчики рядом. */
+export interface TaskListPayload {
+  data: Task[];
+  meta: TaskListMeta;
+}
+
 /** Фильтры списка карточек. */
 export interface TaskListFilters {
   type?: CardType;
@@ -128,4 +155,10 @@ export interface TaskListFilters {
   direction_id?: number;
   initiative_id?: number;
   project_id?: number;
+  /** Размер страницы; передаётся только вместе с `column` (закрытые колонки догружаются страницами). */
+  limit?: number;
+  /** Смещение страницы; передаётся только вместе с `limit`. */
+  offset?: number;
+  /** Направление сортировки карточек по идентификатору. */
+  order?: 'asc' | 'desc';
 }

@@ -9,8 +9,8 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
-import type { CardAction } from '../derive';
-import { COLUMNS, type Card, type ColumnId } from '../types';
+import { columnCount, type CardAction } from '../derive';
+import { COLUMNS, type Card, type CardKind, type ClosedTotals, type ColumnId } from '../types';
 
 interface SwimlaneHeaderProps {
   title: string;
@@ -83,6 +83,14 @@ interface SwimlaneProps {
   title: string;
   color: string | null;
   cards: readonly Card[];
+  /** Тип карточки уровня: по нему в `closedTotals` лежит счётчик закрытых колонок. */
+  kind: CardKind;
+  /**
+   * Полное число карточек закрытых колонок по парам «уровень + колонка»:
+   * в «Готово» и «Отмене» загружены не все карточки, поэтому бейдж берёт
+   * счётчик отсюда, а не из длины массива.
+   */
+  closedTotals: ClosedTotals;
   /** Состояние раскрытых колонок аккордеона: ключ — `${laneId}:${columnId}`. */
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
@@ -106,6 +114,8 @@ export function Swimlane({
   title,
   color,
   cards,
+  kind,
+  closedTotals,
   expandedColumns,
   onToggleColumn,
   canCreate,
@@ -129,12 +139,14 @@ export function Swimlane({
       <View className="gap-2">
         {COLUMNS.map((column) => {
           const key = `${laneId}:${column.id}`;
+          const laneCards = cards.filter((card) => card.column === column.id);
 
           return (
             <BoardColumn
               key={column.id}
               column={column}
-              cards={cards.filter((card) => card.column === column.id)}
+              cards={laneCards}
+              count={columnCount(laneCards.length, column.id, kind, closedTotals)}
               expanded={expandedColumns[key] === true}
               onToggle={() => onToggleColumn(key)}
               canCreate={canCreate}

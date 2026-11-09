@@ -8,6 +8,12 @@
  * API, а не локальная копия. Поэтому `color`, `allowed_transitions` и
  * унаследованные ссылки иерархии всегда актуальны, и клиенту не нужно
  * повторять доменные правила.
+ *
+ * Счётчики закрытых колонок («Готово», «Отмена») берутся из `meta.closed_totals`:
+ * в этих колонках список приходит порцией, и по длине массива полное число
+ * карточек не восстановить. Ответы одиночных мутаций `meta` не содержат, поэтому
+ * счётчик пары правится локально на ту же единицу (см. `shiftClosedTotals`),
+ * а первый следующий `reload()` снова берёт числа с сервера.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,9 +31,10 @@ import {
 } from '../api/client';
 import type { TaskCreateInput, TaskUpdateInput } from '../api/types';
 import { getToken } from '../auth/session';
-import { parentFieldOf, toCard, toDirection } from './mappers';
+import { shiftClosedTotals } from './derive';
+import { parentFieldOf, toCard, toClosedTotals, toDirection } from './mappers';
 import type { CardDraft } from './components/CardFormModal';
-import type { Card, CardKind, ColumnId, Direction } from './types';
+import type { Card, CardKind, ClosedTotals, ColumnId, Direction } from './types';
 
 /** Текст ошибки для интерфейса: сообщение сервера, иначе — запасное. */
 export function errorMessage(error: unknown, fallback: string): string {
@@ -58,6 +65,12 @@ interface DirectionActions {
 export interface BoardState extends CardActions, DirectionActions {
   cards: Card[];
   directions: Direction[];
+  /**
+   * Полное число карточек закрытых колонок по парам «уровень + колонка» из
+   * `meta.closed_totals`: в «Готово» и «Отмене» приходит лишь порция карточек,
+   * поэтому счётчик берётся отсюда, а не из длины списка.
+   */
+  closedTotals: ClosedTotals;
   /** true — идёт первая загрузка доски. */
   isLoading: boolean;
   /** Ошибка загрузки (сеть, 401, 500); null — доска загружена. */
@@ -86,6 +99,7 @@ function parentPayload(kind: CardKind, parentId: number | null): Partial<TaskCre
 export function useBoard(): BoardState {
   const [cards, setCards] = useState<Card[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
+  const [closedTotals, setClosedTotals] = useState<ClosedTotals>({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -96,7 +110,10 @@ export function useBoard(): BoardState {
       const [directionsPayload, tasksPayload] = await Promise.all([fetchDirections(token), fetchTasks(token)]);
 
       setDirections(directionsPayload.map(toDirection));
-      setCards(tasksPayload.map(toCard));
+      setCards(tasksPayload.data.map(toCard));
+      // Счётчики закрытых колонок — из `meta`: карточки «Готово» и «Отмены»
+      // приходят порцией, и по длине списка полное число не восстановить.
+      setClosedTotals(toClosedTotals(tasksPayload.meta));
       setLoadError(null);
     } catch (error) {
       setLoadError(errorMessage(error, 'Не удалось загрузить доску. Проверьте соединение с сервером.'));
@@ -134,6 +151,10 @@ export function useBoard(): BoardState {
       try {
         applyCard(toCard(await createTaskRequest(getToken(), input)));
 
+        // Созданная карточка могла попасть в закрытую колонку (форма это
+        // разрешает) — тогда её пара прибавляется и в счётчике.
+        setClosedTotals((prev) => shiftClosedTotals(prev, draft.kind, draft.columnId, draft.columnId));
+
         return null;
       } catch (error) {
         // 422 — некорректная иерархия (например, родитель перестал быть в работе).
@@ -156,6 +177,9 @@ export function useBoard(): BoardState {
       try {
         applyCard(toCard(await updateTaskRequest(getToken(), card.id, input)));
 
+        // Карточка сменила колонку — переносим её между парами счётчика.
+        setClosedTotals((prev) => shiftClosedTotals(prev, card.kind, card.column, input.column ?? card.column));
+
         return null;
       } catch (error) {
         // 409 — смену статуса блокируют дочерние карточки в работе.
@@ -169,6 +193,7 @@ export function useBoard(): BoardState {
     async (card, column) => {
       try {
         applyCard(toCard(await updateTaskRequest(getToken(), card.id, { column })));
+        setClosedTotals((prev) => shiftClosedTotals(prev, card.kind, card.column, column));
 
         return null;
       } catch (error) {
@@ -183,6 +208,8 @@ export function useBoard(): BoardState {
     try {
       await deleteTaskRequest(getToken(), card.id);
       setCards((prev) => prev.filter((item) => item.id !== card.id));
+      // Удалённая карточка могла быть в закрытой колонке — счётчик пары убывает.
+      setClosedTotals((prev) => shiftClosedTotals(prev, card.kind, card.column, null));
 
       return null;
     } catch (error) {
@@ -237,6 +264,7 @@ export function useBoard(): BoardState {
     () => ({
       cards,
       directions,
+      closedTotals,
       isLoading,
       loadError,
       reload,
@@ -251,6 +279,7 @@ export function useBoard(): BoardState {
     [
       cards,
       directions,
+      closedTotals,
       isLoading,
       loadError,
       reload,

@@ -6,8 +6,8 @@
  * `client.ts` — про модель доски: связывает их этот модуль.
  */
 
-import type { CardColumn, CardType, Direction as ApiDirection, Task as ApiTask } from '../api/types';
-import type { Card, CardKind, ColumnId, Direction } from './types';
+import type { CardColumn, CardType, Direction as ApiDirection, Task as ApiTask, TaskListMeta } from '../api/types';
+import type { Card, CardKind, ClosedTotals, ColumnId, Direction } from './types';
 
 /**
  * Типы карточки API = типы карточки доски: словарь общий.
@@ -40,6 +40,23 @@ export function toCard(task: ApiTask): Card {
 /** Направление API в модель доски. */
 export function toDirection(direction: ApiDirection): Direction {
   return { id: direction.id, title: direction.title, color: direction.color };
+}
+
+/**
+ * Счётчики закрытых колонок из `meta` ответа списка карточек.
+ *
+ * В модели доски колонки и уровни называются так же, как в API, поэтому перевод
+ * остаётся копированием: из `closed_totals` берутся только закрытые колонки,
+ * остальные в модели не хранятся — их счётчик считается по массиву карточек.
+ */
+export function toClosedTotals(meta: TaskListMeta): ClosedTotals {
+  const totals: ClosedTotals = {};
+
+  for (const [column, byKind] of Object.entries(meta.closed_totals)) {
+    totals[toColumnId(column as CardColumn)] = { ...byKind };
+  }
+
+  return totals;
 }
 
 /** Ссылка на родителя карточки: карточка другого уровня или направление инициативы. */
