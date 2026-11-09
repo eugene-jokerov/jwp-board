@@ -82,6 +82,16 @@ export type ParentOptionModel = Card | Direction;
  */
 export type ClosedTotals = Partial<Record<ColumnId, Partial<Record<CardKind, number>>>>;
 
+/**
+ * Шаг догрузки закрытой колонки: столько карточек подгружает «Показать ещё».
+ *
+ * Первичная загрузка доски отдаёт закрытые колонки порцией поменьше (сервер
+ * режет пару «уровень + колонка», см. CardColumn::CLOSED_CARDS_PER_LEVEL), а
+ * догрузка идёт крупными шагами — она вызывается по явному клику, и ждать
+ * ответа пользователь готов дольше, чем при открытии доски.
+ */
+export const CLOSED_PAGE_SIZE = 50;
+
 /** Порядок колонок слева направо: по нему считаются соседние колонки. */
 export const COLUMNS: readonly BoardColumn[] = [
   { id: 'backlog', label: 'Беклог' },

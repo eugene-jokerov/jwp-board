@@ -5,13 +5,16 @@
  *
  * Бейдж показывает полное число карточек колонки: в «Готово» и «Отмене» загружена
  * лишь порция списка, поэтому число приходит снаружи (см. `columnCount`), а не
- * считается по массиву карточек.
+ * считается по массиву карточек. Остальные карточки закрытой колонки догружаются
+ * кнопкой «Показать ещё» — она одна на пару «уровень + колонка», поэтому её
+ * показывает только последний свимлайн (см. `showMore`).
  */
 
 import { Pressable, Text, View } from 'react-native';
 
 import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
+import { ShowMoreButton } from './ShowMoreButton';
 import type { CardAction } from '../derive';
 import { hasParent } from '../mappers';
 import type { BoardColumn as BoardColumnModel, Card } from '../types';
@@ -28,6 +31,14 @@ interface BoardColumnProps {
   onToggle: () => void;
   canCreate: boolean;
   addLabel: string;
+  /**
+   * «Показать ещё» под карточками закрытой колонки; null — кнопки нет (у
+   * открытых колонок всё загружено, у закрытых — последний свимлайн ещё не
+   * дошёл до ленты).
+   */
+  showMore: { loading: boolean; error: string | null } | null;
+  /** Догрузить следующую страницу закрытой колонки. */
+  onShowMore: () => void;
   /** Действие карточки по её колонке; null — иконки нет. */
   cardAction: (card: Card) => CardAction | null;
   /** Выполнить действие карточки (перевод в следующую колонку). */
@@ -45,6 +56,8 @@ export function BoardColumn({
   onToggle,
   canCreate,
   addLabel,
+  showMore,
+  onShowMore,
   cardAction,
   onCardAction,
   onOpenCard,
@@ -80,6 +93,12 @@ export function BoardColumn({
           onPress={() => onOpenCard(card)}
         />
       ))}
+
+      {/* «Показать ещё» закрытой колонки стоит после загруженной порции: догрузка
+          продолжает список вниз, как лента. */}
+      {showMore === null ? null : (
+        <ShowMoreButton onPress={onShowMore} loading={showMore.loading} error={showMore.error} />
+      )}
 
       <AddCardButton label={addLabel} onPress={onAddCard} disabled={!canCreate} />
     </View>

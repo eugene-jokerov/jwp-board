@@ -41,6 +41,103 @@ export function columnCount(loaded: number, column: ColumnId, kind: CardKind, to
 }
 
 /**
+ * Сколько карточек пары «уровень + колонка» уже загружено в состояние доски.
+ *
+ * Считается по массиву карточек, а не по счётчику `closedTotals`: счётчик
+ * говорит, сколько карточек пары есть на сервере, а для страницы догрузки
+ * нужно именно смещение — число строк, которые клиент уже получил и нарисовал.
+ */
+export function closedLoadedCount(cards: readonly Card[], column: ColumnId, kind: CardKind): number {
+  return cards.filter((card) => card.column === column && card.kind === kind).length;
+}
+
+/**
+ * Есть ли у пары «уровень + колонка» ещё карточки, кроме загруженных.
+ *
+ * Первый признак — полное число из `meta.closed_totals`: закрытые колонки на
+ * первичной загрузке приходят порцией, и пока счётчик пары больше списка, под
+ * списком показывается «Показать ещё».
+ *
+ * Второй — последняя догрузка вернула полную страницу: значит за ней заведомо
+ * может быть продолжение, и кнопку нельзя убирать, даже если счётчик пары
+ * отстал (например, страница пришла из `meta` с фильтрами и число успело
+ * измениться). Иначе лента обрывалась бы на ровной границе страницы.
+ */
+export function closedHasMore(
+  cards: readonly Card[],
+  column: ColumnId,
+  kind: CardKind,
+  totals: ClosedTotals,
+  pages: ClosedPages = {},
+): boolean {
+  if (closedPageOf(pages, column, kind).fullPage) {
+    return true;
+  }
+
+  const total = totals[column]?.[kind] ?? 0;
+
+  return total > closedLoadedCount(cards, column, kind);
+}
+
+/**
+ * Состояние догрузки одной пары «колонка + уровень»: идёт запрос или он упал.
+ *
+ * Хранится по парам, потому что ленты «Показать ещё» независимы: догрузка
+ * «Готово» на тактическом уровне не блокирует кнопку в «Отмене» на
+ * стратегическом.
+ */
+export interface ClosedPageState {
+  /** true — запрос страницы в полёте: повторный клик не должен его дублировать. */
+  loading: boolean;
+  /** Текст ошибки последней догрузки; null — ошибки нет. */
+  error: string | null;
+  /**
+   * Последняя догрузка вернула полную страницу: продолжение возможно даже при
+   * счётчике, который ещё не обновился.
+   */
+  fullPage: boolean;
+}
+
+/** Состояние догрузки по парам: колонка → тип карточки → состояние. */
+export type ClosedPages = Partial<Record<ColumnId, Partial<Record<CardKind, ClosedPageState>>>>;
+
+/** Состояние пары; пара ещё не догружалась — `loading`/`error`/`fullPage` сброшены. */
+export function closedPageOf(pages: ClosedPages, column: ColumnId, kind: CardKind): ClosedPageState {
+  return pages[column]?.[kind] ?? { loading: false, error: null, fullPage: false };
+}
+
+/** Новое состояние догрузки с заменой одной пары (остальные пары не меняются). */
+export function withClosedPage(
+  pages: ClosedPages,
+  column: ColumnId,
+  kind: CardKind,
+  state: ClosedPageState,
+): ClosedPages {
+  return { ...pages, [column]: { ...pages[column], [kind]: state } };
+}
+
+/**
+ * Записать полное число карточек одной пары «уровень + колонка», не трогая прочие.
+ *
+ * Ответ страницы догрузки считает `meta` по своим фильтрам («колонка + уровень»),
+ * поэтому по остальным парам там нули. Заменять счётчики целиком нельзя: у пар,
+ * которые не догружали, число обнулилось бы и «Показать ещё» пропало бы у всех
+ * колонок. `null` (сервер не прислал число) оставляет прежнее значение.
+ */
+export function setClosedTotal(
+  totals: ClosedTotals,
+  column: ColumnId,
+  kind: CardKind,
+  total: number | null | undefined,
+): ClosedTotals {
+  if (total === null || total === undefined) {
+    return totals;
+  }
+
+  return { ...totals, [column]: { ...totals[column], [kind]: total } };
+}
+
+/**
  * Счётчики закрытых колонок после изменения одной карточки.
  *
  * Доска не перечитывается на каждое действие: ответ API содержит только саму

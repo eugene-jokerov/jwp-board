@@ -9,7 +9,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
-import { columnCount, type CardAction } from '../derive';
+import { closedHasMore, closedPageOf, columnCount, isClosedColumn, type CardAction, type ClosedPages } from '../derive';
 import { COLUMNS, type Card, type CardKind, type ClosedTotals, type ColumnId } from '../types';
 
 interface SwimlaneHeaderProps {
@@ -91,6 +91,26 @@ interface SwimlaneProps {
    * счётчик отсюда, а не из длины массива.
    */
   closedTotals: ClosedTotals;
+  /**
+   * Состояние догрузки закрытых колонок по парам «колонка + уровень»: по нему
+   * кнопка «Показать ещё» показывает индикатор и текст ошибки.
+   */
+  closedPages: ClosedPages;
+  /**
+   * Полный набор карточек уровня: по нему считается, остались ли у закрытой
+   * колонки незагруженные карточки. Свимлайн видит только свои карточки, а
+   * лента «показать ещё» — одна на уровень, поэтому решение «есть ещё» берётся
+   * из полного набора.
+   */
+  levelCards: readonly Card[];
+  /**
+   * Показывать ли «Показать ещё» закрытых колонок в этом свимлайне. Флаг
+   * включает только последний свимлайн уровня: лента у пары «уровень +
+   * колонка» одна, и кнопка не должна повторяться под каждым свимлайном.
+   */
+  showClosedButtons: boolean;
+  /** Догрузить следующую страницу закрытой колонки уровня. */
+  onLoadMoreClosed: (column: ColumnId) => void;
   /** Состояние раскрытых колонок аккордеона: ключ — `${laneId}:${columnId}`. */
   expandedColumns: Record<string, boolean>;
   onToggleColumn: (key: string) => void;
@@ -116,6 +136,10 @@ export function Swimlane({
   cards,
   kind,
   closedTotals,
+  closedPages,
+  levelCards,
+  showClosedButtons,
+  onLoadMoreClosed,
   expandedColumns,
   onToggleColumn,
   canCreate,
@@ -140,6 +164,10 @@ export function Swimlane({
         {COLUMNS.map((column) => {
           const key = `${laneId}:${column.id}`;
           const laneCards = cards.filter((card) => card.column === column.id);
+          const page = closedPageOf(closedPages, column.id, kind);
+          // «Есть ещё» считается по карточкам уровня целиком: лента закрытой
+          // колонки общая для всех свимлайнов, а этот блок лишь её последний пункт.
+          const hasMore = showClosedButtons && closedHasMore(levelCards, column.id, kind, closedTotals, closedPages);
 
           return (
             <BoardColumn
@@ -151,6 +179,8 @@ export function Swimlane({
               onToggle={() => onToggleColumn(key)}
               canCreate={canCreate}
               addLabel="+ добавить"
+              showMore={isClosedColumn(column.id) && (hasMore || page.error !== null) ? page : null}
+              onShowMore={() => onLoadMoreClosed(column.id)}
               cardAction={cardAction}
               onCardAction={onCardAction}
               onOpenCard={onOpenCard}

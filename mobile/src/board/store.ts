@@ -14,6 +14,11 @@
  * карточек не восстановить. Ответы одиночных мутаций `meta` не содержат, поэтому
  * счётчик пары правится локально на ту же единицу (см. `shiftClosedTotals`),
  * а первый следующий `reload()` снова берёт числа с сервера.
+ *
+ * Остальные карточки закрытой колонки приходят страницами через
+ * `loadMoreClosed` («Показать ещё»): смещение — число уже загруженных карточек
+ * пары, размер страницы — CLOSED_PAGE_SIZE, порядок — свежие сверху, как и у
+ * первичной порции, поэтому страницы стыкуются без пересечений.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,10 +36,17 @@ import {
 } from '../api/client';
 import type { TaskCreateInput, TaskUpdateInput } from '../api/types';
 import { getToken } from '../auth/session';
-import { shiftClosedTotals } from './derive';
+import {
+  closedLoadedCount,
+  closedPageOf,
+  setClosedTotal,
+  shiftClosedTotals,
+  withClosedPage,
+  type ClosedPages,
+} from './derive';
 import { parentFieldOf, toCard, toClosedTotals, toDirection } from './mappers';
 import type { CardDraft } from './components/CardFormModal';
-import type { Card, CardKind, ClosedTotals, ColumnId, Direction } from './types';
+import { CLOSED_PAGE_SIZE, type Card, type CardKind, type ClosedTotals, type ColumnId, type Direction } from './types';
 
 /** Текст ошибки для интерфейса: сообщение сервера, иначе — запасное. */
 export function errorMessage(error: unknown, fallback: string): string {
@@ -62,7 +74,16 @@ interface DirectionActions {
   removeDirection: (id: number) => Promise<string | null>;
 }
 
-export interface BoardState extends CardActions, DirectionActions {
+/** Догрузка закрытых колонок страницами («Показать ещё»). */
+interface ClosedPageActions {
+  /**
+   * Подгрузить следующие CLOSED_PAGE_SIZE карточек пары «уровень + закрытая
+   * колонка»; возвращает текст ошибки сервера или null.
+   */
+  loadMoreClosed: (column: ColumnId, kind: CardKind) => Promise<string | null>;
+}
+
+export interface BoardState extends CardActions, DirectionActions, ClosedPageActions {
   cards: Card[];
   directions: Direction[];
   /**
@@ -71,6 +92,11 @@ export interface BoardState extends CardActions, DirectionActions {
    * поэтому счётчик берётся отсюда, а не из длины списка.
    */
   closedTotals: ClosedTotals;
+  /**
+   * Состояние догрузки по парам «колонка + уровень»: по нему кнопка «Показать
+   * ещё» показывает индикатор и объясняет ошибку.
+   */
+  closedPages: ClosedPages;
   /** true — идёт первая загрузка доски. */
   isLoading: boolean;
   /** Ошибка загрузки (сеть, 401, 500); null — доска загружена. */
@@ -100,6 +126,8 @@ export function useBoard(): BoardState {
   const [cards, setCards] = useState<Card[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
   const [closedTotals, setClosedTotals] = useState<ClosedTotals>({});
+  /** Состояние догрузки закрытых колонок по парам «колонка + уровень». */
+  const [closedPages, setClosedPages] = useState<ClosedPages>({});
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -114,6 +142,9 @@ export function useBoard(): BoardState {
       // Счётчики закрытых колонок — из `meta`: карточки «Готово» и «Отмены»
       // приходят порцией, и по длине списка полное число не восстановить.
       setClosedTotals(toClosedTotals(tasksPayload.meta));
+      // Первичная загрузка снова режет закрытые колонки порцией, поэтому
+      // догруженные страницы и их состояние больше не актуальны.
+      setClosedPages({});
       setLoadError(null);
     } catch (error) {
       setLoadError(errorMessage(error, 'Не удалось загрузить доску. Проверьте соединение с сервером.'));
@@ -218,6 +249,73 @@ export function useBoard(): BoardState {
     }
   }, []);
 
+  /**
+   * «Показать ещё» в закрытой колонке: следующая страница пары «уровень + колонка».
+   *
+   * Смещение — число уже загруженных карточек пары, поэтому страница продолжает
+   * первичную порцию без пересечений: сервер отдаёт закрытые карточки свежими
+   * сверху и в том же порядке сортирует страницу (`order: 'desc'`).
+   *
+   * Загруженные карточки добавляются, а не заменяют список, — на доске уже
+   * лежат открытые колонки и другие страницы. Пришедшие карточки фильтруются по
+   * паре и известным id: сдвиг окна пагинации (карточку закрыли, пока листали)
+   * не должен дать дубли в состоянии.
+   */
+  const loadMoreClosed = useCallback<ClosedPageActions['loadMoreClosed']>(
+    async (column, kind) => {
+      // Запрос уже в полёте — повторный клик его не дублирует.
+      if (closedPageOf(closedPages, column, kind).loading) {
+        return null;
+      }
+
+      setClosedPages((prev) => withClosedPage(prev, column, kind, { loading: true, error: null, fullPage: false }));
+
+      try {
+        const payload = await fetchTasks(getToken(), {
+          column,
+          type: kind,
+          limit: CLOSED_PAGE_SIZE,
+          offset: closedLoadedCount(cards, column, kind),
+          order: 'desc',
+        });
+
+        const page = payload.data.map(toCard).filter((card) => card.column === column && card.kind === kind);
+
+        setCards((prev) => {
+          const known = new Set(prev.map((card) => card.id));
+
+          return [...prev, ...page.filter((card) => !known.has(card.id))];
+        });
+        // Счётчик обновляем только у своей пары. `meta` страницы посчитана по её
+        // фильтрам (`column` + `type`), поэтому по остальным парам там нули:
+        // заменить `closedTotals` целиком значило бы стереть счётчики других
+        // колонок и уровней — у них пропали бы «Показать ещё».
+        // Ключи `closed_totals` в API — только закрытые колонки, отсюда narrowed.
+        const pageTotals = payload.meta.closed_totals as Partial<Record<ColumnId, Partial<Record<CardKind, number>>>>;
+
+        setClosedTotals((prev) => setClosedTotal(prev, column, kind, pageTotals[column]?.[kind]));
+        setClosedPages((prev) =>
+          withClosedPage(prev, column, kind, {
+            loading: false,
+            error: null,
+            fullPage: payload.data.length >= CLOSED_PAGE_SIZE,
+          }),
+        );
+
+        return null;
+      } catch (error) {
+        const message = errorMessage(error, 'Не удалось загрузить карточки.');
+        setClosedPages((prev) =>
+          withClosedPage(prev, column, kind, { loading: false, error: message, fullPage: false }),
+        );
+
+        return message;
+      }
+    },
+    // `cards` нужны для смещения и дедупликации, `closedPages` — для защиты от двойного клика.
+    [cards, closedPages],
+  );
+
   const addDirection = useCallback<DirectionActions['addDirection']>(async (title, color) => {
     try {
       const created = toDirection(await createDirectionRequest(getToken(), { title, color }));
@@ -265,6 +363,7 @@ export function useBoard(): BoardState {
       cards,
       directions,
       closedTotals,
+      closedPages,
       isLoading,
       loadError,
       reload,
@@ -272,6 +371,7 @@ export function useBoard(): BoardState {
       saveCard,
       moveCard,
       removeCard,
+      loadMoreClosed,
       addDirection,
       editDirection,
       removeDirection,
@@ -280,6 +380,7 @@ export function useBoard(): BoardState {
       cards,
       directions,
       closedTotals,
+      closedPages,
       isLoading,
       loadError,
       reload,
@@ -287,6 +388,7 @@ export function useBoard(): BoardState {
       saveCard,
       moveCard,
       removeCard,
+      loadMoreClosed,
       addDirection,
       editDirection,
       removeDirection,

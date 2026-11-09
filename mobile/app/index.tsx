@@ -231,7 +231,7 @@ export default function HomeScreen() {
 
   // Доска: карточки, направления и все изменения живут в API (src/board/store.ts).
   const board = useBoard();
-  const { cards, directions, closedTotals, isLoading, loadError, reload } = board;
+  const { cards, directions, closedTotals, closedPages, isLoading, loadError, reload } = board;
 
   /**
    * Свёрнутые уровни и колонки — настройки пользователя: они сохраняются на
@@ -308,6 +308,21 @@ export default function HomeScreen() {
     if (Platform.OS !== 'web') {
       Alert.alert('Перенос запрещён', action.blockReason);
     }
+  };
+
+  /**
+   * «Показать ещё» в закрытой колонке: следующая страница пары «уровень + колонка».
+   *
+   * Ошибку дублируем баннером над доской: кнопка показывает её у себя, но на
+   * телефоне лента может оказаться ниже экрана, а причина отказа должна быть
+   * видна сразу после клика.
+   */
+  const handleLoadMoreClosed = (column: ColumnId, kind: CardKind) => {
+    void board.loadMoreClosed(column, kind).then((error) => {
+      if (error !== null) {
+        setNotice(error);
+      }
+    });
   };
 
   /** Форма из свимлайна: родитель предопределён. */
@@ -424,6 +439,9 @@ export default function HomeScreen() {
 
         {LEVELS.map((level) => {
           const lanes = swimlanesOf(cards, directions, level);
+          // Карточки уровня в порядке сервера: по нему строятся ленты закрытых
+          // колонок, чтобы догруженные карточки оставались в конце списка.
+          const levelCards = cards.filter((card) => card.kind === LEVEL_CARD_KIND[level.id]);
           // Кнопку блокирует только стратегический уровень: инициативе родитель
           // (направление) обязателен, а проекту и задаче родитель не нужен —
           // они создаются и «без инициативы» / «без проекта».
@@ -435,6 +453,9 @@ export default function HomeScreen() {
               level={level}
               lanes={lanes}
               closedTotals={closedTotals}
+              closedPages={closedPages}
+              levelCards={levelCards}
+              onLoadMoreClosed={handleLoadMoreClosed}
               collapsed={collapsedLevels[level.id] === true}
               onToggle={() => toggleLevel(level.id)}
               compact={compact}

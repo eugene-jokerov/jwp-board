@@ -37,9 +37,10 @@ import { Pressable, Text, View } from 'react-native';
 
 import { BoardCard } from './BoardCard';
 import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './BoardIcons';
+import { ShowMoreButton } from './ShowMoreButton';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
-import { columnCount, isClosedColumn, type CardAction } from '../derive';
+import { closedHasMore, closedPageOf, columnCount, isClosedColumn, type CardAction, type ClosedPages } from '../derive';
 import { hasParent } from '../mappers';
 import {
   COLUMNS,
@@ -342,6 +343,27 @@ interface BoardLevelProps {
    * карточек, поэтому бейдж колонки берёт счётчик отсюда.
    */
   closedTotals: ClosedTotals;
+  /**
+   * Состояние догрузки закрытых колонок по парам «колонка + уровень»: по нему
+   * кнопка «Показать ещё» показывает индикатор и текст ошибки.
+   */
+  closedPages: ClosedPages;
+  /**
+   * Карточки уровня в исходном порядке доски (как в состоянии клиента).
+   *
+   * Списки закрытых колонок строятся по этому массиву, а не по свимлайнам:
+   * свимлайны группируют карточки по родителю «в работе», и закрытая карточка
+   * со старым родителем уезжает в служебный свимлайн — при догрузке такой
+   * карточки появлялись бы в середине списка. В общем массиве догрузка всегда
+   * добавляется в конец, поэтому лента закрытой колонки остаётся в порядке
+   * «свежие сверху, догруженные — ниже».
+   */
+  levelCards: readonly Card[];
+  /**
+   * Догрузить следующую страницу закрытой колонки уровня. Пара «уровень +
+   * колонка» адресуется типом карточки уровня — его `BoardLevel` знает сам.
+   */
+  onLoadMoreClosed: (columnId: ColumnId, kind: CardKind) => void;
   collapsed: boolean;
   onToggle: () => void;
   compact: boolean;
@@ -379,6 +401,9 @@ export function BoardLevel({
   level,
   lanes,
   closedTotals,
+  closedPages,
+  levelCards,
+  onLoadMoreClosed,
   collapsed,
   onToggle,
   compact,
@@ -407,10 +432,21 @@ export function BoardLevel({
   const openColumns = COLUMNS.filter((column) => !isClosedColumn(column.id));
 
   /**
-   * Карточки закрытых колонок подряд по всем свимлайнам: порядок свимлайнов и
-   * карточек в них — тот же, что задаёт экран (`lanes`).
+   * Лента закрытой колонки в порядке «свежие сверху».
+   *
+   * Свимлайны для этого не подходят: они группируют карточки по родителю «в
+   * работе», и закрытая карточка с родителем, вышедшим из работы, уезжает в
+   * служебный свимлайн — при догрузке она вставала бы в середину списка.
+   *
+   * Сортируем по идентификатору по убыванию, а не берём порядок массива как
+   * есть: так лента не зависит от того, как карточки попали в состояние
+   * (первичная порция, страница догрузки, перенос колонки, создание), и каждая
+   * следующая страница гарантированно продолжает список вниз — сервер тоже
+   * отдаёт закрытые карточки свежими сверху.
    */
-  const closedCards = lanes.flatMap((lane) => lane.cards.filter((card) => isClosedColumn(card.column)));
+  const closedCards = levelCards
+    .filter((card) => isClosedColumn(card.column))
+    .sort((left, right) => right.id - left.id);
 
   /**
    * Ширина контейнера колонок — основа расчёта мест в слое списков.
@@ -555,7 +591,7 @@ export function BoardLevel({
           {emptyNotice}
 
           {compact ? (
-            lanes.map((lane) => (
+            lanes.map((lane, index) => (
               <Swimlane
                 key={lane.id}
                 laneId={lane.id}
@@ -564,6 +600,13 @@ export function BoardLevel({
                 cards={lane.cards}
                 kind={kindOfLevel}
                 closedTotals={closedTotals}
+                closedPages={closedPages}
+                levelCards={levelCards}
+                // Кнопка «Показать ещё» у пары «уровень + колонка» одна, поэтому
+                // её рисует последний свимлайн: над ним закрытые колонки уровня
+                // показаны целиком, и лента логично завершается внизу.
+                showClosedButtons={index === lanes.length - 1}
+                onLoadMoreClosed={(columnId) => onLoadMoreClosed(columnId, kindOfLevel)}
                 expandedColumns={expandedColumns}
                 onToggleColumn={onToggleColumn}
                 canCreate={canAddInLane(lane)}
@@ -715,6 +758,11 @@ export function BoardLevel({
                     }
 
                     const columnCards = closedCards.filter((card) => card.column === columnId);
+                    // «Есть ещё» — сравнение счётчика пары с загруженным уровнем
+                    // целиком: лента закрытой колонки здесь одна на уровень, она
+                    // не разрезана по свимлайнам.
+                    const hasMore = closedHasMore(levelCards, columnId, kindOfLevel, closedTotals, closedPages);
+                    const page = closedPageOf(closedPages, columnId, kindOfLevel);
 
                     return (
                       <View
@@ -757,6 +805,17 @@ export function BoardLevel({
                               onPress={() => onOpenCard(card)}
                             />
                           ))}
+
+                          {/* «Показать ещё» закрытой колонки завершает список:
+                              порция догружается вниз, а кнопка остаётся на месте,
+                              пока у пары есть незагруженные карточки. */}
+                          {isClosedColumn(columnId) && (hasMore || page.error !== null) ? (
+                            <ShowMoreButton
+                              onPress={() => onLoadMoreClosed(columnId, kindOfLevel)}
+                              loading={page.loading}
+                              error={page.error}
+                            />
+                          ) : null}
                         </View>
                       </View>
                     );
