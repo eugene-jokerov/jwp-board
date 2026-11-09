@@ -35,30 +35,85 @@ final class EloquentTaskRepository implements TaskRepository
 
     public function listForUser(int $userId, array $filters = []): array
     {
-        $query = Task::query()->where('user_id', $userId);
+        $query = $this->filteredQuery($userId, $filters);
 
-        $type = $filters['type'] ?? null;
+        // `asc` по умолчанию — прежний порядок доски; `desc` нужен закрытым
+        // колонкам, где сверху показываем самые свежие карточки.
+        $query->orderBy('id', ($filters['order'] ?? 'asc') === 'desc' ? 'desc' : 'asc');
 
-        if ($type instanceof CardType) {
-            $query->where('type', $type->value);
-        }
+        $limit = $filters['limit'] ?? null;
 
-        $column = $filters['column'] ?? null;
+        if ($limit !== null && (int) $limit > 0) {
+            $query->limit((int) $limit);
 
-        if ($column instanceof CardColumn) {
-            $query->where('column', $column->value);
-        }
+            $offset = $filters['offset'] ?? 0;
 
-        foreach (['direction_id', 'initiative_id', 'project_id'] as $field) {
-            $value = $filters[$field] ?? null;
-
-            // 0 и отрицательные — не идентификаторы: фильтр не применяем.
-            if ($value !== null && (int) $value > 0) {
-                $query->where($field, (int) $value);
+            if ((int) $offset > 0) {
+                $query->offset((int) $offset);
             }
         }
 
-        return $query->orderBy('id')->get()->all();
+        return $query->get()->all();
+    }
+
+    public function countForUser(int $userId, array $filters = []): int
+    {
+        return $this->filteredQuery($userId, $filters)->count();
+    }
+
+    public function listInitialForUser(int $userId, array $filters, int $perLevelLimit): array
+    {
+        // Открытые колонки отдаются целиком — это основной рабочий экран доски.
+        $open = $this->filteredQuery($userId, $filters)
+            ->whereIn('column', $this->openColumnValues())
+            ->orderBy('id', 'asc')
+            ->get()
+            ->all();
+
+        $closed = $this->closedCardsOfInitialLoad($userId, $filters, $perLevelLimit);
+
+        // Порядок ответа детерминирован: открытые — в порядке создания,
+        // закрытые — свежие сверху, пары идут в порядке перечисления.
+        return [...$open, ...$closed];
+    }
+
+    public function countClosedByLevelForUser(int $userId, array $filters = []): array
+    {
+        $rows = $this->filteredQuery($userId, $filters)
+            ->select(['type', 'column'])
+            ->selectRaw('count(*) as aggregate')
+            ->whereIn('column', $this->closedColumnValues())
+            ->groupBy('type', 'column')
+            ->toBase()
+            ->get();
+
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $counts[(string) $row->column][(string) $row->type] = (int) $row->aggregate;
+        }
+
+        return $counts;
+    }
+
+    public function countByColumnForUser(int $userId, array $filters = []): array
+    {
+        // `column` — зарезервированное слово в MySQL, но билдер квотирует
+        // имена колонок сам, поэтому select/groupBy можно писать буквально.
+        $rows = $this->filteredQuery($userId, $filters)
+            ->select('column')
+            ->selectRaw('count(*) as aggregate')
+            ->groupBy('column')
+            ->toBase()
+            ->get();
+
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $counts[(string) $row->column] = (int) $row->aggregate;
+        }
+
+        return $counts;
     }
 
     public function countChildrenInProgress(Task $task): int
@@ -150,6 +205,128 @@ final class EloquentTaskRepository implements TaskRepository
             ->where('user_id', $userId)
             ->whereKey($directionId)
             ->exists();
+    }
+
+    /**
+     * Закрытые карточки первичной загрузки: не больше $perLevelLimit на каждую
+     * пару «уровень + колонка», свежие сверху.
+     *
+     * На каждую пару — своя ветка UNION ALL со своим LIMIT. Ветка идёт по
+     * индексу (user_id, type, column) в нужном порядке и читает ровно
+     * $perLevelLimit строк, поэтому время зависит от размера порции, а не от
+     * того, сколько закрытых карточек накопилось у пользователя: оконная
+     * функция ROW_NUMBER() читала бы всю закрытую колонку и сортировала её.
+     *
+     * Фильтры накладываются внутри каждой ветки — так «показать ещё» внутри
+     * свимлайна и фильтр по направлению тоже ограничены порцией.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return list<Task>
+     */
+    private function closedCardsOfInitialLoad(int $userId, array $filters, int $perLevelLimit): array
+    {
+        $limit = max(1, $perLevelLimit);
+        $columns = $this->closedColumnValues();
+        $type = $filters['type'] ?? null;
+
+        // Явный фильтр по уровню сужает набор пар: остальные уровни и так
+        // не попадут в выборку, а лишние ветки — лишние обращения к таблице.
+        $types = $type instanceof CardType
+            ? [$type->value]
+            : array_map(static fn (CardType $cardType): string => $cardType->value, CardType::cases());
+
+        $union = null;
+
+        foreach ($columns as $column) {
+            foreach ($types as $cardType) {
+                $branch = $this->filteredQuery($userId, $filters)
+                    ->where('column', $column)
+                    ->where('type', $cardType)
+                    ->orderByDesc('id')
+                    ->limit($limit);
+
+                $union = $union === null ? $branch : $union->unionAll($branch);
+            }
+        }
+
+        if ($union === null) {
+            return [];
+        }
+
+        // Порядок ответа детерминирован и одинаков между парами: ветки идут в
+        // порядке колонок и уровней, внутри — свежие сверху. Сортировку задаём
+        // на объединении: ветки по отдельности уже упорядочены, но UNION ALL
+        // порядок не гарантирует.
+        return Task::query()
+            ->fromSub($union, 'tasks')
+            ->orderBy('column')
+            ->orderBy('type')
+            ->orderByDesc('id')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * Значения закрытых колонок (Готово, Отмена).
+     *
+     * @return list<string>
+     */
+    private function closedColumnValues(): array
+    {
+        return array_values(array_map(
+            static fn (CardColumn $column): string => $column->value,
+            array_filter(CardColumn::ordered(), static fn (CardColumn $column): bool => $column->isClosed()),
+        ));
+    }
+
+    /**
+     * Значения открытых колонок (Беклог, В работе).
+     *
+     * @return list<string>
+     */
+    private function openColumnValues(): array
+    {
+        return array_values(array_map(
+            static fn (CardColumn $column): string => $column->value,
+            array_filter(CardColumn::ordered(), static fn (CardColumn $column): bool => ! $column->isClosed()),
+        ));
+    }
+
+    /**
+     * Запрос карточек пользователя с фильтрами, без сортировки и страницы.
+     *
+     * Общий для списка и подсчёта: условия фильтрации не должны расходиться
+     * между «что отдаём» и «сколько всего есть».
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<Task>
+     */
+    private function filteredQuery(int $userId, array $filters): Builder
+    {
+        $query = Task::query()->where('user_id', $userId);
+
+        $type = $filters['type'] ?? null;
+
+        if ($type instanceof CardType) {
+            $query->where('type', $type->value);
+        }
+
+        $column = $filters['column'] ?? null;
+
+        if ($column instanceof CardColumn) {
+            $query->where('column', $column->value);
+        }
+
+        foreach (['direction_id', 'initiative_id', 'project_id'] as $field) {
+            $value = $filters[$field] ?? null;
+
+            // 0 и отрицательные — не идентификаторы: фильтр не применяем.
+            if ($value !== null && (int) $value > 0) {
+                $query->where($field, (int) $value);
+            }
+        }
+
+        return $query;
     }
 
     /**

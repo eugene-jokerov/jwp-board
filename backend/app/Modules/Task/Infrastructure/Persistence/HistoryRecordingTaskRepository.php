@@ -51,6 +51,26 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
         return $this->inner->listForUser($userId, $filters);
     }
 
+    public function listInitialForUser(int $userId, array $filters, int $perLevelLimit): array
+    {
+        return $this->inner->listInitialForUser($userId, $filters, $perLevelLimit);
+    }
+
+    public function countForUser(int $userId, array $filters = []): int
+    {
+        return $this->inner->countForUser($userId, $filters);
+    }
+
+    public function countClosedByLevelForUser(int $userId, array $filters = []): array
+    {
+        return $this->inner->countClosedByLevelForUser($userId, $filters);
+    }
+
+    public function countByColumnForUser(int $userId, array $filters = []): array
+    {
+        return $this->inner->countByColumnForUser($userId, $filters);
+    }
+
     public function countChildrenInProgress(Task $task): int
     {
         return $this->inner->countChildrenInProgress($task);

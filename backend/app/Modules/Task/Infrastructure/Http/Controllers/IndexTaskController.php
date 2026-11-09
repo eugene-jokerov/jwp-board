@@ -4,20 +4,36 @@ namespace App\Modules\Task\Infrastructure\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Task\Application\Queries\ListTasks\ListTasksQuery;
-use App\Modules\Task\Application\Results\TaskResult;
+use App\Modules\Task\Application\Results\ListTasksResult;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Infrastructure\Http\Requests\IndexTaskRequest;
 use App\Modules\Task\Infrastructure\Http\Resources\TaskResource;
 use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\QueryBus;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\JsonResponse;
 
 /**
  * Список карточек текущего пользователя с фильтрами доски.
  *
  * Фильтры валидируются IndexTaskRequest: неизвестный тип, колонка или
  * нечисловой идентификатор дают 422, а не тихо отключённый фильтр.
+ *
+ * Два режима, оба отдают `{"data": [...], "meta": {...}}`:
+ *  - первичная загрузка (без `column`/`limit`/`offset`): Беклог и «В работе»
+ *    приходят целиком, в «Готово» и «Отмене» — не больше
+ *    CardColumn::CLOSED_CARDS_PER_LEVEL карточек на каждую пару «уровень +
+ *    колонка»;
+ *  - страница (`limit`/`offset` вместе с `column`): ровно запрошенный кусок,
+ *    так клиент догружает следующие карточки закрытой колонки своего уровня.
+ *
+ * Счётчики лежат в `meta` рядом с `data`, а не в заголовках: веб-версия ходит
+ * в API с другого origin, и заголовки пришлось бы отдельно экспонировать
+ * в CORS ради тех же чисел, которые проще прочитать из тела.
+ * `meta.columns` — сколько карточек под фильтром в каждой колонке (для бейджа
+ * колонки), `meta.closed_totals` — полное число закрытых карточек по паре
+ * «уровень + колонка»: по нему клиент рисует «показать ещё», когда выборка
+ * урезана.
  */
 final class IndexTaskController extends Controller
 {
@@ -26,9 +42,9 @@ final class IndexTaskController extends Controller
     ) {}
 
     /**
-     * GET /api/v1/tasks?type=&column=&direction_id=&initiative_id=&project_id=
+     * GET /api/v1/tasks?type=&column=&direction_id=&initiative_id=&project_id=&limit=&offset=&order=
      */
-    public function __invoke(IndexTaskRequest $request): AnonymousResourceCollection
+    public function __invoke(IndexTaskRequest $request): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -39,16 +55,88 @@ final class IndexTaskController extends Controller
         /** @var CardColumn|null $column */
         $column = $request->enumValue('column', CardColumn::class);
 
-        /** @var list<TaskResult> $tasks */
-        $tasks = $this->queries->ask(new ListTasksQuery(
+        /** @var ListTasksResult $result */
+        $result = $this->queries->ask(new ListTasksQuery(
             (int) $user->getKey(),
             $type,
             $column,
             $request->intValue('direction_id'),
             $request->intValue('initiative_id'),
             $request->intValue('project_id'),
+            $request->limitValue(),
+            $request->offsetValue(),
+            $request->orderValue(),
+            $request->isInitialLoad(),
         ));
 
-        return TaskResource::collection($tasks);
+        $response = TaskResource::collection($result->items)
+            ->response();
+
+        // Ответ собираем явно: рядом с `data` нужен `meta`, а `with()` в Laravel
+        // кладёт поля плоско — на одном уровне с ключом `data`, а не в `meta`.
+        $payload = [
+            'data' => json_decode((string) $response->getContent(), true)['data'] ?? [],
+            'meta' => [
+                'total' => $result->total,
+                // Счётчики по всем парам: отсутствующая в выборке пара — это
+                // ноль, а не пропущенный ключ, иначе клиенту пришлось бы
+                // подставлять нули самому.
+                'columns' => $this->columnTotals($result),
+                'closed_totals' => $this->closedTotals($result),
+            ],
+        ];
+
+        return new JsonResponse($payload);
+    }
+
+    /**
+     * Полное число карточек каждой колонки под фильтром.
+     *
+     * Считается по тем же фильтрам, что и выборка: при `column=complete`
+     * карточки распределены только по этой колонке, остальные — нули.
+     * Число включает карточки всех уровней, в том числе открытых колонок.
+     *
+     * @return array<string, int>
+     */
+    private function columnTotals(ListTasksResult $result): array
+    {
+        $totals = [];
+
+        foreach (CardColumn::ordered() as $column) {
+            $totals[$column->value] = $result->totalByColumn[$column->value] ?? 0;
+        }
+
+        return $totals;
+    }
+
+    /**
+     * Полное число закрытых карточек по парам «уровень + колонка».
+     *
+     * Форма фиксированная: ключ — закрытая колонка, значение — объект
+     * «тип карточки => всего карточек» со всеми типами. Так фронту не нужно
+     * проверять наличие ключа, а «есть ещё» — это сравнение числа с уже
+     * загруженным количеством карточек пары.
+     *
+     * @return array<string, array<string, int>>
+     */
+    private function closedTotals(ListTasksResult $result): array
+    {
+        $totals = [];
+
+        foreach (CardColumn::ordered() as $column) {
+            if (! $column->isClosed()) {
+                continue;
+            }
+
+            $byLevel = [];
+
+            foreach (CardType::cases() as $type) {
+                $byLevel[$type->value] = $result->closedByLevel[$column->value][$type->value] ?? 0;
+            }
+
+            $totals[$column->value] = $byLevel;
+        }
+
+        return $totals;
     }
 }

@@ -80,6 +80,69 @@ final class InMemoryTaskRepository implements TaskRepository
         ));
     }
 
+    public function countForUser(int $userId, array $filters = []): int
+    {
+        return count($this->listForUser($userId, $filters));
+    }
+
+    public function listInitialForUser(int $userId, array $filters, int $perLevelLimit): array
+    {
+        // Как и у Eloquent-репозитория: открытые колонки отдаются целиком,
+        // закрытые — не больше $perLevelLimit на пару «уровень + колонка».
+        // Сортировки здесь нет — двойник нужен только доменным правилам,
+        // которым порядок не важен.
+        $tasks = [];
+        $taken = [];
+
+        foreach ($this->listForUser($userId, $filters) as $task) {
+            if (! $task->column->isClosed()) {
+                $tasks[] = $task;
+
+                continue;
+            }
+
+            $pair = $task->type->value.'|'.$task->column->value;
+
+            if (($taken[$pair] ?? 0) >= $perLevelLimit) {
+                continue;
+            }
+
+            $taken[$pair] = ($taken[$pair] ?? 0) + 1;
+            $tasks[] = $task;
+        }
+
+        return $tasks;
+    }
+
+    public function countClosedByLevelForUser(int $userId, array $filters = []): array
+    {
+        $counts = [];
+
+        foreach ($this->listForUser($userId, $filters) as $task) {
+            if (! $task->column->isClosed()) {
+                continue;
+            }
+
+            $column = $task->column->value;
+            $type = $task->type->value;
+
+            $counts[$column][$type] = ($counts[$column][$type] ?? 0) + 1;
+        }
+
+        return $counts;
+    }
+
+    public function countByColumnForUser(int $userId, array $filters = []): array
+    {
+        $counts = [];
+
+        foreach ($this->listForUser($userId, $filters) as $task) {
+            $counts[$task->column->value] = ($counts[$task->column->value] ?? 0) + 1;
+        }
+
+        return $counts;
+    }
+
     public function countChildrenInProgress(Task $task): int
     {
         return $this->childrenInProgress[(int) $task->id] ?? 0;

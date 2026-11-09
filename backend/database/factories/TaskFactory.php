@@ -26,6 +26,19 @@ class TaskFactory extends Factory
     protected $model = Task::class;
 
     /**
+     * Счётчик заголовков: даёт уникальное имя карточке без генератора случайных чисел.
+     */
+    private static int $titleCounter = 0;
+
+    /**
+     * Следующий номер для заголовка карточки.
+     */
+    private static function nextTitleNumber(): int
+    {
+        return ++self::$titleCounter;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function definition(): array
@@ -37,7 +50,12 @@ class TaskFactory extends Factory
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => CardColumn::Backlog->value,
-            'title' => 'Карточка '.fake()->unique()->numberBetween(1, 10000),
+            // Заголовок уникален в пределах вызова fake(): суффикс из
+            // счётчика не зависит от генератора случайных чисел. `unique()`
+            // здесь не годится — при исчерпании значений фейкер кидает
+            // OverflowException, и фабрика молча теряет карточку, из-за чего
+            // count(N) создаёт N-1 запись.
+            'title' => 'Карточка '.self::nextTitleNumber(),
             'description' => null,
         ];
     }

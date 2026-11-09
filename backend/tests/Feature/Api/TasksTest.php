@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -264,7 +265,7 @@ final class TasksTest extends TestCase
             ->assertJsonValidationErrors(['direction_id']);
     }
 
-    public function test_index_without_filters_returns_all_cards(): void
+    public function test_index_without_filters_returns_all_open_cards(): void
     {
         $user = User::factory()->create();
         $direction = Direction::factory()->create(['user_id' => $user->id]);
@@ -275,6 +276,477 @@ final class TasksTest extends TestCase
             ->getJson(self::ENDPOINT)
             ->assertOk()
             ->assertJsonCount(2, 'data');
+    }
+
+    /**
+     * Первичная загрузка доски: Беклог и «В работе» приходят целиком, а в
+     * «Готово» и «Отмене» — не больше 10 карточек на каждую пару «уровень +
+     * колонка». Счётчики при этом полные (по фильтру), иначе клиент не знает,
+     * что за пределами отданного есть ещё карточки.
+     */
+    public function test_initial_load_caps_closed_columns_per_level(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'complete']);
+        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'backlog']);
+        Task::factory()->count(4)->create(['user_id' => $user->id, 'column' => 'in_progress']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            // 3 + 4 открытых целиком, 10 + 10 закрытых: все карточки — задачи,
+            // то есть по одной паре на колонку.
+            ->assertJsonCount(27, 'data')
+            ->assertJsonPath('meta.total', 57)
+            ->assertJsonPath('meta.columns', [
+                'backlog' => 3,
+                'in_progress' => 4,
+                'complete' => 25,
+                'canceled' => 25,
+            ])
+            ->assertJsonPath('meta.closed_totals.complete.task', 25)
+            ->assertJsonPath('meta.closed_totals.canceled.task', 25);
+    }
+
+    /**
+     * Лимит считается на пару «уровень + колонка», а не на колонку: карточки
+     * каждого уровня отдают свои 10, поэтому «Готово» с тремя уровнями — это
+     * 30 карточек в ответе при 75 в счётчике.
+     */
+    public function test_initial_load_limits_each_level_and_column_pair(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        $project = Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+
+        Task::factory()->count(2)->initiative($direction)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(2)->project($initiative)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        // Задачи того же проекта: третий уровень в той же колонке.
+        Task::factory()->count(3)->task($project)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+
+        /** @var list<array{column: string, type: string}> $data */
+        $data = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonPath('meta.columns.complete', 9)
+            ->assertJsonPath('meta.closed_totals.complete', [
+                'initiative' => 3,
+                'project' => 3,
+                'task' => 3,
+            ])
+            ->json('data');
+
+        $byPair = array_count_values(array_map(
+            static fn (array $row): string => $row['type'].'|'.$row['column'],
+            $data,
+        ));
+
+        $this->assertSame([
+            'initiative|complete' => 3,
+            'project|complete' => 3,
+            'task|complete' => 3,
+        ], $byPair);
+    }
+
+    /**
+     * Урезание до 10 действует на каждой паре «уровень + колонка» отдельно:
+     * по 12 карточек каждого уровня в «Готово» — значит, в ответе по 10 на
+     * уровень (30 всего), а не 10 на всю колонку.
+     */
+    public function test_initial_load_keeps_ten_cards_per_level_and_column_pair(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        $project = Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+
+        // Карточки создаём поштучно: у итераторной фабрики count(N) может
+        // отдать N-1 запись, и тест лимита проверял бы не то, что задумано.
+        for ($i = 0; $i < 11; $i++) {
+            Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+            Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+            Task::factory()->task($project)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+        }
+
+        /** @var list<array{column: string, type: string}> $data */
+        $data = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            // По 12 инициатив и проектов (одна инициализирующая плюс 11) и
+            // 11 задач: инициализирующая карточка проекта — сам проект.
+            ->assertJsonPath('meta.columns.complete', 35)
+            ->assertJsonPath('meta.closed_totals.complete', [
+                'initiative' => 12,
+                'project' => 12,
+                'task' => 11,
+            ])
+            ->json('data');
+
+        $byPair = array_count_values(array_map(
+            static fn (array $row): string => $row['type'].'|'.$row['column'],
+            $data,
+        ));
+
+        $this->assertSame([
+            'initiative|complete' => 10,
+            'project|complete' => 10,
+            'task|complete' => 10,
+        ], $byPair);
+    }
+
+    /**
+     * Фильтр по уровню не отменяет порций закрытых колонок: запрос уровня без
+     * страницы — та же первичная загрузка. Открытые колонки уровня приходят
+     * целиком, «Готово» и «Отмена» — по 10 (при одном уровне — ровно по одной
+     * паре на колонку), карточки других уровней не попадают.
+     */
+    public function test_initial_load_caps_closed_columns_by_level_type(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+
+        Task::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Canceled)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(3)->initiative($direction)->inColumn(CardColumn::Backlog)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(4)->initiative($direction)->inColumn(CardColumn::InProgress)->create([
+            'user_id' => $user->id,
+        ]);
+        // Чужой уровень: его карточки не должны ни попасть в ответ, ни исказить счётчики.
+        Task::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?type=initiative')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 57)
+            ->assertJsonPath('meta.columns', [
+                'backlog' => 3,
+                'in_progress' => 4,
+                'complete' => 25,
+                'canceled' => 25,
+            ])
+            ->assertJsonPath('meta.closed_totals.complete.initiative', 25)
+            // Карточки другого уровня в счётчик пары не попадают.
+            ->assertJsonPath('meta.closed_totals.complete.task', 0);
+
+        /** @var list<array{column: string, type: string}> $data */
+        $data = $response->json('data');
+
+        $this->assertSame(['initiative'], array_values(array_unique(array_column($data, 'type'))));
+
+        $byColumn = array_count_values(array_column($data, 'column'));
+
+        $this->assertSame(3, $byColumn['backlog'] ?? 0);
+        $this->assertSame(4, $byColumn['in_progress'] ?? 0);
+        $this->assertSame(10, $byColumn['complete'] ?? 0);
+        $this->assertSame(10, $byColumn['canceled'] ?? 0);
+    }
+
+    /**
+     * В закрытой колонке первичной загрузки приходят самые свежие карточки:
+     * старые доступны только догрузкой страницами.
+     */
+    public function test_initial_load_returns_newest_closed_cards(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        /** @var list<array{id: int, column: string}> $data */
+        $data = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->json('data');
+
+        $ids = array_values(array_column(
+            array_filter($data, static fn (array $row): bool => $row['column'] === 'complete'),
+            'id',
+        ));
+
+        $expected = Task::query()
+            ->where('user_id', $user->id)
+            ->where('column', 'complete')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame($expected, $ids);
+    }
+
+    /**
+     * У каждого уровня свои 10 карточек: догрузка уровня фильтруется по типу,
+     * а счётчики страницы относятся только к своему уровню.
+     */
+    public function test_closed_column_page_is_scoped_by_level(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        Task::factory()->count(14)->project($initiative)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(13)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?type=project&column=complete&limit=10&offset=0&order=desc')
+            ->assertOk()
+            ->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.total', 14);
+
+        /** @var list<array{type: string}> $data */
+        $data = $response->json('data');
+
+        $this->assertSame(['project'], array_values(array_unique(array_column($data, 'type'))));
+    }
+
+    /**
+     * Догрузка следующих карточек закрытой колонки продолжает выборку
+     * без пересечений с первой порцией первичной загрузки.
+     */
+    public function test_next_page_of_closed_column_continues_after_initial_load(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
+
+        /** @var list<array{id: int}> $first */
+        $first = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->json('data');
+
+        $second = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=canceled&limit=10&offset=10&order=desc')
+            ->assertOk()
+            ->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.total', 25);
+
+        /** @var list<int> $firstIds */
+        $firstIds = array_column($first, 'id');
+        /** @var list<int> $secondIds */
+        $secondIds = array_column($second->json('data'), 'id');
+
+        $this->assertSame([], array_values(array_intersect($firstIds, $secondIds)));
+    }
+
+    /**
+     * Урезание действует и внутри свимлайна: доска грузит ветку направления
+     * тем же запросом без колонки, и закрытые колонки ветки тоже по 10.
+     */
+    public function test_initial_load_applies_to_parent_filter(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        Task::factory()->count(15)->project($initiative)->inColumn(CardColumn::Complete)->create([
+            'user_id' => $user->id,
+        ]);
+        Task::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?initiative_id='.$initiative->id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 15);
+
+        /** @var list<array{column: string}> $data */
+        $data = $response->json('data');
+
+        $byColumn = array_count_values(array_column($data, 'column'));
+
+        $this->assertSame(10, $byColumn['complete'] ?? 0);
+    }
+
+    /**
+     * Явный фильтр по колонке без страницы — это запрос «вся колонка»:
+     * первичное урезание к нему не применяется, поведение прежнее.
+     */
+    public function test_explicit_column_without_limit_returns_whole_column(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete')
+            ->assertOk()
+            ->assertJsonCount(15, 'data')
+            ->assertJsonPath('meta.total', 15);
+    }
+
+    /**
+     * Первая страница закрытой колонки: свежие карточки сверху, а общее число
+     * приходит в meta — по нему клиент рисует кнопку «показать ещё».
+     */
+    public function test_index_page_returns_newest_cards_with_total(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=0&order=desc')
+            ->assertOk()
+            ->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.total', 15);
+
+        /** @var list<int> $ids */
+        $ids = array_column($response->json('data'), 'id');
+
+        // Порядок — по убыванию идентификатора: самые новые карточки сверху.
+        $sorted = $ids;
+        rsort($sorted);
+
+        $this->assertSame($sorted, $ids);
+    }
+
+    public function test_index_last_page_has_no_more_cards(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=10&order=desc')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.total', 15);
+    }
+
+    /**
+     * Метаданные одинаковы в обоих режимах: счётчики по колонкам есть и у
+     * страницы, поэтому клиенту не нужно помнить, какой режим он вызвал.
+     * Счётчики считаются по тем же фильтрам: фильтр по колонке обнуляет
+     * остальные — они не входят в выборку.
+     */
+    public function test_page_also_returns_column_totals(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        Task::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=0&order=desc')
+            ->assertOk()
+            ->assertJsonPath('meta.columns', [
+                'backlog' => 0,
+                'in_progress' => 0,
+                'complete' => 15,
+                'canceled' => 0,
+            ]);
+
+        // Форма meta зафиксирована: total, columns и closed_totals. «Есть ещё»
+        // клиент выводит сам, сравнивая счётчик пары с уже загруженным количеством.
+        $this->assertSame(['total', 'columns', 'closed_totals'], array_keys($response->json('meta')));
+        $this->assertSame([
+            'complete' => ['initiative' => 0, 'project' => 0, 'task' => 15],
+            'canceled' => ['initiative' => 0, 'project' => 0, 'task' => 0],
+        ], $response->json('meta.closed_totals'));
+    }
+
+    /**
+     * Ограничение страницы действует только на свою выборку: карточки других
+     * колонок под тот же фильтр не попадают.
+     */
+    public function test_index_page_does_not_mix_columns(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'complete']);
+        Task::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=canceled&limit=10&offset=0&order=desc')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.total', 2);
+    }
+
+    /**
+     * Страница без order сохраняет прежний порядок доски (по возрастанию id),
+     * чтобы «показать ещё» не перемешивал карточки между страницами.
+     */
+    public function test_index_page_keeps_ascending_order_by_default(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'canceled']);
+
+        $response = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=canceled&limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        /** @var list<int> $ids */
+        $ids = array_column($response->json('data'), 'id');
+
+        $sorted = $ids;
+        sort($sorted);
+
+        $this->assertSame($sorted, $ids);
+    }
+
+    /**
+     * Опечатка в параметрах страницы — ошибка клиента: тихо отданный «весь
+     * список» скрыл бы баг пагинации.
+     */
+    public function test_index_rejects_invalid_page_parameters(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=0')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['limit']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=abc')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['limit']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?offset=10')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['offset']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=complete&limit=10&order=random')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['order']);
+    }
+
+    /**
+     * Страница без колонки отклоняется: лимит закрытых карточек действует на
+     * пару «уровень + колонка», и догрузка всегда адресная. Кусок смешанного
+     * списка сломал бы счётчики пары у клиента.
+     */
+    public function test_index_rejects_page_without_column(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?limit=10')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['limit']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?type=initiative&limit=10&offset=10')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['limit']);
     }
 
     /**
