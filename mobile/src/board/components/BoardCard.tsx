@@ -12,7 +12,9 @@
  * onBlocked с текстом причины — на web Alert не работает, поэтому решение
  * «где показать» принимает экран.
  *
- * Клик по названию карточки открывает форму редактирования.
+ * Клик по названию карточки открывает форму редактирования. Кликабельность
+ * включена явно (`pointer-events-auto`): карточки закрытых колонок лежат в слое
+ * с `pointer-events-none`, см. комментарий у корневого `View`.
  * Признак «без проекта» — отсутствие родителя, а не отсутствие цвета:
  * у такой карточки цвет служебный (нейтральный c0).
  */
@@ -50,7 +52,13 @@ export function BoardCard({ title, color, hasParent, kind, action, onAction, onP
   const withoutParentLabel = hasParent ? '' : kind === 'project' ? 'Без инициативы' : 'Без проекта';
 
   return (
-    <View className="flex-row overflow-hidden rounded border border-card-line bg-card">
+    // `pointer-events-auto` возвращает клики самой карточке. Карточки закрытых
+    // колонок («Готово», «Отмена») лежат в позиционном слое, помеченном
+    // `pointer-events-none` (см. CLOSED_COLUMN_SLOT в BoardLevel.tsx), а это
+    // свойство наследуемое: без явного `auto` плитка была видна, но не ловила
+    // наведение и клик на web. Пустые места слота при этом остаются прозрачными
+    // для кликов. На native свойство не используется — там поведение прежнее.
+    <View className="pointer-events-auto flex-row overflow-hidden rounded border border-card-line bg-card">
       {/* Полоса цвета родителя — единственный цветной акцент карточки.
           У карточки без родителя резолвер отдаёт служебный c0. */}
       <View className="w-1 shrink-0" style={{ backgroundColor: directionColorHex(color) }} />
