@@ -362,8 +362,9 @@ export default function HomeScreen() {
     description: string | null,
     parentId: number | null,
     deadline: string | null,
+    idea: boolean,
   ) => {
-    const error = await board.createCard(cardDraft, title, slug, description, parentId, deadline);
+    const error = await board.createCard(cardDraft, title, slug, description, parentId, deadline, idea);
 
     if (error === null) {
       setForm(null);
@@ -384,8 +385,9 @@ export default function HomeScreen() {
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
+    idea: boolean | undefined,
   ) => {
-    const error = await board.saveCard(card, title, slug, description, column, deadline);
+    const error = await board.saveCard(card, title, slug, description, column, deadline, idea);
 
     if (error === null) {
       setEditedCardId(null);

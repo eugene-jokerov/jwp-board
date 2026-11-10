@@ -520,6 +520,156 @@ final class TasksTest extends TestCase
             ->assertJsonPath('data.0.slug', 'BOARD');
     }
 
+    /**
+     * Степень проработки задаётся при создании: идея или готова к реализации.
+     * По умолчанию карточка создаётся готовой к реализации.
+     */
+    public function test_idea_flag_is_stored_on_create(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача-идея',
+                'idea' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.idea', true);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача на реализацию',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.idea', false);
+
+        $this->assertDatabaseHas('tasks', ['user_id' => $user->id, 'title' => 'Задача-идея', 'idea' => true]);
+        $this->assertDatabaseHas('tasks', ['user_id' => $user->id, 'title' => 'Задача на реализацию', 'idea' => false]);
+    }
+
+    /**
+     * Степень проработки — свойство беклога: карточка, созданная сразу в работе
+     * или в закрытой колонке, идеей не бывает.
+     */
+    public function test_idea_flag_is_ignored_outside_backlog_on_create(): void
+    {
+        $user = User::factory()->create();
+
+        foreach (['in_progress', 'complete', 'canceled'] as $column) {
+            $this->actingAsUser($user)
+                ->postJson(self::ENDPOINT, [
+                    'type' => 'task',
+                    'column' => $column,
+                    'title' => 'Карточка в колонке '.$column,
+                    'idea' => true,
+                ])
+                ->assertCreated()
+                ->assertJsonPath('data.idea', false);
+        }
+    }
+
+    public function test_idea_flag_must_be_boolean(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Некорректная степень проработки',
+                'idea' => 'idea',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['idea']);
+    }
+
+    public function test_idea_flag_can_be_changed(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['idea' => true])
+            ->assertOk()
+            ->assertJsonPath('data.idea', true);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['idea' => false])
+            ->assertOk()
+            ->assertJsonPath('data.idea', false);
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'idea' => false]);
+    }
+
+    /**
+     * Флаг хранится у карточки, а не у колонки: переводя идею в работу,
+     * значение не сбрасывается, и при возврате в беклог оно снова актуально.
+     */
+    public function test_idea_flag_survives_column_change(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->idea()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'in_progress'])
+            ->assertOk()
+            ->assertJsonPath('data.column', 'in_progress')
+            ->assertJsonPath('data.idea', true);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'backlog'])
+            ->assertOk()
+            ->assertJsonPath('data.column', 'backlog')
+            ->assertJsonPath('data.idea', true);
+    }
+
+    /**
+     * Флаг приходит и в списке доски: по нему беклог сортируется и рисует бейдж.
+     */
+    public function test_index_returns_idea_flag(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.idea', true);
+    }
+
+    /**
+     * Порядок беклога: «на реализацию» выше, идеи ниже; внутри группы —
+     * по идентификатору. Порядок одинаков на первичной загрузке и в странице.
+     */
+    public function test_backlog_lists_ready_cards_before_ideas(): void
+    {
+        $user = User::factory()->create();
+        $ready = Task::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $idea = Task::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $readyLater = Task::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
+
+        $expected = [(int) $ready->id, (int) $readyLater->id, (int) $idea->id];
+
+        $initial = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame($expected, array_column($initial, 'id'));
+
+        $column = $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'?column=backlog')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame($expected, array_column($column, 'id'));
+    }
+
     public function test_delete_is_forbidden_when_card_has_children(): void
     {
         $user = User::factory()->create();

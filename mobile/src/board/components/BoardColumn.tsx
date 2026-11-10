@@ -16,7 +16,7 @@ import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
 import { ShowMoreButton } from './ShowMoreButton';
 import type { CardAction, CardBreadcrumb } from '../derive';
-import { isClosedColumn } from '../derive';
+import { isClosedColumn, sortBacklogCards } from '../derive';
 import { hasParent } from '../mappers';
 import type { BoardColumn as BoardColumnModel, Card } from '../types';
 
@@ -85,7 +85,9 @@ export function BoardColumn({
         </View>
       ) : null}
 
-      {cards.map((card) => (
+      {/* В беклоге карточки «на реализацию» стоят выше идей (см. `sortBacklogCards`),
+          остальные колонки выводятся в порядке состояния доски. */}
+      {sortBacklogCards(cards, column.id).map((card) => (
         <BoardCard
           key={card.id}
           title={card.title}
@@ -96,6 +98,8 @@ export function BoardColumn({
           kind={card.kind}
           deadline={card.deadline}
           closedColumn={isClosedColumn(column.id)}
+          idea={card.idea}
+          backlogColumn={column.id === 'backlog'}
           action={cardAction(card)}
           onAction={() => onCardAction(card)}
           onPress={() => onOpenCard(card)}

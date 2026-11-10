@@ -44,6 +44,9 @@ final class UpdateTaskRequest extends FormRequest
             // самой даты (30 февраля и т. п.) проверяет value object.
             'deadline' => ['sometimes', 'nullable', 'string', 'regex:/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $this->deadlineRule()],
             'column' => ['sometimes', Rule::enum(CardColumn::class)],
+            // Степень проработки: true — идея, false — готова к реализации.
+            // Отсутствие ключа — «не менять»: при смене колонки флаг сохраняется.
+            'idea' => ['sometimes', 'boolean'],
             'direction_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'initiative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
@@ -92,6 +95,7 @@ final class UpdateTaskRequest extends FormRequest
             'description' => 'описание',
             'deadline' => 'дедлайн',
             'column' => 'колонка',
+            'idea' => 'степень проработки',
             'direction_id' => 'направление',
             'initiative_id' => 'инициатива',
             'project_id' => 'проект',
@@ -109,6 +113,7 @@ final class UpdateTaskRequest extends FormRequest
             'description.max' => 'Описание не может быть длиннее :max символов.',
             'deadline.regex' => 'Неверная дата дедлайна.',
             'column.enum' => 'Неизвестная колонка.',
+            'idea.boolean' => 'Степень проработки — «идея» или «на реализацию».',
         ];
     }
 
@@ -132,12 +137,13 @@ final class UpdateTaskRequest extends FormRequest
     }
 
     /**
-     * Переданные поля карточки: заголовок, кодовое название, описание, дедлайн, колонка.
+     * Переданные поля карточки: заголовок, кодовое название, описание, дедлайн,
+     * колонка, степень проработки.
      *
      * Ключи попадают в результат только если они пришли в запросе: отсутствие
      * ключа — «не менять», явный null — «очистить».
      *
-     * @return array{title?: string, slug?: string|null, description?: string|null, deadline?: string|null, column?: string}
+     * @return array{title?: string, slug?: string|null, description?: string|null, deadline?: string|null, column?: string, idea?: bool}
      */
     public function toFieldPayload(): array
     {
@@ -164,6 +170,10 @@ final class UpdateTaskRequest extends FormRequest
 
         if ($this->has('column')) {
             $fields['column'] = $this->string('column')->toString();
+        }
+
+        if ($this->has('idea')) {
+            $fields['idea'] = $this->boolean('idea');
         }
 
         return $fields;

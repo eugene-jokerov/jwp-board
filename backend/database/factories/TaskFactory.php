@@ -51,6 +51,7 @@ class TaskFactory extends Factory
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => CardColumn::Backlog->value,
+            'idea' => false,
             // Заголовок уникален в пределах вызова fake(): суффикс из
             // счётчика не зависит от генератора случайных чисел. `unique()`
             // здесь не годится — при исчерпании значений фейкер кидает
@@ -80,6 +81,16 @@ class TaskFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'column' => $column->value,
+        ]);
+    }
+
+    /**
+     * Карточка-идея: степень проработки «ещё идея», а не «на реализацию».
+     */
+    public function idea(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'idea' => true,
         ]);
     }
 

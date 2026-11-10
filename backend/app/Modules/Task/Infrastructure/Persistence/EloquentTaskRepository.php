@@ -37,6 +37,8 @@ final class EloquentTaskRepository implements TaskRepository
     {
         $query = $this->filteredQuery($userId, $filters);
 
+        $this->orderByBacklogStage($query);
+
         // `asc` по умолчанию — прежний порядок доски; `desc` нужен закрытым
         // колонкам, где сверху показываем самые свежие карточки.
         $query->orderBy('id', ($filters['order'] ?? 'asc') === 'desc' ? 'desc' : 'asc');
@@ -64,16 +66,20 @@ final class EloquentTaskRepository implements TaskRepository
     public function listInitialForUser(int $userId, array $filters, int $perLevelLimit): array
     {
         // Открытые колонки отдаются целиком — это основной рабочий экран доски.
+        // В беклоге сначала идут карточки, готовые к реализации, ниже — идеи:
+        // то же правило, что и в listForUser.
         $open = $this->filteredQuery($userId, $filters)
-            ->whereIn('column', $this->openColumnValues())
-            ->orderBy('id', 'asc')
-            ->get()
-            ->all();
+            ->whereIn('column', $this->openColumnValues());
+
+        $this->orderByBacklogStage($open);
+
+        $open = $open->orderBy('id', 'asc')->get()->all();
 
         $closed = $this->closedCardsOfInitialLoad($userId, $filters, $perLevelLimit);
 
-        // Порядок ответа детерминирован: открытые — в порядке создания,
-        // закрытые — свежие сверху, пары идут в порядке перечисления.
+        // Порядок ответа детерминирован: открытые — в порядке создания
+        // (в беклоге идеи идут после готовых карточек), закрытые — свежие
+        // сверху, пары идут в порядке перечисления.
         return [...$open, ...$closed];
     }
 
@@ -179,6 +185,7 @@ final class EloquentTaskRepository implements TaskRepository
             'project_id' => $attributes['project_id'],
             'type' => $attributes['type']->value,
             'column' => $attributes['column']->value,
+            'idea' => $attributes['idea'],
             'title' => $attributes['title'],
             'slug' => $attributes['slug'],
             'description' => $attributes['description'],
@@ -207,6 +214,29 @@ final class EloquentTaskRepository implements TaskRepository
             ->where('user_id', $userId)
             ->whereKey($directionId)
             ->exists();
+    }
+
+    /**
+     * Порядок беклога: сначала карточки «на реализацию», ниже — идеи.
+     *
+     * Флаг `idea` рядом с литералом `'backlog'` читается как сравнение колонки
+     * с значением — сначала разбираются карточки самого беклога (остальные
+     * колонки в этой группе идут после и внутри своей сохраняют порядок по id),
+     * затем по флагу: `false` (готово к реализации) выше `true` (идея).
+     *
+     * Условие пишется сырым SQL и двумя отдельными выражениями намеренно:
+     * `ORDER BY backlog = idea DESC` в MySQL разбирается как алиас `backlog`
+     * (синтаксическая ошибка), а `column = ? desc` без кавычек в SQLite
+     * превращается в идентификатор. Кавычки-литерал и друг от друга отдельные
+     * элементы `ORDER BY` одинаково понимают оба движка (проверено на SQLite
+     * и MySQL 8.4).
+     *
+     * @param  Builder<Task>  $query
+     */
+    private function orderByBacklogStage(Builder $query): void
+    {
+        $query->orderByRaw("`column` = '".CardColumn::Backlog->value."' desc");
+        $query->orderBy('idea', 'asc');
     }
 
     /**

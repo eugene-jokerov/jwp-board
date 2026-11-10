@@ -7,6 +7,10 @@
  *   У направления на стратегическом уровне родитель обязателен, а у тактического
  *   и операционного есть опция «без родителя»: проект без инициативы и задача без
  *   проекта допустимы (карточка получает служебный нейтральный цвет c0).
+ *
+ * Степень проработки («Идея» / «На реализацию») выбирается только для беклога:
+ * карточка, которую создают сразу в работе или в закрытой колонке, идеей не
+ * бывает, и сервер такой флаг обнуляет.
  */
 
 import { useState } from 'react';
@@ -18,7 +22,7 @@ import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
-import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL, SLUG_MAX_LENGTH } from '../types';
+import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL, SLUG_MAX_LENGTH, WORK_STAGE_LABEL } from '../types';
 
 export interface CardDraft {
   kind: CardKind;
@@ -50,6 +54,7 @@ interface CardFormModalProps {
    * Создать карточку; текст ошибки сервера или null при успехе.
    * `slug` — кодовое название или null (поле не заполнено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
+   * `idea` — степень проработки: true — идея; вне беклога всегда false.
    */
   onCreate: (
     draft: CardDraft,
@@ -58,6 +63,7 @@ interface CardFormModalProps {
     description: string | null,
     parentId: number | null,
     deadline: string | null,
+    idea: boolean,
   ) => Promise<string | null>;
   onClose: () => void;
 }
@@ -98,6 +104,43 @@ function parentErrorText(kind: CardKind): string {
   return kind === 'initiative' ? 'Выберите направление.' : 'Выберите родителя (только карточки в колонке «В работе»).';
 }
 
+/**
+ * Опция степени проработки: «Идея» или «На реализацию».
+ *
+ * Выбор показывается только для беклога: в остальных колонках карточка не
+ * бывает идеей, и сервер обнуляет флаг при создании.
+ */
+function StageOption({
+  label,
+  hint,
+  selected,
+  onPress,
+}: {
+  label: string;
+  hint: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={['gap-0.5 rounded-xl border px-3 py-2', selected ? 'border-app bg-surface' : 'border-border'].join(
+        ' ',
+      )}
+    >
+      <View className="flex-row items-center gap-2">
+        <Text className="flex-1 text-sm text-app">{label}</Text>
+
+        {selected ? <Text className="text-xs font-semibold text-app">✓</Text> : null}
+      </View>
+
+      <Text className="text-[11px] text-subtle">{hint}</Text>
+    </Pressable>
+  );
+}
+
 /** Пояснение под пустым списком родителей: у направлений оно не нужно. */
 function parentEmptyHint(kind: CardKind): string | null {
   return kind === 'initiative' ? null : 'Нет карточек в колонке «В работе» — выбрать нечего.';
@@ -111,6 +154,11 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const [description, setDescription] = useState('');
   /** Дедлайн необязателен: null — карточка без срока. */
   const [deadline, setDeadline] = useState<string | null>(null);
+  /**
+   * Степень проработки: true — идея. По умолчанию карточка создаётся готовой
+   * к реализации, поэтому форма открывается со значением false.
+   */
+  const [idea, setIdea] = useState(false);
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -124,6 +172,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setSlug('');
     setDescription('');
     setDeadline(null);
+    setIdea(false);
     setParentId(null);
     setTitleError(null);
     setParentError(null);
@@ -140,6 +189,11 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const parentRequired = parentOptions !== null && !draft.allowNoParent;
   const selectedParent = parentOptions?.find((card) => card.id === parentId) ?? null;
   const previewColor = draft.laneColor ?? selectedParent?.color ?? null;
+  /**
+   * Степень проработки выбирается только для беклога: остальные колонки
+   * создают карточку сразу в работе, и «идея» там не имеет смысла.
+   */
+  const stageSelectable = draft.columnId === 'backlog';
 
   // Безымянную карточку не создаём: кнопка ждёт название, а родителя —
   // только если выбор обязателен (направление для инициативы, инициатива для проекта).
@@ -171,6 +225,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
       descriptionValue === '' ? null : descriptionValue,
       draft.laneId ?? parentId,
       toDeadlineDate(deadline),
+      stageSelectable && idea,
     );
     setSaving(false);
 
@@ -260,6 +315,32 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 }}
                 placeholder="Без срока"
               />
+
+              {stageSelectable ? (
+                <View className="gap-1.5">
+                  <Text className="text-sm font-medium text-app">Степень проработки</Text>
+
+                  <StageOption
+                    label={WORK_STAGE_LABEL.idea}
+                    hint="Карточка ещё не готова к работе: её уточняют, прежде чем брать в работу."
+                    selected={idea}
+                    onPress={() => {
+                      setIdea(true);
+                      setFormError(null);
+                    }}
+                  />
+
+                  <StageOption
+                    label={WORK_STAGE_LABEL.ready}
+                    hint="Карточка продумана: её можно брать в работу."
+                    selected={!idea}
+                    onPress={() => {
+                      setIdea(false);
+                      setFormError(null);
+                    }}
+                  />
+                </View>
+              ) : null}
 
               {parentOptions !== null ? (
                 <View className="gap-1.5">

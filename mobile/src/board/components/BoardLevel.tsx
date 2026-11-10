@@ -45,6 +45,7 @@ import {
   closedPageOf,
   columnCount,
   isClosedColumn,
+  sortBacklogCards,
   type CardAction,
   type CardBreadcrumb,
   type ClosedPages,
@@ -855,6 +856,8 @@ export function BoardLevel({
                               kind={card.kind}
                               deadline={card.deadline}
                               closedColumn={isClosedColumn(columnId)}
+                              idea={card.idea}
+                              backlogColumn={columnId === 'backlog'}
                               action={cardAction(card)}
                               onAction={() => onCardAction(card)}
                               onPress={() => onOpenCard(card)}
@@ -904,7 +907,12 @@ export function BoardLevel({
                           );
                         }
 
-                        const laneCards = lane.cards.filter((card) => card.column === column.id);
+                        // В беклоге сверху идут карточки «на реализацию», ниже — идеи
+                        // (см. `sortBacklogCards`); остальные колонки — как есть.
+                        const laneCards = sortBacklogCards(
+                          lane.cards.filter((card) => card.column === column.id),
+                          column.id,
+                        );
 
                         // Фон и рамку даёт подложка ряда, поэтому ячейка прозрачна:
                         // пустая группа просто растягивается по высоте ряда.
@@ -925,6 +933,8 @@ export function BoardLevel({
                                 kind={card.kind}
                                 deadline={card.deadline}
                                 closedColumn={isClosedColumn(column.id)}
+                                idea={card.idea}
+                                backlogColumn={column.id === 'backlog'}
                                 action={cardAction(card)}
                                 onAction={() => onCardAction(card)}
                                 onPress={() => onOpenCard(card)}

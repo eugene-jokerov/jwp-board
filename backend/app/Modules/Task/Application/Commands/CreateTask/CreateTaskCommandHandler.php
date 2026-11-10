@@ -34,6 +34,7 @@ final readonly class CreateTaskCommandHandler
             $command->projectId,
             $command->deadline,
             $command->slug,
+            $command->idea,
         );
 
         return TaskResult::fromTask(

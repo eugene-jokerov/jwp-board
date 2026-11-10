@@ -42,6 +42,7 @@ final readonly class TaskFactory
         ?int $projectId,
         ?TaskDeadline $deadline,
         ?TaskSlug $slug = null,
+        bool $idea = false,
     ): Task {
         $place = $this->placement->resolve($type, $userId, $directionId, $initiativeId, $projectId);
 
@@ -52,6 +53,9 @@ final readonly class TaskFactory
             'deadline' => $deadline?->value(),
             'type' => $type,
             'column' => $column,
+            // Степень проработки — свойство беклога. Карточка, созданная сразу
+            // в работе или закрытой колонке, идеей не бывает.
+            'idea' => $column->acceptsIdeas() && $idea,
             'direction_id' => $place['direction_id'],
             'initiative_id' => $place['initiative_id'],
             'project_id' => $place['project_id'],

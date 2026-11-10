@@ -7,6 +7,7 @@ use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\User\Domain\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -28,6 +29,11 @@ use Illuminate\Support\Facades\Hash;
  * вывести карточку из работы, пока у неё есть дети в работе, поэтому доска из
  * сида не должна содержать таких состояний. Отменённая инициатива может быть
  * без детей вовсе — «отменили, не начиная».
+ *
+ * Кодовое название (slug) получают 2/3 карточек каждого уровня, а в беклоге
+ * каждая третья карточка помечена как идея: так на демо-доске видны обе степени
+ * проработки и оба состояния метки. Заголовки карточек одного свимлайна похожи,
+ * поэтому соседние слаги различаются номером: «PROBEZHAT», «PROBEZHAT-2».
  *
  * Иерархия заполняется вручную — так же, как это делает доменный сервис
  * TaskPlacement: direction_id проекта и задачи наследуется от родителя.
@@ -71,6 +77,40 @@ class UserBoardSeeder extends Seeder
         'in_progress' => 4,
         'complete' => 40,
         'canceled' => 100,
+    ];
+
+    /**
+     * Доля карточек уровня, которым достаётся кодовое название: 2/3.
+     *
+     * Хранится дробью, а не процентом: так нечётное число карточек делится
+     * без потери точности (intdiv($total * 2, 3)).
+     */
+    private const int SLUG_SHARE_NUMERATOR = 2;
+
+    private const int SLUG_SHARE_DENOMINATOR = 3;
+
+    /**
+     * Поля карточки в порядке вставки.
+     *
+     * Батч-вставка составляет список колонок по первой строке пачки, поэтому
+     * у всех строк уровня набор и порядок ключей должны совпадать: см. normalize().
+     *
+     * @var list<string>
+     */
+    private const array CARD_FIELDS = [
+        'id',
+        'user_id',
+        'direction_id',
+        'initiative_id',
+        'project_id',
+        'type',
+        'column',
+        'idea',
+        'title',
+        'slug',
+        'description',
+        'created_at',
+        'updated_at',
     ];
 
     /**
@@ -369,9 +409,90 @@ class UserBoardSeeder extends Seeder
 
         $this->seedCardsWithoutDirection();
 
+        // Метки и степень проработки выдаёт один проход по готовым строкам:
+        // доля 2/3 считается от полного числа карточек уровня. Сначала флаг,
+        // потом метка — второй проход дописывает slug в уже полные строки.
+        $this->assignIdeaFlags();
+        $this->assignSlugs();
+
         $this->insertRows(Task::class, $this->initiativeRows);
         $this->insertRows(Task::class, $this->projectRows);
         $this->insertRows(Task::class, $this->taskRows);
+    }
+
+    /**
+     * Кодовое название из полного заголовка карточки.
+     *
+     * Метка короткая (≤ TaskSlug::MAX_LENGTH) и из латиницы: так она читается
+     * в плитке так же, как её вводят руками. Из заголовка берётся максимум два
+     * значимых слова: больше в лимит не влезает, а у задачи первое слово — это
+     * инициатива, и все её задачи получили бы один и тот же «инициативный» код.
+     * Хвост обрезается по границе слова: последнее слово, не влезшее целиком,
+     * пропускается, первое — усекается (пустая метка хуже короткой).
+     */
+    private function slugOf(string $title): string
+    {
+        return self::transliterate($title);
+    }
+
+    /**
+     * Латинская метка из русского названия: до двух значимых слов.
+     *
+     * Служебные слова («и», «на», «в») пропускаются: «Настроить сервер и сеть»
+     * превращается в «NASTROIT-SERVER», а не «NASTROIT-SERVER-I». Кириллица
+     * транслитерируется по таблице, остальные буквы (цифры, латиница) остаются.
+     */
+    private static function transliterate(string $title): string
+    {
+        $map = [
+            'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'g', 'д' => 'd', 'е' => 'e',
+            'ё' => 'e', 'ж' => 'zh', 'з' => 'z', 'и' => 'i', 'й' => 'y', 'к' => 'k',
+            'л' => 'l', 'м' => 'm', 'н' => 'n', 'о' => 'o', 'п' => 'p', 'р' => 'r',
+            'с' => 's', 'т' => 't', 'у' => 'u', 'ф' => 'f', 'х' => 'kh', 'ц' => 'ts',
+            'ч' => 'ch', 'ш' => 'sh', 'щ' => 'sch', 'ъ' => '', 'ы' => 'y', 'ь' => '',
+            'э' => 'e', 'ю' => 'yu', 'я' => 'ya',
+        ];
+
+        $skip = ['i', 'v', 'na', 's', 'po', 'k', 'o', 'za', 'iz', 'do', 'ili'];
+        $words = [];
+        $length = 0;
+
+        // Делим по всему, что не буква и не цифра: знаки препинания, двоеточия
+        // и точки в названиях — это тоже разделители слов.
+        foreach (preg_split('/[^\p{L}\p{N}]+/u', $title) ?: [] as $word) {
+            // str_replace, а не strtr: посимвольная замена ломает многобуквенные
+            // соответствия («щ» превращалось бы в «sh» — подстрока «ш»).
+            $latin = strtoupper(str_replace(array_keys($map), array_values($map), mb_strtolower($word)));
+            $latin = preg_replace('/[^A-Z0-9]/', '', $latin) ?? '';
+
+            if ($latin === '' || in_array(mb_strtolower($latin), $skip, true)) {
+                continue;
+            }
+
+            $wordLength = mb_strlen($latin) + ($words === [] ? 0 : 1);
+
+            // Больше двух слов не берём: метка должна оставаться «кодом».
+            if (count($words) === 2) {
+                break;
+            }
+
+            if ($length + $wordLength <= TaskSlug::MAX_LENGTH) {
+                $words[] = $latin;
+                $length += $wordLength;
+
+                continue;
+            }
+
+            // Первое слово не влезло целиком — берём его начало: пустая метка
+            // была бы хуже усечённой. Дальше слова уже не учитываются.
+            if ($words === []) {
+                $words[] = mb_substr($latin, 0, TaskSlug::MAX_LENGTH);
+            }
+
+            break;
+        }
+
+        return $words === [] ? 'CARD' : implode('-', $words);
     }
 
     /**
@@ -421,6 +542,140 @@ class UserBoardSeeder extends Seeder
                 $this->seedInitiative($direction, $column, $titles[$i % count($titles)], $createdAt);
             }
         }
+    }
+
+    /**
+     * Кодовые названия двум третям карточек каждого уровня.
+     *
+     * Метка необязательна, и у живого пользователя её нет у всех подряд: на доске
+     * должны быть видны оба случая. Заголовки карточек одного свимлайна похожи,
+     * поэтому транслит у них совпадает: первая карточка свимлайна метку получает,
+     * а соседи — нет, иначе весь свимлайн показал бы одинаковые надписи.
+     *
+     * Такую «свободную» метку получает не больше одной карточки на свимлайн, и на
+     * нижних уровнях этого мало: задач у инициативы десятки, а метка у них одна.
+     * Поэтому вторым проходом остаток доли добирается метками с номером
+     * («KUPIT-DOM-2»): требование «2/3 карточек с меткой» важнее отсутствия
+     * повторов, а рядом одинаковые надписи всё равно не встанут.
+     */
+    private function assignSlugs(): void
+    {
+        foreach ([&$this->initiativeRows, &$this->projectRows, &$this->taskRows] as &$rows) {
+            $total = count($rows);
+            $target = intdiv($total * self::SLUG_SHARE_NUMERATOR, self::SLUG_SHARE_DENOMINATOR);
+            $assigned = 0;
+            /** @var array<string, true> $taken метки, уже занятые карточками уровня */
+            $taken = [];
+            /** @var array<int, true> $done позиции карточек, получивших метку без номера */
+            $done = [];
+
+            // Первый проход: карточки получают чистые метки без номеров.
+            for ($i = 0; $i < $total && $assigned < $target; $i++) {
+                $slug = $this->slugOf((string) $rows[$i]['title']);
+
+                if (isset($taken[$slug])) {
+                    continue;
+                }
+
+                $taken[$slug] = true;
+                $done[$i] = true;
+                $rows[$i] = self::normalize($rows[$i], ['slug' => $slug, 'idea' => $rows[$i]['idea']]);
+                $assigned++;
+            }
+
+            // Второй проход: остальные карточки получают метку с номером, пока не
+            // набрана доля; кто в неё не попал — остаётся без метки. Уже готовые
+            // карточки ищем по позициям: после нормализации у строк с меткой и без
+            // неё одинаковый набор ключей, и значение slug тут не различитель.
+            $numbered = 0;
+
+            for ($i = 0; $i < $total; $i++) {
+                if (isset($done[$i])) {
+                    continue;
+                }
+
+                $row = $rows[$i];
+
+                if ($assigned + $numbered >= $target) {
+                    $rows[$i] = self::normalize($row, ['slug' => null, 'idea' => $row['idea']]);
+
+                    continue;
+                }
+
+                // База обрезается под суффикс текущей длины: номер двузначный —
+                // значит под «-12» нужно три символа, а не два.
+                $base = $this->slugOf((string) $row['title']);
+                $number = 2;
+                $suffix = '-'.$number;
+                $base = mb_substr($base, 0, TaskSlug::MAX_LENGTH - mb_strlen($suffix));
+                $slug = $base.$suffix;
+
+                while (isset($taken[$slug])) {
+                    $number++;
+                    $suffix = '-'.$number;
+                    $base = mb_substr($base, 0, TaskSlug::MAX_LENGTH - mb_strlen($suffix));
+                    $slug = $base.$suffix;
+                }
+
+                $taken[$slug] = true;
+                $rows[$i] = self::normalize($row, ['slug' => $slug, 'idea' => $row['idea']]);
+                $numbered++;
+            }
+        }
+
+        unset($rows);
+    }
+
+    /**
+     * Степень проработки карточек беклога: каждая третья — ещё идея.
+     *
+     * Проставляется по готовым строкам, а не в планах уровней: колонка есть
+     * у карточки любого уровня, а идея — свойство именно беклога.
+     */
+    private function assignIdeaFlags(): void
+    {
+        foreach ([&$this->initiativeRows, &$this->projectRows, &$this->taskRows] as &$rows) {
+            $position = 0;
+
+            foreach ($rows as $index => $row) {
+                // Ключи строки пересобираются в том же порядке, что и в остальных
+                // строках: батч-вставка берёт список колонок по первой строке,
+                // поэтому вставка нового ключа «на месте» разъехалась бы с ним.
+                $idea = false;
+
+                if ($row['column'] === CardColumn::Backlog->value) {
+                    $idea = ($position % 3) === 0;
+                    $position++;
+                }
+
+                $rows[$index] = self::normalize($row, ['idea' => $idea]);
+            }
+        }
+
+        unset($rows);
+    }
+
+    /**
+     * Разложить поля карточки в одном порядке для всех строк уровня.
+     *
+     * Батч-вставка Eloquent/Query Builder составляет список колонок по первой
+     * строке пачки, поэтому набор и порядок ключей у строк должен совпадать.
+     * Поля, которых в строке нет, добавляются как null.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, mixed>  $extra  переопределяемые поля (slug, idea)
+     * @return array<string, mixed>
+     */
+    private static function normalize(array $row, array $extra = []): array
+    {
+        $fields = [...self::CARD_FIELDS, ...array_keys($extra)];
+        $normalized = [];
+
+        foreach ($fields as $field) {
+            $normalized[$field] = $extra[$field] ?? $row[$field] ?? null;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -577,6 +832,7 @@ class UserBoardSeeder extends Seeder
             CardColumn::Backlog => [
                 ['Сформулировать задачу и критерии готовности', CardColumn::Backlog],
                 ['Оценить трудозатраты', CardColumn::Backlog],
+                ['Обсудить идею с участниками', CardColumn::Backlog],
             ],
             // Готово: задачи закрыты, пара отменена по ходу дела.
             CardColumn::Complete => [

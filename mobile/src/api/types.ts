@@ -95,6 +95,12 @@ export interface TaskSummary {
   deadline: string | null;
   /** Колонки, в которые карточку можно перевести сейчас. */
   allowed_transitions: CardColumn[];
+  /**
+   * Степень проработки: true — карточка ещё идея, false — готова к реализации.
+   * Поле приходит всегда; смысл имеет в беклоге (там доска ставит идеи ниже
+   * и рисует бейдж), а при смене колонки значение не сбрасывается.
+   */
+  idea: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -118,6 +124,11 @@ export interface TaskCreateInput {
   type: CardType;
   column: CardColumn;
   title: string;
+  /**
+   * Степень проработки: true — идея, false — готова к реализации. Без поля
+   * карточка создаётся готовой к реализации; вне беклога сервер флаг обнуляет.
+   */
+  idea?: boolean;
   /** Кодовое название (slug): необязательная метка до 16 символов; null — нет метки. */
   slug?: string | null;
   description?: string | null;

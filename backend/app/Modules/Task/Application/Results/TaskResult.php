@@ -13,6 +13,8 @@ use App\Modules\Task\Domain\ValueObjects\CardType;
  * Снимок вместо Eloquent-модели: HTTP-адаптер не получает доступ к запросам
  * и сохранению. allowedTransitions — колонки, в которые карточку можно
  * перевести сейчас; их считает доменная политика, а не клиент.
+ * idea — степень проработки: true — карточка ещё идея, false — готова
+ * к реализации. Значение имеет смысл в беклоге, но отдаётся всегда.
  */
 final readonly class TaskResult
 {
@@ -23,6 +25,7 @@ final readonly class TaskResult
         public int $id,
         public CardType $type,
         public CardColumn $column,
+        public bool $idea,
         public string $title,
         public ?string $slug,
         public ?string $description,
@@ -45,6 +48,7 @@ final readonly class TaskResult
             (int) $task->id,
             $task->type,
             $task->column,
+            (bool) $task->idea,
             $task->title,
             $task->slug,
             $task->description,

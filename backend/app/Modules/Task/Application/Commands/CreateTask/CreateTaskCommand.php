@@ -15,6 +15,8 @@ use App\Modules\Task\Domain\ValueObjects\TaskTitle;
  * Тип и колонка обязательны: тип задаёт уровень иерархии (и значит, какие
  * ссылки допустимы), колонка — место на доске. Дедлайн и кодовое название
  * (slug) необязательны: карточка может жить без срока и без метки.
+ * `idea` — степень проработки: идея или готова к реализации. Флаг имеет смысл
+ * только в беклоге, поэтому вне его создание сбрасывает значение в `false`.
  */
 final readonly class CreateTaskCommand
 {
@@ -29,6 +31,7 @@ final readonly class CreateTaskCommand
         public ?int $projectId = null,
         public ?TaskDeadline $deadline = null,
         public ?TaskSlug $slug = null,
+        public bool $idea = false,
     ) {}
 
     /**
@@ -51,6 +54,7 @@ final readonly class CreateTaskCommand
             array_key_exists('slug', $payload)
                 ? TaskSlug::fromNullableString($payload['slug'] === null ? null : (string) $payload['slug'])
                 : null,
+            ($payload['idea'] ?? false) === true,
         );
     }
 }

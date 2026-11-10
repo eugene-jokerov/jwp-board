@@ -6,6 +6,11 @@
  * из ответа сервера: если у карточки есть дети в работе, смена статуса
  * запрещена, статусы в списке заблокированы и причина показана под ними.
  *
+ * Степень проработки («Идея» / «На реализацию») правится только у карточки
+ * из беклога: у карточки в работе или в закрытой колонке выбора нет, а флаг
+ * в данных сохраняется — он снова станет актуальным, если карточку вернуть
+ * в беклог. Поэтому `idea` отправляется, только когда его выбрали в форме.
+ *
  * Описания в списке карточек нет, поэтому при каждом открытии модалка
  * запрашивает карточку отдельно (`GET /tasks/{task}`) и показывает общий
  * лоадер на всю форму, пока данные не придут: поля не должны появляться
@@ -32,7 +37,15 @@ import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
 import { toCardDescription, toCardSlug } from '../mappers';
-import { COLUMNS, DESCRIPTION_MAX_LENGTH, KIND_LABEL, SLUG_MAX_LENGTH, type Card, type ColumnId } from '../types';
+import {
+  COLUMNS,
+  DESCRIPTION_MAX_LENGTH,
+  KIND_LABEL,
+  SLUG_MAX_LENGTH,
+  WORK_STAGE_LABEL,
+  type Card,
+  type ColumnId,
+} from '../types';
 
 interface CardEditModalProps {
   /** Редактируемая карточка; null — модалка закрыта. */
@@ -45,6 +58,7 @@ interface CardEditModalProps {
    * `slug` — кодовое название: null очищает метку, undefined — не отправлять
    * (ещё не загружено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null; undefined — не отправлять.
+   * `idea` — степень проработки: undefined — не отправлять (выбор не показывался).
    */
   onSave: (
     card: Card,
@@ -53,6 +67,7 @@ interface CardEditModalProps {
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
+    idea: boolean | undefined,
   ) => Promise<string | null>;
   /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
   onDelete: (card: Card) => Promise<string | null>;
@@ -92,6 +107,7 @@ interface CardEditFormProps {
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
+    idea: boolean | undefined,
   ) => Promise<string | null>;
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
@@ -141,6 +157,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
    */
   const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
   const [columnId, setColumnId] = useState<ColumnId>(card.column);
+  /**
+   * Степень проработки из полного представления; undefined — ещё не загружена.
+   * Как и описание: незагруженное значение не отправляется, иначе PATCH
+   * перезаписал бы флаг, которого мы ещё не видели.
+   */
+  const [idea, setIdea] = useState<boolean | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | null>(null);
   // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
   const [formError, setFormError] = useState<string | null>(null);
@@ -168,6 +190,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
       setDescription(toCardDescription(detail));
       setSlug(toCardSlug(detail));
       setDeadline(toDeadlineDate(detail.deadline));
+      setIdea(detail.idea === true);
       setTitle(detail.title);
       setLoadError(null);
     } catch {
@@ -210,8 +233,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     // стёртая метка уходит пустой строкой и сервер записывает null.
     const nextSlug = slug === undefined ? undefined : (slug ?? '').trim();
 
+    // Степень проработки отправляем, только если выбор был доступен (карточка
+    // из беклога) и значение уже загружено: иначе PATCH стёр бы флаг.
+    const nextIdea = ideaSelectable ? idea : undefined;
+
     setSaving(true);
-    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline);
+    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline, nextIdea);
     setSaving(false);
 
     if (error !== null) {
@@ -231,6 +258,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   };
 
   const titleEmpty = title.trim() === '';
+  /**
+   * Выбор степени проработки доступен только у карточки из беклога — по её
+   * текущей колонке, а не по выбранной в форме: перевели на «В работе» и выбор
+   * пропадает, а сохранённое значение флага остаётся в данных.
+   */
+  const ideaSelectable = card.column === 'backlog';
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -343,6 +376,34 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     }}
                     placeholder="Без срока"
                   />
+
+                  {ideaSelectable ? (
+                    <View className="gap-1.5">
+                      <Text className="text-sm font-medium text-app">Степень проработки</Text>
+
+                      <View className="gap-1.5">
+                        <StatusOption
+                          label={WORK_STAGE_LABEL.idea}
+                          selected={idea === true}
+                          locked={saving}
+                          onPress={() => {
+                            setIdea(true);
+                            setFormError(null);
+                          }}
+                        />
+
+                        <StatusOption
+                          label={WORK_STAGE_LABEL.ready}
+                          selected={idea === false}
+                          locked={saving}
+                          onPress={() => {
+                            setIdea(false);
+                            setFormError(null);
+                          }}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
 
                   <View className="gap-1.5">
                     <Text className="text-sm font-medium text-app">Статус</Text>

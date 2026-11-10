@@ -113,6 +113,10 @@ interface TaskRepository
     /**
      * Создать карточку с уже проверенной иерархией.
      *
+     * Помимо ссылок иерархии `$attributes` содержит `idea` — степень проработки
+     * карточки (см. CardColumn::acceptsIdeas): значение уже нормализовано
+     * прикладным сервисом.
+     *
      * @param  array<string, mixed>  $attributes
      */
     public function create(int $userId, array $attributes): Task;

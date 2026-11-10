@@ -63,7 +63,8 @@ export function errorMessage(error: unknown, fallback: string): string {
 interface CardActions {
   /**
    * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null,
-   * `slug` — кодовое название или null (метки нет).
+   * `slug` — кодовое название или null (метки нет),
+   * `idea` — степень проработки: true — идея (только для беклога).
    */
   createCard: (
     draft: CardDraft,
@@ -72,12 +73,14 @@ interface CardActions {
     description: string | null,
     parentId: number | null,
     deadline: string | null,
+    idea: boolean,
   ) => Promise<string | null>;
   /**
    * Сохранить карточку; `description` — null, если описание стёрли, а незагруженное
    * описание не отправляется. `deadline` — дата в формате API, null или
    * undefined (ещё не загружен — не отправлять). `slug` — так же: null очищает
-   * метку, undefined — «ещё не загружено, не трогать».
+   * метку, undefined — «ещё не загружено, не трогать». `idea` — степень
+   * проработки: undefined — «выбор не показывался, не трогать».
    */
   saveCard: (
     card: Card,
@@ -86,6 +89,7 @@ interface CardActions {
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
+    idea: boolean | undefined,
   ) => Promise<string | null>;
   moveCard: (card: Card, column: ColumnId) => Promise<string | null>;
   removeCard: (card: Card) => Promise<string | null>;
@@ -195,11 +199,14 @@ export function useBoard(): BoardState {
   }, []);
 
   const createCard = useCallback<CardActions['createCard']>(
-    async (draft, title, slug, description, parentId, deadline) => {
+    async (draft, title, slug, description, parentId, deadline, idea) => {
       const input: TaskCreateInput = {
         type: draft.kind,
         column: draft.columnId,
         title,
+        // Степень проработки отправляем всегда явно: сервер без поля считает
+        // карточку готовой к реализации, а вне беклога флаг всё равно обнуляет.
+        idea,
         // Пустую метку не отправляем: сервер и так создаёт карточку без slug.
         ...(slug === null ? {} : { slug }),
         // Пустое описание не отправляем: сервер сам нормализует пустую строку
@@ -228,8 +235,14 @@ export function useBoard(): BoardState {
   );
 
   const saveCard = useCallback<CardActions['saveCard']>(
-    async (card, title, slug, description, column, deadline) => {
+    async (card, title, slug, description, column, deadline, idea) => {
       const input: TaskUpdateInput = { title };
+
+      // Степень проработки: undefined — выбор не показывался (карточка не из
+      // беклога), ключ не отправляем, чтобы сервер не тронул сохранённый флаг.
+      if (idea !== undefined) {
+        input.idea = idea;
+      }
 
       // Кодовое название — как и дедлайн: undefined значит «ещё не загружено»,
       // пустая строка (метку стёрли) отправляется явно — сервер запишет null.

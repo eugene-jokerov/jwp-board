@@ -59,6 +59,13 @@ final class UpdateTaskController extends Controller
             $changes['column'] = CardColumn::from($fields['column']);
         }
 
+        // Степень проработки меняется отдельным полем; правила «только беклог»
+        // нет — флаг живёт в данных при любой колонке, интерфейс лишь не
+        // показывает выбор вне беклога.
+        if (array_key_exists('idea', $fields)) {
+            $changes['idea'] = $fields['idea'] === true;
+        }
+
         /** @var TaskResult $result */
         $result = $this->bus->dispatch(new UpdateTaskCommand(
             (int) $user->getKey(),

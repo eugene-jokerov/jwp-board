@@ -26,6 +26,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * поэтому поле есть и в списке (оно короткое, в отличие от описания).
  * slug — кодовое название или null; поле короткое (≤16 символов), поэтому есть
  * и в списке: форма редактирования сверяет с ним начальное значение.
+ * idea — степень проработки: true — ещё идея, false — готова к реализации.
+ * Смысл имеет в беклоге (там доска ставит идеи ниже и рисует бейдж), но
+ * отдаётся всегда: значение флага при смене колонки не сбрасывается.
  *
  * @property-read TaskResult $resource
  */
@@ -40,6 +43,7 @@ final class TaskSummaryResource extends JsonResource
             'id' => $this->resource->id,
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
+            'idea' => $this->resource->idea,
             'title' => $this->resource->title,
             'slug' => $this->resource->slug,
             'deadline' => $this->resource->deadline,

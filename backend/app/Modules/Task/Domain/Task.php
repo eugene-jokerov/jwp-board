@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $project_id
  * @property CardType $type
  * @property CardColumn $column
+ * @property bool $idea
  * @property string $title
  * @property string|null $slug
  * @property string|null $description
@@ -52,6 +53,7 @@ class Task extends Model
         'project_id',
         'type',
         'column',
+        'idea',
         'title',
         'slug',
         'description',
@@ -62,8 +64,10 @@ class Task extends Model
      * Приведение типов атрибутов.
      *
      * `type` и `column` — php-enum'ы: из модели всегда приходит доменный тип,
-     * а не «сырая» строка из базы. `deadline` — дата (Carbon), чтобы ответ API
-     * отдавал ISO-строку, а не формат базы.
+     * а не «сырая» строка из базы. `idea` — boolean: в MySQL флаг приходит
+     * числом 0/1, а в ответе API и на клиенте это именно `true`/`false`.
+     * `deadline` — дата (Carbon), чтобы ответ API отдавал ISO-строку,
+     * а не формат базы.
      *
      * @return array<string, string>
      */
@@ -72,6 +76,7 @@ class Task extends Model
         return [
             'type' => CardType::class,
             'column' => CardColumn::class,
+            'idea' => 'boolean',
             'deadline' => 'datetime',
         ];
     }

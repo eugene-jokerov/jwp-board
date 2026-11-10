@@ -213,6 +213,7 @@ final class InMemoryTaskRepository implements TaskRepository
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => 'backlog',
+            'idea' => false,
             'title' => 'Карточка '.$id,
             'slug' => null,
             'description' => null,

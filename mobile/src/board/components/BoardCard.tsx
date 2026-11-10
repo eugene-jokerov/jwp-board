@@ -53,6 +53,7 @@ import { formatDeadlineDate, isDeadlineOverdue } from '../deadline';
 import { directionColorHex } from '../directionColors';
 import type { CardAction, CardBreadcrumb } from '../derive';
 import type { CardKind } from '../types';
+import { WORK_STAGE_LABEL } from '../types';
 
 /**
  * Разделитель сегментов крошек: «›» — компактный шеврон, привычный для пути
@@ -64,6 +65,23 @@ const BREADCRUMB_DIVIDER = '›';
 /** Иконка действия по целевой колонке: «В работе» — play, «Готово» — галочка. */
 function ActionIcon({ target }: { target: CardAction['target'] }) {
   return target === 'complete' ? <CheckIcon /> : <PlayIcon />;
+}
+
+/**
+ * Бейдж степени проработки: «Идея» или «На реализацию».
+ *
+ * Выводится только в беклоге. Идея помечена приглушённой плашкой (карточка
+ * ещё не готова к работе), готовность — плашкой цвета акцента, чтобы группа
+ * «на реализацию» читалась выше списка идей с первого взгляда.
+ */
+function StageBadge({ idea }: { idea: boolean }) {
+  return (
+    <View className={['rounded-full px-1.5 py-0.5', idea ? 'bg-lane' : 'bg-app/10'].join(' ')}>
+      <Text className={['text-[10px] font-semibold', idea ? 'text-subtle' : 'text-app'].join(' ')}>
+        {idea ? WORK_STAGE_LABEL.idea : WORK_STAGE_LABEL.ready}
+      </Text>
+    </View>
+  );
 }
 
 /**
@@ -114,6 +132,15 @@ interface BoardCardProps {
    * и просрочку не подсвечиваем — см. комментарий в шапке компонента.
    */
   closedColumn: boolean;
+  /**
+   * Степень проработки карточки: true — идея, false — готова к реализации.
+   *
+   * Бейдж показывается только в беклоге: степень проработки — его свойство.
+   * В остальных колонках значение не выводится, хотя в данных оно сохраняется.
+   */
+  idea: boolean;
+  /** Карточка лежит в беклоге — колонке, где выводится степень проработки. */
+  backlogColumn: boolean;
   /** Действие над колонками; null — в этой колонке действий нет. */
   action: CardAction | null;
   /** Выполнить действие (перевод в следующую колонку). */
@@ -131,6 +158,8 @@ export function BoardCard({
   kind,
   deadline,
   closedColumn,
+  idea,
+  backlogColumn,
   action,
   onAction,
   onPress,
@@ -218,6 +247,10 @@ export function BoardCard({
             ))}
           </Text>
         )}
+
+        {/* Степень проработки видна только в беклоге: в работе и закрытых
+            колонках карточка уже не «идея или нет», поэтому бейджа там нет. */}
+        {backlogColumn ? <StageBadge idea={idea} /> : null}
 
         <View className="flex-row items-center justify-between gap-2">
           {/* Левая часть нижней строки — только срок карточки: подпись «без

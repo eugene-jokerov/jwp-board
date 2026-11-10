@@ -45,6 +45,7 @@ export function toCard(task: TaskSummary): Card {
     initiativeId: task.initiative_id,
     projectId: task.project_id,
     deadline: task.deadline,
+    idea: task.idea === true,
     allowedTransitions: task.allowed_transitions.map(toColumnId),
   };
 }

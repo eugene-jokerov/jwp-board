@@ -35,6 +35,9 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => ['required', Rule::enum(CardType::class)],
             'column' => ['required', Rule::enum(CardColumn::class)],
+            // Степень проработки: true — идея, false — готова к реализации.
+            // Флаг необязателен: без него карточка создаётся готовой к работе.
+            'idea' => ['sometimes', 'boolean'],
             'title' => ['required', 'string', 'max:'.TaskTitle::MAX_LENGTH],
             // Кодовое название необязательно и без ограничений по символам —
             // проверяется только длина. Правило `max` у строки считает символы
@@ -92,6 +95,7 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => 'тип',
             'column' => 'колонка',
+            'idea' => 'степень проработки',
             'title' => 'название',
             'slug' => 'кодовое название',
             'description' => 'описание',
@@ -112,6 +116,7 @@ final class StoreTaskRequest extends FormRequest
             'type.enum' => 'Неизвестный тип карточки.',
             'column.required' => 'Укажите колонку.',
             'column.enum' => 'Неизвестная колонка.',
+            'idea.boolean' => 'Степень проработки — «идея» или «на реализацию».',
             'title.required' => 'Укажите название карточки.',
             'title.max' => 'Название не может быть длиннее :max символов.',
             'slug.max' => 'Кодовое название не может быть длиннее :max символов.',
@@ -128,6 +133,10 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => $this->string('type')->toString(),
             'column' => $this->string('column')->toString(),
+            // Степень проработки передаётся всегда явным boolean: без флага
+            // карточка считается готовой к реализации. `boolean`-правило уже
+            // проверило тип, поэтому `null` здесь означать нечего.
+            'idea' => $this->boolean('idea'),
             'title' => $this->string('title')->toString(),
             // Кодовое название передаётся только если пришло в запросе: пустая
             // строка нормализуется в null уже в value object.
