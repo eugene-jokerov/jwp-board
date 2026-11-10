@@ -285,10 +285,18 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     <Modal visible transparent animationType="fade" onRequestClose={close}>
       {/* Форма длинная и на низком экране не помещается целиком, поэтому карточка
           ограничена высотой экрана: шапка и кнопки закреплены, прокручивается
-          только тело. KeyboardAvoidingView поднимает форму над клавиатурой на iOS. */}
+          только тело. KeyboardAvoidingView поднимает форму над клавиатурой на iOS.
+          Скругление задаём через `radius`, а не `overflow-hidden`: на web
+          вертикальный ScrollView и так обрезает по горизонтали (overflow-x:
+          hidden в react-native-web), и фокусная обводка полей, которая рисуется
+          чуть шире рамки, пропадала бы по краям. Поэтому же у прокручиваемого
+          тела есть горизонтальные отступы: обводке нужно место внутри клипа. */}
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
-          <View className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-card p-5">
+          <View
+            className="max-h-[85vh] w-full max-w-md rounded-2xl bg-card p-4"
+            style={{ borderRadius: 16, overflow: 'visible' }}
+          >
             <View className="gap-1 pb-4">
               <Text className="text-lg font-bold text-app">Новый {KIND_LABEL[draft.kind].toLowerCase()}</Text>
               <Text className="text-xs text-muted">
@@ -299,7 +307,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
             <ScrollView
               className="min-h-0 flex-1"
-              contentContainerClassName="gap-4 pb-4"
+              contentContainerClassName="gap-4 px-0.5 pb-4"
               keyboardShouldPersistTaps="handled"
               automaticallyAdjustKeyboardInsets
             >

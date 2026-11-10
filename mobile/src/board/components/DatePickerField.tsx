@@ -203,10 +203,13 @@ export function DatePickerField({ label, value, onChange, error, placeholder }: 
             прокручивается, а кнопки «Очистить/Отмена/Готово» остаются видны. */}
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
-            <View className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-card p-5">
+            <View
+              className="max-h-[85vh] w-full max-w-md rounded-2xl bg-card p-4"
+              style={{ borderRadius: 16, overflow: 'visible' }}
+            >
               <Text className="pb-3 text-lg font-bold text-app">Дедлайн</Text>
 
-              <ScrollView className="min-h-0 flex-1" contentContainerClassName="pb-3">
+              <ScrollView className="min-h-0 flex-1" contentContainerClassName="px-0.5 pb-3">
                 <DeadlineCalendar selected={draft} onSelect={setDraft} />
               </ScrollView>
 
