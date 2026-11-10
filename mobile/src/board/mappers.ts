@@ -43,6 +43,7 @@ export function toCard(task: TaskSummary): Card {
     directionId: task.direction_id,
     initiativeId: task.initiative_id,
     projectId: task.project_id,
+    deadline: task.deadline,
     allowedTransitions: task.allowed_transitions.map(toColumnId),
   };
 }

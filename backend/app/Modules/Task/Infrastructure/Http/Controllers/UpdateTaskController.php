@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommand;
 use App\Modules\Task\Application\Results\TaskResult;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 use App\Modules\Task\Infrastructure\Http\Requests\UpdateTaskRequest;
@@ -42,6 +43,11 @@ final class UpdateTaskController extends Controller
 
         if (array_key_exists('description', $fields)) {
             $changes['description'] = TaskDescription::fromNullableString($fields['description'])->value();
+        }
+
+        // Пустая строка дедлайна — «срок убрали»: value object отдаёт null.
+        if (array_key_exists('deadline', $fields)) {
+            $changes['deadline'] = TaskDeadline::fromNullableString($fields['deadline'])->value();
         }
 
         if (array_key_exists('column', $fields)) {

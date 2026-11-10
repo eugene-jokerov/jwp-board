@@ -19,7 +19,9 @@ import { fetchTask } from '../../api/client';
 import { getToken } from '../../auth/session';
 import { FormAlert } from '../../components/FormAlert';
 import { TextField } from '../../components/TextField';
+import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
+import { toDeadlineDate } from '../deadline';
 import { toCardDescription } from '../mappers';
 import { COLUMNS, DESCRIPTION_MAX_LENGTH, KIND_LABEL, type Card, type ColumnId } from '../types';
 
@@ -31,8 +33,15 @@ interface CardEditModalProps {
   /**
    * Сохранить изменения; возвращает текст ошибки, который показываем в модалке.
    * `description` — null, если описание ещё не загружено: поле тогда не отправляется.
+   * `deadline` — дата в формате API (`YYYY-MM-DD`) или null; undefined — не отправлять.
    */
-  onSave: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
+  onSave: (
+    card: Card,
+    title: string,
+    description: string | null,
+    column: ColumnId,
+    deadline: string | null | undefined,
+  ) => Promise<string | null>;
   /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
@@ -64,7 +73,13 @@ export function CardEditModal(props: CardEditModalProps) {
 interface CardEditFormProps {
   card: Card;
   lockedReason: string | null;
-  onSave: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
+  onSave: (
+    card: Card,
+    title: string,
+    description: string | null,
+    column: ColumnId,
+    deadline: string | null | undefined,
+  ) => Promise<string | null>;
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
 }
@@ -100,6 +115,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   const [title, setTitle] = useState(card.title);
   /** Описание из полного представления карточки; null — ещё не загружено. */
   const [description, setDescription] = useState<string | null>(null);
+  /**
+   * Дедлайн в формате API (`YYYY-MM-DD`); undefined — ещё не загружен.
+   * Как и описание: незагруженное значение не отправляется, иначе PATCH
+   * стёр бы срок, которого мы ещё не видели.
+   */
+  const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
   const [columnId, setColumnId] = useState<ColumnId>(card.column);
   const [titleError, setTitleError] = useState<string | null>(null);
   // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
@@ -126,6 +147,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
       const detail = await fetchTask(getToken(), card.id);
 
       setDescription(toCardDescription(detail));
+      setDeadline(toDeadlineDate(detail.deadline));
       setTitle(detail.title);
       setLoadError(null);
     } catch {
@@ -165,7 +187,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     const nextDescription = description === null ? null : descriptionValue;
 
     setSaving(true);
-    const error = await onSave(card, trimmed, nextDescription, columnId);
+    const error = await onSave(card, trimmed, nextDescription, columnId, deadline);
     setSaving(false);
 
     if (error !== null) {
@@ -252,6 +274,16 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                 multiline
                 numberOfLines={4}
                 maxLength={DESCRIPTION_MAX_LENGTH}
+              />
+
+              <DatePickerField
+                label="Дедлайн (необязательно)"
+                value={deadline ?? null}
+                onChange={(value) => {
+                  setDeadline(value);
+                  setFormError(null);
+                }}
+                placeholder="Без срока"
               />
 
               <View className="gap-1.5">

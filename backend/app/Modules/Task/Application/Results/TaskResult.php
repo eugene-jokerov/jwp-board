@@ -30,6 +30,7 @@ final readonly class TaskResult
         public ?int $projectId,
         public ?DirectionColor $directionColor,
         public array $allowedTransitions,
+        public ?string $deadline,
         public ?string $createdAt,
         public ?string $updatedAt,
     ) {}
@@ -50,6 +51,8 @@ final readonly class TaskResult
             $task->project_id,
             $directionColor,
             $allowedTransitions,
+            // Дедлайн отдаётся в том же виде, что и отметки времени: ISO-8601.
+            $task->deadline?->toIso8601String(),
             $task->created_at?->toIso8601String(),
             $task->updated_at?->toIso8601String(),
         );

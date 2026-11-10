@@ -7,6 +7,7 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\User\Domain\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -57,7 +58,18 @@ class TaskFactory extends Factory
             // count(N) создаёт N-1 запись.
             'title' => 'Карточка '.self::nextTitleNumber(),
             'description' => null,
+            'deadline' => null,
         ];
+    }
+
+    /**
+     * Карточка с дедлайном.
+     */
+    public function withDeadline(?CarbonInterface $deadline): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'deadline' => $deadline,
+        ]);
     }
 
     /**

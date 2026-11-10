@@ -215,6 +215,7 @@ final class InMemoryTaskRepository implements TaskRepository
             'column' => 'backlog',
             'title' => 'Карточка '.$id,
             'description' => null,
+            'deadline' => null,
         ], $attributes), true);
 
         return $task;

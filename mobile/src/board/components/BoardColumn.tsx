@@ -88,6 +88,7 @@ export function BoardColumn({
           color={card.color}
           hasParent={hasParent(card)}
           kind={card.kind}
+          deadline={card.deadline}
           action={cardAction(card)}
           onAction={() => onCardAction(card)}
           onPress={() => onOpenCard(card)}

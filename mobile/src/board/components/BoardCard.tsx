@@ -17,11 +17,18 @@
  * с `pointer-events-none`, см. комментарий у корневого `View`.
  * Признак «без проекта» — отсутствие родителя, а не отсутствие цвета:
  * у такой карточки цвет служебный (нейтральный c0).
+ *
+ * В нижней строке слева стоит дедлайн без времени в виде «до ДД.ММ.ГГГГ», если
+ * он задан: срок виден прямо на доске, не открывая карточку. За ним — подпись
+ * «Без проекта» / «Без инициативы»; справа остаётся кнопка действия.
+ * Если срок прошёл, карточка получает лёгкую красную подложку, а сама дата
+ * красится в цвет ошибки — просрочка видна и без чтения даты.
  */
 
 import { Pressable, Text, View } from 'react-native';
 
-import { CheckIcon, PlayIcon } from './BoardIcons';
+import { CalendarIcon, CheckIcon, PlayIcon } from './BoardIcons';
+import { formatDeadlineDate, isDeadlineOverdue } from '../deadline';
 import { directionColorHex } from '../directionColors';
 import type { CardAction } from '../derive';
 import type { CardKind } from '../types';
@@ -39,6 +46,8 @@ interface BoardCardProps {
   hasParent: boolean;
   /** Тип карточки: у проекта без родителя подпись «Без инициативы». */
   kind: CardKind;
+  /** Срок карточки строкой ISO-8601; null — срока нет. */
+  deadline: string | null;
   /** Действие над колонками; null — в этой колонке действий нет. */
   action: CardAction | null;
   /** Выполнить действие (перевод в следующую колонку). */
@@ -47,9 +56,13 @@ interface BoardCardProps {
   onPress: () => void;
 }
 
-export function BoardCard({ title, color, hasParent, kind, action, onAction, onPress }: BoardCardProps) {
+export function BoardCard({ title, color, hasParent, kind, deadline, action, onAction, onPress }: BoardCardProps) {
   // У карточки без родителя подпись говорит, чего именно ей не хватает.
   const withoutParentLabel = hasParent ? '' : kind === 'project' ? 'Без инициативы' : 'Без проекта';
+  // Срок рисуется без времени: для дедлайна важен сам день.
+  const deadlineLabel = formatDeadlineDate(deadline);
+  // Просроченная карточка подсвечивается: срок прошёл, а работа ещё не закрыта.
+  const overdue = isDeadlineOverdue(deadline);
 
   return (
     // `pointer-events-auto` возвращает клики самой карточке. Карточки закрытых
@@ -58,7 +71,12 @@ export function BoardCard({ title, color, hasParent, kind, action, onAction, onP
     // свойство наследуемое: без явного `auto` плитка была видна, но не ловила
     // наведение и клик на web. Пустые места слота при этом остаются прозрачными
     // для кликов. На native свойство не используется — там поведение прежнее.
-    <View className="pointer-events-auto flex-row overflow-hidden rounded border border-card-line bg-card">
+    <View
+      className={[
+        'pointer-events-auto flex-row overflow-hidden rounded border',
+        overdue ? 'border-err-fg/30 bg-card-overdue' : 'border-card-line bg-card',
+      ].join(' ')}
+    >
       {/* Полоса цвета родителя — единственный цветной акцент карточки.
           У карточки без родителя резолвер отдаёт служебный c0. */}
       <View className="w-1 shrink-0" style={{ backgroundColor: directionColorHex(color) }} />
@@ -83,9 +101,34 @@ export function BoardCard({ title, color, hasParent, kind, action, onAction, onP
         </Pressable>
 
         <View className="flex-row items-center justify-between gap-2">
-          <Text className="flex-1 text-[11px] text-muted" numberOfLines={1}>
-            {withoutParentLabel}
-          </Text>
+          {/* Левая часть нижней строки: срок карточки на левом краю, подпись
+              «Без проекта» — следом, чтобы срок не уезжал к кнопке действия. */}
+          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+            {deadlineLabel === null ? null : (
+              /* «до» + дата: сразу понятно, что дата — это срок, а не отметка
+                 создания. У просроченной карточки сама дата краснее подложки,
+                 чтобы причина подсветки читалась без открытия карточки. */
+              <View className="flex-row items-center gap-1">
+                <CalendarIcon size={11} />
+
+                <Text className="text-[11px] text-muted">до</Text>
+
+                <Text
+                  className={['text-[11px]', overdue ? 'font-semibold text-err-fg' : 'font-medium text-muted'].join(
+                    ' ',
+                  )}
+                >
+                  {deadlineLabel}
+                </Text>
+              </View>
+            )}
+
+            {withoutParentLabel === '' ? null : (
+              <Text className="min-w-0 flex-1 text-[11px] text-muted" numberOfLines={1}>
+                {withoutParentLabel}
+              </Text>
+            )}
+          </View>
 
           {action ? (
             <Pressable

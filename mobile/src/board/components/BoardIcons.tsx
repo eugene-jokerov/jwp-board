@@ -9,7 +9,7 @@
 
 import { View } from 'react-native';
 
-import { CircleCheck, Menu, Play, Settings } from 'lucide-react-native';
+import { Calendar, CircleCheck, Menu, Play, Settings } from 'lucide-react-native';
 
 /** Три точки в столбик — «меню колонки». */
 export function MenuIcon() {
@@ -56,4 +56,9 @@ export function SettingsIcon() {
 /** Иконка главного меню: «гамбургер» в шапке экрана. */
 export function HamburgerIcon() {
   return <Menu size={22} color={CONTROL_ICON_COLOR} />;
+}
+
+/** Иконка дедлайна: календарь в поле выбора даты и в плитке карточки. */
+export function CalendarIcon({ size = 16 }: { size?: number }) {
+  return <Calendar size={size} color={CONTROL_ICON_COLOR} />;
 }

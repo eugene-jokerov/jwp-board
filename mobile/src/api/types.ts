@@ -72,7 +72,8 @@ export interface Direction {
  *
  * Описания в списке нет: сервер отдаёт его только детальным представлением
  * (`GET /api/v1/tasks/{id}`), чтобы не тащить длинные тексты в выборку из
- * сотен карточек.
+ * сотен карточек. Дедлайн, наоборот, есть и в списке — доска рисует дату
+ * прямо в плитке карточки.
  */
 export interface TaskSummary {
   id: number;
@@ -84,6 +85,8 @@ export interface TaskSummary {
   project_id: number | null;
   /** Цвет направления карточки; null — направления нет. */
   color: string | null;
+  /** Срок карточки в ISO-8601 (время — начало дня); null — срока нет. */
+  deadline: string | null;
   /** Колонки, в которые карточку можно перевести сейчас. */
   allowed_transitions: CardColumn[];
   created_at: string | null;
@@ -110,6 +113,8 @@ export interface TaskCreateInput {
   column: CardColumn;
   title: string;
   description?: string | null;
+  /** Срок карточки: дата в формате `YYYY-MM-DD`; null — срока нет. */
+  deadline?: string | null;
   direction_id?: number | null;
   initiative_id?: number | null;
   project_id?: number | null;

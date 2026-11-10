@@ -29,6 +29,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
     private const array TRACKED_FIELDS = [
         'title',
         'description',
+        'deadline',
         'type',
         'column',
         'direction_id',
@@ -152,7 +153,8 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
     /**
      * Строковый снимок отслеживаемых полей для old_value и new_value.
      *
-     * Enum'ы приводятся к значениям, id — к строке, description не пишется.
+     * Enum'ы приводятся к значениям, id — к строке, description не пишется,
+     * дедлайн — строкой в формате базы (без ISO-суффикса пояса).
      *
      * @return array<string, string|null>
      */
@@ -161,6 +163,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
         return [
             'title' => $task->title,
             'description' => null,
+            'deadline' => $task->deadline?->format('Y-m-d H:i:s'),
             'type' => $task->type->value,
             'column' => $task->column->value,
             'direction_id' => $task->direction_id === null ? null : (string) $task->direction_id,

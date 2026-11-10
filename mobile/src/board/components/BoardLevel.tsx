@@ -800,6 +800,7 @@ export function BoardLevel({
                               color={card.color}
                               hasParent={hasParent(card)}
                               kind={card.kind}
+                              deadline={card.deadline}
                               action={cardAction(card)}
                               onAction={() => onCardAction(card)}
                               onPress={() => onOpenCard(card)}
@@ -862,6 +863,7 @@ export function BoardLevel({
                                 color={card.color}
                                 hasParent={hasParent(card)}
                                 kind={card.kind}
+                                deadline={card.deadline}
                                 action={cardAction(card)}
                                 onAction={() => onCardAction(card)}
                                 onPress={() => onOpenCard(card)}

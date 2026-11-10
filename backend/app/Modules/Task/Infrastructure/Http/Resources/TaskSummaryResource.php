@@ -22,6 +22,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * нет: клиент красит такую карточку нейтральным цветом.
  * allowed_transitions — колонки, в которые карточку можно перевести сейчас;
  * их считает доменная политика, клиент только отображает.
+ * deadline — срок карточки в ISO-8601 или null: доска рисует дату в плитке,
+ * поэтому поле есть и в списке (оно короткое, в отличие от описания).
  *
  * @property-read TaskResult $resource
  */
@@ -37,6 +39,7 @@ final class TaskSummaryResource extends JsonResource
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
             'title' => $this->resource->title,
+            'deadline' => $this->resource->deadline,
             'direction_id' => $this->resource->directionId,
             'initiative_id' => $this->resource->initiativeId,
             'project_id' => $this->resource->projectId,

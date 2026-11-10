@@ -14,7 +14,9 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
 import { FormAlert } from '../../components/FormAlert';
+import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
+import { toDeadlineDate } from '../deadline';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
 import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL } from '../types';
 
@@ -44,12 +46,16 @@ export interface CardDraft {
 
 interface CardFormModalProps {
   draft: CardDraft | null;
-  /** Создать карточку; текст ошибки сервера или null при успехе. */
+  /**
+   * Создать карточку; текст ошибки сервера или null при успехе.
+   * `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
+   */
   onCreate: (
     draft: CardDraft,
     title: string,
     description: string | null,
     parentId: number | null,
+    deadline: string | null,
   ) => Promise<string | null>;
   onClose: () => void;
 }
@@ -99,6 +105,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const [title, setTitle] = useState('');
   /** Описание необязательно: пустое поле отправляется как null. */
   const [description, setDescription] = useState('');
+  /** Дедлайн необязателен: null — карточка без срока. */
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -110,6 +118,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const close = () => {
     setTitle('');
     setDescription('');
+    setDeadline(null);
     setParentId(null);
     setTitleError(null);
     setParentError(null);
@@ -154,6 +163,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
       titleValue,
       descriptionValue === '' ? null : descriptionValue,
       draft.laneId ?? parentId,
+      toDeadlineDate(deadline),
     );
     setSaving(false);
 
@@ -203,6 +213,16 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
             multiline
             numberOfLines={4}
             maxLength={DESCRIPTION_MAX_LENGTH}
+          />
+
+          <DatePickerField
+            label="Дедлайн (необязательно)"
+            value={deadline}
+            onChange={(value) => {
+              setDeadline(value);
+              setFormError(null);
+            }}
+            placeholder="Без срока"
           />
 
           {parentOptions !== null ? (

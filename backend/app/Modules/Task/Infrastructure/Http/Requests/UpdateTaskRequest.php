@@ -5,6 +5,8 @@ namespace App\Modules\Task\Infrastructure\Http\Requests;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
+use Closure;
+use DateTimeImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,11 +32,47 @@ final class UpdateTaskRequest extends FormRequest
         return [
             'title' => ['sometimes', 'string', 'max:'.TaskTitle::MAX_LENGTH],
             'description' => ['sometimes', 'nullable', 'string', 'max:'.TaskDescription::MAX_LENGTH],
+            // Формат фиксирован: дата `Y-m-d`, время — необязательно
+            // (`H:i` / `H:i:s`). Несколько правил date_format здесь не годятся:
+            // они проверяются одновременно, а не как альтернативы. Существование
+            // самой даты (30 февраля и т. п.) проверяет value object.
+            'deadline' => ['sometimes', 'nullable', 'string', 'regex:/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $this->deadlineRule()],
             'column' => ['sometimes', Rule::enum(CardColumn::class)],
             'direction_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'initiative_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'project_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ];
+    }
+
+    /**
+     * Правило существования даты: 30 февраля и прочие несуществующие дни отклоняются.
+     *
+     * Регулярка проверяет только форму строки, а `createFromFormat` прощает
+     * переполнение (30 февраля → 2 марта). Ошибки разбора видны в
+     * getLastErrors(), поэтому дата проверяется ими, а не сравнением строки.
+     */
+    private function deadlineRule(): Closure
+    {
+        return static function (string $attribute, mixed $value, Closure $fail): void {
+            if (! is_string($value) || trim($value) === '') {
+                return;
+            }
+
+            $normalized = preg_replace('/[T ]/', ' ', trim($value)) ?? '';
+
+            if (mb_strlen($normalized) === 10) {
+                $normalized .= ' 00:00:00';
+            } elseif (mb_strlen($normalized) === 16) {
+                $normalized .= ':00';
+            }
+
+            $date = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $normalized);
+            $errors = DateTimeImmutable::getLastErrors();
+
+            if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+                $fail('Неверная дата дедлайна.');
+            }
+        };
     }
 
     /**
@@ -45,6 +83,7 @@ final class UpdateTaskRequest extends FormRequest
         return [
             'title' => 'название',
             'description' => 'описание',
+            'deadline' => 'дедлайн',
             'column' => 'колонка',
             'direction_id' => 'направление',
             'initiative_id' => 'инициатива',
@@ -60,6 +99,7 @@ final class UpdateTaskRequest extends FormRequest
         return [
             'title.max' => 'Название не может быть длиннее :max символов.',
             'description.max' => 'Описание не может быть длиннее :max символов.',
+            'deadline.regex' => 'Неверная дата дедлайна.',
             'column.enum' => 'Неизвестная колонка.',
         ];
     }
@@ -84,9 +124,12 @@ final class UpdateTaskRequest extends FormRequest
     }
 
     /**
-     * Переданные поля карточки: заголовок, описание, колонка.
+     * Переданные поля карточки: заголовок, описание, дедлайн, колонка.
      *
-     * @return array{title?: string, description?: string|null, column?: string}
+     * Ключи попадают в результат только если они пришли в запросе: отсутствие
+     * ключа — «не менять», явный null — «очистить».
+     *
+     * @return array{title?: string, description?: string|null, deadline?: string|null, column?: string}
      */
     public function toFieldPayload(): array
     {
@@ -99,6 +142,11 @@ final class UpdateTaskRequest extends FormRequest
         if ($this->has('description')) {
             $value = $this->input('description');
             $fields['description'] = $value === null ? null : (string) $value;
+        }
+
+        if ($this->has('deadline')) {
+            $value = $this->input('deadline');
+            $fields['deadline'] = $value === null ? null : (string) $value;
         }
 
         if ($this->has('column')) {

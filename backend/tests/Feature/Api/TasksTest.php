@@ -7,6 +7,7 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -197,6 +198,7 @@ final class TasksTest extends TestCase
                     'column',
                     'title',
                     'description',
+                    'deadline',
                     'direction_id',
                     'initiative_id',
                     'project_id',
@@ -243,6 +245,120 @@ final class TasksTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['description']);
+    }
+
+    public function test_deadline_is_stored_and_returned_as_date(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача со сроком',
+                'deadline' => '2026-12-31',
+            ])
+            ->assertCreated()
+            // Календарь присылает только дату: время хранится как начало дня.
+            ->assertJsonPath('data.deadline', '2026-12-31T00:00:00+03:00');
+
+        $this->assertDatabaseHas('tasks', ['user_id' => $user->id, 'deadline' => '2026-12-31 00:00:00']);
+    }
+
+    public function test_deadline_is_optional(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача без срока',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.deadline', null);
+    }
+
+    public function test_deadline_can_be_changed_and_cleared(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['deadline' => '2027-01-15'])
+            ->assertOk()
+            ->assertJsonPath('data.deadline', '2027-01-15T00:00:00+03:00');
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['deadline' => null])
+            ->assertOk()
+            ->assertJsonPath('data.deadline', null);
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'deadline' => null]);
+    }
+
+    public function test_patch_without_deadline_keeps_it(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+            'user_id' => $user->id,
+        ]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => 'Новое название'])
+            ->assertOk()
+            ->assertJsonPath('data.deadline', '2027-02-01T00:00:00+03:00');
+    }
+
+    public function test_invalid_deadline_is_rejected(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача',
+                'deadline' => '31.12.2026',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['deadline']);
+    }
+
+    /**
+     * Формат валиден, но такого дня нет: отказ тоже 422, а не 500.
+     */
+    public function test_nonexistent_deadline_date_is_rejected(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача',
+                'deadline' => '2026-02-30',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['deadline']);
+    }
+
+    /**
+     * Дедлайн нужен списку доски: по нему плитка карточки рисует дату.
+     */
+    public function test_index_returns_deadline(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->withDeadline(Carbon::parse('2027-03-05 00:00:00'))->create([
+            'user_id' => $user->id,
+            'title' => 'Задача со сроком',
+        ]);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.deadline', '2027-03-05T00:00:00+03:00');
     }
 
     public function test_delete_is_forbidden_when_card_has_children(): void

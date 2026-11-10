@@ -30,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property CardColumn $column
  * @property string $title
  * @property string|null $description
+ * @property Carbon|null $deadline
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -52,13 +53,15 @@ class Task extends Model
         'column',
         'title',
         'description',
+        'deadline',
     ];
 
     /**
      * Приведение типов атрибутов.
      *
      * `type` и `column` — php-enum'ы: из модели всегда приходит доменный тип,
-     * а не «сырая» строка из базы.
+     * а не «сырая» строка из базы. `deadline` — дата (Carbon), чтобы ответ API
+     * отдавал ISO-строку, а не формат базы.
      *
      * @return array<string, string>
      */
@@ -67,6 +70,7 @@ class Task extends Model
         return [
             'type' => CardType::class,
             'column' => CardColumn::class,
+            'deadline' => 'datetime',
         ];
     }
 

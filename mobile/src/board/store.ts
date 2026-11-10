@@ -61,14 +61,28 @@ export function errorMessage(error: unknown, fallback: string): string {
 
 /** Действия над карточками; каждая возвращает текст ошибки сервера или null. */
 interface CardActions {
+  /**
+   * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
+   */
   createCard: (
     draft: CardDraft,
     title: string,
     description: string | null,
     parentId: number | null,
+    deadline: string | null,
   ) => Promise<string | null>;
-  /** `description` — null, если описание стёрли; незагруженное описание не отправляется. */
-  saveCard: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
+  /**
+   * Сохранить карточку; `description` — null, если описание стёрли, а незагруженное
+   * описание не отправляется. `deadline` — дата в формате API, null или
+   * undefined (ещё не загружен — не отправлять).
+   */
+  saveCard: (
+    card: Card,
+    title: string,
+    description: string | null,
+    column: ColumnId,
+    deadline: string | null | undefined,
+  ) => Promise<string | null>;
   moveCard: (card: Card, column: ColumnId) => Promise<string | null>;
   removeCard: (card: Card) => Promise<string | null>;
 }
@@ -177,7 +191,7 @@ export function useBoard(): BoardState {
   }, []);
 
   const createCard = useCallback<CardActions['createCard']>(
-    async (draft, title, description, parentId) => {
+    async (draft, title, description, parentId, deadline) => {
       const input: TaskCreateInput = {
         type: draft.kind,
         column: draft.columnId,
@@ -185,6 +199,9 @@ export function useBoard(): BoardState {
         // Пустое описание не отправляем: сервер сам нормализует пустую строку
         // в null, а лишнее поле в теле запроса ничего не добавляет.
         ...(description === null ? {} : { description }),
+        // Дедлайн отправляем только выбранный: без даты поле не нужно —
+        // сервер и так создаёт карточку без срока.
+        ...(deadline === null ? {} : { deadline }),
         ...parentPayload(draft.kind, draft.laneId ?? parentId),
       };
 
@@ -205,7 +222,7 @@ export function useBoard(): BoardState {
   );
 
   const saveCard = useCallback<CardActions['saveCard']>(
-    async (card, title, description, column) => {
+    async (card, title, description, column, deadline) => {
       const input: TaskUpdateInput = { title };
 
       // Описание отправляем, только если оно загружено. null от модалки —
@@ -213,6 +230,12 @@ export function useBoard(): BoardState {
       // которую сервер нормализует в null.
       if (description !== null) {
         input.description = description;
+      }
+
+      // Дедлайн — так же: undefined значит «ещё не загружен». null (срок убрали)
+      // отправляется явно, иначе сервер сохранил бы старое значение.
+      if (deadline !== undefined) {
+        input.deadline = deadline;
       }
 
       // Колонку отправляем только при смене: PATCH с текущей колонкой
