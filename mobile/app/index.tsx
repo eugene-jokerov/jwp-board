@@ -28,7 +28,13 @@ import { CardFormModal, type CardDraft } from '../src/board/components/CardFormM
 import { DirectionsModal } from '../src/board/components/DirectionsModal';
 import { LevelSettingsMenu } from '../src/board/components/LevelSettingsMenu';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../src/board/directionColors';
-import { cardAction, cardBreadcrumbs, checkDirectionDelete, parentCandidates } from '../src/board/derive';
+import {
+  cardAction,
+  cardBreadcrumbs,
+  checkDirectionDelete,
+  isClosedColumn,
+  parentCandidates,
+} from '../src/board/derive';
 import { parentOf } from '../src/board/mappers';
 import { useBoardSettings } from '../src/board/settings';
 import { useBoard } from '../src/board/store';
@@ -104,11 +110,14 @@ function columnLabel(column: ColumnId): string {
 
 /**
  * Свимлайны уровня:
- * - стратегический — направления деятельности; инициативы без направления
- *   собираются в свимлайн «Без направления»;
+ * - стратегический — направления деятельности; служебного свимлайна здесь нет:
+ *   инициатива без направления невозможна (сервер её не создаст);
  * - тактический/операционный — родительские карточки из «В работе»; карточки
- *   родителей вне работы и карточки без родителя (проект без инициативы, задача
- *   без проекта) собираются в свимлайн «без родителя».
+ *   без родителя (проект без инициативы, задача без проекта) собираются в
+ *   служебный свимлайн «Без инициативы» / «Без проекта».
+ *
+ * Служебный свимлайн показывается, только пока в нём есть карточки в активных
+ * колонках: если он остался из одних закрытых, строка уровня пустует зря.
  */
 function swimlanesOf(
   cards: readonly Card[],
@@ -118,32 +127,15 @@ function swimlanesOf(
   if (level.id === 'strategic') {
     const initiatives = cards.filter((card) => card.kind === 'initiative');
 
-    const lanes: SwimlaneModel[] = directions.map((direction) => ({
+    return directions.map((direction) => ({
       id: `direction-${direction.id}`,
       parentId: direction.id,
+      service: false,
       title: direction.title,
       // У направления хранится ключ палитры, свимлайн рисуется оттенком.
       color: directionColorHex(direction.color),
       cards: initiatives.filter((card) => card.directionId === direction.id),
     }));
-
-    // Инициативы без направления остаются в данных, даже если все направления
-    // удалили: специально их не создают (кнопка заблокирована), но терять их
-    // из виду нельзя — показываем в служебном свимлайне.
-    const directionIds = new Set(directions.map((direction) => direction.id));
-    const unassigned = initiatives.filter((card) => card.directionId === null || !directionIds.has(card.directionId));
-
-    if (unassigned.length > 0) {
-      lanes.push({
-        id: 'no_direction',
-        parentId: null,
-        title: 'Без направления',
-        color: directionColorHex(UNPARENTED_CARD_COLOR),
-        cards: unassigned,
-      });
-    }
-
-    return lanes;
   }
 
   const parentKind = PARENT_KIND[level.id];
@@ -159,6 +151,7 @@ function swimlanesOf(
   const lanes: SwimlaneModel[] = parents.map((parent) => ({
     id: `card-${parent.id}`,
     parentId: parent.id,
+    service: false,
     title: parent.title,
     // У карточки-родителя хранится ключ палитры, свимлайн рисуется оттенком.
     // У проекта без инициативы цвет null — резолвер отдаёт служебный c0,
@@ -168,15 +161,24 @@ function swimlanesOf(
     cards: children.filter((card) => card.kind !== parent.kind && parentOf(card)?.id === parent.id),
   }));
 
-  // Карточки без родителя и карточки, чей родитель вышел из работы,
-  // на этом уровне показывать негде — их видно в свимлайне «без родителя».
+  // Карточки без родителя (проект без инициативы, задача без проекта) и
+  // карточки, чей родитель уже не в работе, показывать негде — их видно в
+  // служебном свимлайне. На тактическом уровне второго случая не бывает:
+  // сервер не выпускает инициативу из работы, пока у неё есть проекты в работе.
   const inLane = new Set(lanes.flatMap((lane) => lane.cards.map((card) => card.id)));
   const orphaned = children.filter((card) => !inLane.has(card.id));
 
-  if (orphaned.length > 0) {
+  // Свимлайн показывается, только пока у него есть карточки в активных колонках:
+  // из одних закрытых он даёт пустую строку и кнопку создания на пустом месте,
+  // а сами закрытые карточки видны в плитах «Готово»/«Отмена» (они строятся по
+  // карточкам уровня, а не по свимлайнам).
+  const hasActive = orphaned.some((card) => !isClosedColumn(card.column));
+
+  if (hasActive) {
     lanes.push({
       id: `no_parent-${level.id}`,
       parentId: null,
+      service: true,
       title: childKind === 'project' ? 'Без инициативы' : 'Без проекта',
       // Свимлайн «без родителя» — это и есть служебный цвет c0.
       color: directionColorHex(UNPARENTED_CARD_COLOR),
