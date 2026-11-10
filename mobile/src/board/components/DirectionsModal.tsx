@@ -32,6 +32,12 @@ const ROW_ICON_COLOR = '#6b7280';
 interface DirectionsModalProps {
   visible: boolean;
   directions: readonly Direction[];
+  /**
+   * Лимит направлений с сервера (`meta.limit`); null — ещё не известен.
+   * По нему попап показывает счётчик «Направления n из k» и гасит кнопку
+   * создания: новое направление сервер не примет (422).
+   */
+  limit: number | null;
   /** Добавить направление; текст ошибки или null при успехе. */
   onAdd: (title: string, color: string) => Promise<string | null>;
   /** Изменить название и цвет; текст ошибки или null при успехе. */
@@ -399,6 +405,7 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
 export function DirectionsModal({
   visible,
   directions,
+  limit,
   onAdd,
   onUpdate,
   onDelete,
@@ -408,6 +415,19 @@ export function DirectionsModal({
   // Форма создания скрыта по умолчанию: список направлений — главное содержимое,
   // а форма открывается кнопкой «Добавить направление».
   const [creating, setCreating] = useState(false);
+
+  // Лимит известен только после загрузки доски: до этого счётчик не показываем,
+  // а создание не блокируем — сервер всё равно проверит лимит сам.
+  const limitReached = limit !== null && directions.length >= limit;
+
+  /** Заголовок со счётчиком: «Направления 3 из 15»; без лимита — просто «Направления». */
+  const counter = limit === null ? null : `${directions.length} из ${limit}`;
+
+  /**
+   * Прочитать список направлений пользователю: счётчик и подпись формы стоят
+   * в одном месте, чтобы скринридер не собирал фразу из разных блоков.
+   */
+  const headerLabel = counter === null ? 'Направления' : `Направления ${counter}`;
 
   /** Закрыть попап и заодно свернуть форму, чтобы следующий вход начинался со списка. */
   const closeAll = () => {
@@ -420,14 +440,25 @@ export function DirectionsModal({
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="w-full max-w-lg gap-4 rounded-2xl bg-card p-5">
           <View className="gap-1">
-            <Text className="text-lg font-bold text-app">Направления</Text>
+            <View className="flex-row items-baseline justify-between gap-3">
+              <Text accessibilityRole="header" accessibilityLabel={headerLabel} className="text-lg font-bold text-app">
+                Направления
+              </Text>
+
+              {/* Счётчик «n из k»: сколько направлений уже заведено и сколько
+                  всего доступно. Число лимита приходит с сервера (meta.limit). */}
+              {counter === null ? null : <Text className="text-xs font-semibold text-muted">{counter}</Text>}
+            </View>
+
             <Text className="text-xs text-muted">
               Направление — родитель инициатив стратегического уровня. Удалить можно только пустое направление.
             </Text>
           </View>
 
           {/* Создание — над списком: кнопка раскрывается формой на своём же месте,
-              а сам список остаётся ниже и не прыгает по высоте. */}
+              а сам список остаётся ниже и не прыгает по высоте. При достигнутом
+              лимите кнопка погашена: сервер ответил бы 422, поэтому сразу
+              объясняем причину, а не ждём ошибки. */}
           {creating ? (
             <DirectionCreator
               usedColors={directions.map((item) => item.color)}
@@ -435,13 +466,28 @@ export function DirectionsModal({
               onClose={() => setCreating(false)}
             />
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setCreating(true)}
-              className="h-10 items-center justify-center rounded-xl border border-app bg-card active:bg-surface"
-            >
-              <Text className="text-sm font-semibold text-app">Добавить направление</Text>
-            </Pressable>
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: limitReached }}
+                disabled={limitReached}
+                onPress={() => setCreating(true)}
+                className={[
+                  'h-10 items-center justify-center rounded-xl border border-app bg-card active:bg-surface',
+                  limitReached ? 'opacity-60' : '',
+                ].join(' ')}
+              >
+                <Text className={['text-sm font-semibold', limitReached ? 'text-muted' : 'text-app'].join(' ')}>
+                  Добавить направление
+                </Text>
+              </Pressable>
+
+              {limitReached ? (
+                <Text className="text-[11px] text-muted">
+                  Достигнут лимит направлений. Удалите ненужное, чтобы добавить новое.
+                </Text>
+              ) : null}
+            </>
           )}
 
           <ScrollView className="max-h-[60vh]" contentContainerClassName="gap-1.5">

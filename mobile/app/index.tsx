@@ -547,6 +547,7 @@ export default function HomeScreen() {
       <DirectionsModal
         visible={directionsOpen}
         directions={directions}
+        limit={board.directionLimit}
         onAdd={board.addDirection}
         onUpdate={board.editDirection}
         onDelete={board.removeDirection}

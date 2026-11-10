@@ -32,6 +32,11 @@ interface DirectionRepository
     public function allForUser(int $userId): array;
 
     /**
+     * Количество направлений пользователя — для проверки лимита направления.
+     */
+    public function countForUser(int $userId): int;
+
+    /**
      * Создать направление.
      *
      * @throws \InvalidArgumentException если значения не проходят value object'ы

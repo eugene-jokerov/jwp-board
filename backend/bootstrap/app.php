@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Direction\Domain\Exceptions\DirectionHasCards;
+use App\Modules\Direction\Domain\Exceptions\DirectionLimitReached;
 use App\Modules\Direction\Domain\Exceptions\DirectionNotFound;
 use App\Modules\Task\Domain\Exceptions\ColumnChangeBlocked;
 use App\Modules\Task\Domain\Exceptions\InvalidHierarchy;
@@ -84,6 +85,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'message' => $e->getMessage(),
             'errors' => [
                 'hierarchy' => [$e->getMessage()],
+            ],
+        ], Response::HTTP_UNPROCESSABLE_ENTITY));
+
+        // Достигнут лимит направлений — ошибка входных данных, а не конфликт
+        // состояния: создать ещё одно направление нельзя в принципе, пока не
+        // удалено одно из существующих. Ключ `direction` — чтобы клиент показал
+        // текст рядом с формой создания направления.
+        $exceptions->render(fn (DirectionLimitReached $e) => response()->json([
+            'message' => $e->getMessage(),
+            'errors' => [
+                'direction' => [$e->getMessage()],
             ],
         ], Response::HTTP_UNPROCESSABLE_ENTITY));
     })->create();

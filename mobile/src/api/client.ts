@@ -17,6 +17,7 @@ import type {
   DataResponse,
   Direction,
   DirectionInput,
+  DirectionListPayload,
   HealthPayload,
   RegisterInput,
   TaskCreateInput,
@@ -222,11 +223,14 @@ function authHeaders(token: string | null): { token: string | null } {
   return { token: IS_WEB ? null : token };
 }
 
-/** Список направлений пользователя. */
-export async function fetchDirections(token: string | null): Promise<Direction[]> {
-  const response = await request<DataResponse<Direction[]>>('/directions', authHeaders(token));
-
-  return response.data;
+/**
+ * Список направлений пользователя вместе с лимитом (`meta.limit`).
+ *
+ * Лимит едет в ответе, чтобы счётчик «Направления n из k» брал число с сервера:
+ * на клиенте константа лимита не дублируется.
+ */
+export async function fetchDirections(token: string | null): Promise<DirectionListPayload> {
+  return request<DirectionListPayload>('/directions', authHeaders(token));
 }
 
 /** Создание направления. */

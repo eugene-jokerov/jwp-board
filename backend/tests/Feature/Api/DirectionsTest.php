@@ -6,6 +6,7 @@ use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Task\Domain\Task;
 use App\Modules\User\Domain\User;
+use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -75,6 +76,82 @@ final class DirectionsTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'Моё');
+    }
+
+    public function test_index_returns_limit_in_meta(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonPath('meta.limit', (int) config('direction.max_per_user'));
+    }
+
+    public function test_limit_comes_from_config(): void
+    {
+        config(['direction.max_per_user' => 3]);
+
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonPath('meta.limit', 3);
+    }
+
+    public function test_create_is_forbidden_at_limit(): void
+    {
+        // Лимит задаётся конфигом, поэтому проверка не зависит от значения
+        // в backend/.env и не требует создания пятнадцати направлений.
+        config(['direction.max_per_user' => 2]);
+
+        $user = User::factory()->create();
+
+        Direction::factory()
+            ->count(2)
+            ->sequence(fn (Sequence $sequence): array => ['color' => DirectionColor::keys()[$sequence->index]])
+            ->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, ['title' => 'Лишнее', 'color' => 'c19'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['direction'])
+            ->assertJsonPath('errors.direction.0', 'Достигнут лимит направлений (2). Удалите ненужное направление, чтобы добавить новое.');
+
+        $this->assertDatabaseCount('directions', 2);
+    }
+
+    public function test_create_is_allowed_below_limit(): void
+    {
+        config(['direction.max_per_user' => 2]);
+
+        $user = User::factory()->create();
+
+        Direction::factory()
+            ->count(1)
+            ->create(['user_id' => $user->id, 'color' => DirectionColor::Blue->value]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, ['title' => 'Последнее', 'color' => 'c19'])
+            ->assertCreated()
+            ->assertJsonPath('data.title', 'Последнее');
+
+        $this->assertDatabaseCount('directions', 2);
+    }
+
+    public function test_limit_is_counted_per_user(): void
+    {
+        config(['direction.max_per_user' => 1]);
+
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+
+        Direction::factory()->create(['user_id' => $other->id]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, ['title' => 'Своё', 'color' => 'c1'])
+            ->assertCreated();
     }
 
     public function test_show_returns_foreign_direction_as_not_found(): void

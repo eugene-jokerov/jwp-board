@@ -40,6 +40,11 @@ final class EloquentDirectionRepository implements DirectionRepository
             ->all();
     }
 
+    public function countForUser(int $userId): int
+    {
+        return Direction::query()->where('user_id', $userId)->count();
+    }
+
     public function create(int $userId, DirectionTitle $title, DirectionColor $color): Direction
     {
         return Direction::query()->create([

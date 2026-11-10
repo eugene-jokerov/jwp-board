@@ -42,5 +42,7 @@
         <env name="LEGAL_EFFECTIVE_DATE" value="2026-11-11"/>
         <env name="LEGAL_VERSION" value="1.0"/>
         <env name="LEGAL_RKN_NOTICE" value="уведомление подано"/>
+        <!-- Лимит направлений: тесты не зависят от backend/.env и проверяют его число. -->
+        <env name="DIRECTIONS_MAX_PER_USER" value="15"/>
     </php>
 </phpunit>

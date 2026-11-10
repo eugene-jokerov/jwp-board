@@ -8,14 +8,20 @@ use App\Modules\Direction\Application\Results\DirectionResult;
 use App\Modules\Direction\Infrastructure\Http\Resources\DirectionResource;
 use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\QueryBus;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * Список направлений текущего пользователя.
  *
  * Контроллер — входной адаптер: собирает запрос прикладного слоя, отдаёт его
  * в шину и оборачивает результат в ресурс. Бизнес-логики здесь нет.
+ *
+ * Ответ — `{"data": [...], "meta": {"limit": 15}}`: рядом с направлениями едет
+ * лимит из config('direction.max_per_user'), чтобы клиент показывал счётчик
+ * «n из k» и не дублировал число у себя. Лимит лежит в теле, а не в заголовке:
+ * веб-версия ходит в API с другого origin, и заголовок пришлось бы отдельно
+ * экспонировать в CORS ради значения, которое проще прочитать из тела.
  */
 final class IndexDirectionController extends Controller
 {
@@ -26,7 +32,7 @@ final class IndexDirectionController extends Controller
     /**
      * GET /api/v1/directions
      */
-    public function __invoke(Request $request): AnonymousResourceCollection
+    public function __invoke(Request $request): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -34,6 +40,17 @@ final class IndexDirectionController extends Controller
         /** @var list<DirectionResult> $directions */
         $directions = $this->queries->ask(new ListDirectionsQuery((int) $user->getKey()));
 
-        return DirectionResource::collection($directions);
+        $response = DirectionResource::collection($directions)->response();
+
+        // Ответ собираем явно: рядом с `data` нужен `meta`, а `with()` в Laravel
+        // кладёт поля плоско — на одном уровне с ключом `data`, а не в `meta`.
+        $payload = [
+            'data' => json_decode((string) $response->getContent(), true)['data'] ?? [],
+            'meta' => [
+                'limit' => (int) config('direction.max_per_user'),
+            ],
+        ];
+
+        return new JsonResponse($payload);
     }
 }

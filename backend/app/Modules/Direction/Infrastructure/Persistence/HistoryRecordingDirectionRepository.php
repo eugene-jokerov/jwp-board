@@ -35,6 +35,11 @@ final readonly class HistoryRecordingDirectionRepository implements DirectionRep
         return $this->inner->allForUser($userId);
     }
 
+    public function countForUser(int $userId): int
+    {
+        return $this->inner->countForUser($userId);
+    }
+
     public function create(int $userId, DirectionTitle $title, DirectionColor $color): Direction
     {
         $direction = $this->inner->create($userId, $title, $color);

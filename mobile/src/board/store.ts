@@ -115,6 +115,12 @@ export interface BoardState extends CardActions, DirectionActions, ClosedPageAct
   cards: Card[];
   directions: Direction[];
   /**
+   * Лимит направлений на пользователя из `meta.limit` списка направлений;
+   * null — ответ ещё не получен (или пришёл от API без `meta`). По нему попап
+   * «Направления» показывает счётчик «n из k» и гасит кнопку создания.
+   */
+  directionLimit: number | null;
+  /**
    * Полное число карточек закрытых колонок по парам «уровень + колонка» из
    * `meta.closed_totals`: в «Готово» и «Отмене» приходит лишь порция карточек,
    * поэтому счётчик берётся отсюда, а не из длины списка.
@@ -153,6 +159,8 @@ function parentPayload(kind: CardKind, parentId: number | null): Partial<TaskCre
 export function useBoard(): BoardState {
   const [cards, setCards] = useState<Card[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
+  /** Лимит направлений с сервера; null — ещё не загружен. */
+  const [directionLimit, setDirectionLimit] = useState<number | null>(null);
   const [closedTotals, setClosedTotals] = useState<ClosedTotals>({});
   /** Состояние догрузки закрытых колонок по парам «колонка + уровень». */
   const [closedPages, setClosedPages] = useState<ClosedPages>({});
@@ -165,7 +173,10 @@ export function useBoard(): BoardState {
     try {
       const [directionsPayload, tasksPayload] = await Promise.all([fetchDirections(token), fetchTasks(token)]);
 
-      setDirections(directionsPayload.map(toDirection));
+      setDirections(directionsPayload.data.map(toDirection));
+      // Лимит приходит с сервера: клиент не хранит своё число направлений,
+      // иначе при смене лимита на бэкенде счётчик «n из k» разошёлся бы.
+      setDirectionLimit(directionsPayload.meta.limit);
       setCards(tasksPayload.data.map(toCard));
       // Счётчики закрытых колонок — из `meta`: карточки «Готово» и «Отмены»
       // приходят порцией, и по длине списка полное число не восстановить.
@@ -426,6 +437,7 @@ export function useBoard(): BoardState {
     () => ({
       cards,
       directions,
+      directionLimit,
       closedTotals,
       closedPages,
       isLoading,
@@ -443,6 +455,7 @@ export function useBoard(): BoardState {
     [
       cards,
       directions,
+      directionLimit,
       closedTotals,
       closedPages,
       isLoading,
