@@ -27,6 +27,7 @@ final readonly class CreateTaskCommandHandler
             $command->userId,
             $command->type,
             $command->column,
+            $command->priority,
             $command->title,
             $command->description,
             $command->directionId,

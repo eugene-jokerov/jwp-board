@@ -26,6 +26,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * slug — необязательное кодовое название (≤16 символов); null — метки нет.
  * idea — степень проработки: true — ещё идея, false — готова к реализации.
  * Смысл имеет в беклоге, но отдаётся всегда.
+ * priority — приоритет карточки (low / medium / high). От колонки и уровня
+ * не зависит и поэтому отдаётся всегда; в закрытых колонках клиент его
+ * не показывает.
  *
  * @property-read TaskResult $resource
  */
@@ -40,6 +43,7 @@ final class TaskResource extends JsonResource
             'id' => $this->resource->id,
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
+            'priority' => $this->resource->priority->value,
             'idea' => $this->resource->idea,
             'title' => $this->resource->title,
             'slug' => $this->resource->slug,

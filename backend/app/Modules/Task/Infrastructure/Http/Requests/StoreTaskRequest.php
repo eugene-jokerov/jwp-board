@@ -3,6 +3,7 @@
 namespace App\Modules\Task\Infrastructure\Http\Requests;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
 use App\Modules\Task\Domain\ValueObjects\TaskSlug;
@@ -35,6 +36,9 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => ['required', Rule::enum(CardType::class)],
             'column' => ['required', Rule::enum(CardColumn::class)],
+            // Приоритет необязателен: без него карточка создаётся со средним —
+            // то же значение, что подставляет колонка в базе.
+            'priority' => ['sometimes', Rule::enum(CardPriority::class)],
             // Степень проработки: true — идея, false — готова к реализации.
             // Флаг необязателен: без него карточка создаётся готовой к работе.
             'idea' => ['sometimes', 'boolean'],
@@ -95,6 +99,7 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => 'тип',
             'column' => 'колонка',
+            'priority' => 'приоритет',
             'idea' => 'степень проработки',
             'title' => 'название',
             'slug' => 'кодовое название',
@@ -116,6 +121,7 @@ final class StoreTaskRequest extends FormRequest
             'type.enum' => 'Неизвестный тип карточки.',
             'column.required' => 'Укажите колонку.',
             'column.enum' => 'Неизвестная колонка.',
+            'priority.enum' => 'Неизвестный приоритет карточки.',
             'idea.boolean' => 'Степень проработки — «идея» или «на реализацию».',
             'title.required' => 'Укажите название карточки.',
             'title.max' => 'Название не может быть длиннее :max символов.',
@@ -133,6 +139,9 @@ final class StoreTaskRequest extends FormRequest
         return [
             'type' => $this->string('type')->toString(),
             'column' => $this->string('column')->toString(),
+            // Приоритет передаётся только если пришёл в запросе: без поля
+            // команда ставит средний, как и колонка в базе по умолчанию.
+            ...($this->has('priority') ? ['priority' => $this->string('priority')->toString()] : []),
             // Степень проработки передаётся всегда явным boolean: без флага
             // карточка считается готовой к реализации. `boolean`-правило уже
             // проверило тип, поэтому `null` здесь означать нечего.

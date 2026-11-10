@@ -20,8 +20,8 @@
  *
  * В нижней строке слева стоит дедлайн без времени в виде «до ДД.ММ.ГГГГ», если
  * он задан: срок виден прямо на доске, не открывая карточку. Сразу за сроком (а
- * если срока нет — на его месте) в беклоге стоит бейдж «Идея»; справа остаётся
- * кнопка действия.
+ * если срока нет — на его месте) в беклоге стоит бейдж «Идея», за ним — бейдж
+ * приоритета («Низкий», «Средний», «Высокий»); справа остаётся кнопка действия.
  * Если срок прошёл, карточка получает лёгкую красную подложку, а сама дата
  * красится в цвет ошибки — просрочка видна и без чтения даты.
  *
@@ -44,7 +44,10 @@
  * подписью «без родителя») не выводятся и просрочка не подсвечивается: работа
  * уже завершена или отменена, дедлайн там потерял смысл (красная плитка
  * читалась бы как «просрочено» без причины), а путь по иерархии перестаёт быть
- * нужным. Признак колонки передаёт вызывающий компонент (`closedColumn`).
+ * нужным. Приоритет по той же причине не показывается: у завершённой работы
+ * важность уже не влияет на решения. Значение при этом хранится и снова
+ * появится, если карточку вернуть в открытую колонку. Признак колонки передаёт
+ * вызывающий компонент (`closedColumn`).
  */
 
 import { Pressable, Text, View } from 'react-native';
@@ -53,8 +56,8 @@ import { CalendarIcon, CheckIcon, PlayIcon } from './BoardIcons';
 import { formatDeadlineDate, isDeadlineOverdue } from '../deadline';
 import { directionColorHex } from '../directionColors';
 import type { CardAction, CardBreadcrumb } from '../derive';
-import type { CardKind } from '../types';
-import { WORK_STAGE_LABEL } from '../types';
+import type { CardKind, CardPriority } from '../types';
+import { PRIORITY_LABEL, WORK_STAGE_LABEL } from '../types';
 
 /**
  * Разделитель сегментов крошек: «›» — компактный шеврон, привычный для пути
@@ -80,6 +83,38 @@ function IdeaBadge() {
   return (
     <View className="rounded-full bg-lane px-1.5 py-0.5">
       <Text className="text-[10px] font-semibold text-subtle">{WORK_STAGE_LABEL.idea}</Text>
+    </View>
+  );
+}
+
+/**
+ * Оформление бейджа приоритета.
+ *
+ * Классы заданы литералами, а не через переменную: Tailwind собирает только
+ * те классы, которые встречаются в исходниках целиком, а склеенные из частей
+ * (`bg-priority-${key}`) в сборку не попадают. «Средний» приоритет — самый
+ * частый, поэтому он самый нейтральный; высокий получает акцент ошибки,
+ * низкий — приглушённую подложку.
+ */
+const PRIORITY_BADGE_STYLE: Record<CardPriority, { container: string; text: string }> = {
+  low: { container: 'bg-lane', text: 'text-subtle' },
+  medium: { container: 'bg-surface', text: 'text-muted' },
+  high: { container: 'bg-err-bg', text: 'text-err-fg' },
+};
+
+/**
+ * Бейдж приоритета карточки в нижней строке плитки.
+ *
+ * Показывается для всех трёх значений: в отличие от «Идеи», приоритет — не
+ * отметка особого случая, а характеристика карточки, и «Средний» тоже полезно
+ * видеть. Плашка компактная: название в плитке важнее метки.
+ */
+function PriorityBadge({ priority }: { priority: CardPriority }) {
+  const style = PRIORITY_BADGE_STYLE[priority];
+
+  return (
+    <View className={['shrink-0 rounded-full px-1.5 py-0.5', style.container].join(' ')}>
+      <Text className={['text-[10px] font-semibold', style.text].join(' ')}>{PRIORITY_LABEL[priority]}</Text>
     </View>
   );
 }
@@ -128,6 +163,14 @@ interface BoardCardProps {
   /** Срок карточки строкой ISO-8601; null — срока нет. */
   deadline: string | null;
   /**
+   * Приоритет карточки: низкий, средний или высокий.
+   *
+   * Бейдж приоритета выводится в нижней строке открытых колонок. В закрытых
+   * («Готово», «Отмена») он скрывается вместе со сроком: у завершённой работы
+   * важность уже не влияет на решения.
+   */
+  priority: CardPriority;
+  /**
    * Карточка лежит в закрытой колонке («Готово», «Отмена»): срок не выводим
    * и просрочку не подсвечиваем — см. комментарий в шапке компонента.
    */
@@ -157,6 +200,7 @@ export function BoardCard({
   hasParent,
   kind,
   deadline,
+  priority,
   closedColumn,
   idea,
   backlogColumn,
@@ -193,6 +237,10 @@ export function BoardCard({
   // колонках карточка уже не «идея или нет», а готовые к реализации плашки не
   // носят (их группа и так идёт первой, см. `sortBacklogCards`).
   const showIdeaBadge = backlogColumn && idea;
+  // Приоритет показываем в открытых колонках. В закрытых он не нужен: работа
+  // завершена или отменена, и важность карточки больше не влияет на решения —
+  // то же правило, что у срока и крошек.
+  const showPriorityBadge = !closedColumn;
 
   return (
     // `pointer-events-auto` возвращает клики самой карточке. Карточки закрытых
@@ -253,11 +301,12 @@ export function BoardCard({
         )}
 
         <View className="flex-row items-center justify-between gap-2">
-          {/* Левая часть нижней строки — срок карточки и бейдж «Идея» сразу за
-              ним: подпись «без родителя» переехала в крошки, поэтому здесь ей
+          {/* Левая часть нижней строки — срок карточки и бейджи сразу за ним:
+              подпись «без родителя» переехала в крошки, поэтому здесь ей
               делать нечего. `flex-1` держит срок у левого края, а кнопку
-              действия — справа; бейдж идёт после даты, а если срока нет —
-              встаёт на её место. */}
+              действия — справа; бейджи идут после даты, а если срока нет —
+              встают на её место. Порядок «Идея» → «Приоритет»: сначала признак
+              стадии работы, затем её важность. */}
           <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
             {deadlineLabel === null ? null : (
               /* «до» + дата: сразу понятно, что дата — это срок, а не отметка
@@ -279,6 +328,8 @@ export function BoardCard({
             )}
 
             {showIdeaBadge ? <IdeaBadge /> : null}
+
+            {showPriorityBadge ? <PriorityBadge priority={priority} /> : null}
           </View>
 
           {action ? (

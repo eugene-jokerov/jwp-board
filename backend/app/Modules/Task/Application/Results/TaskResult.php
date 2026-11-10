@@ -5,6 +5,7 @@ namespace App\Modules\Task\Application\Results;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 
 /**
@@ -15,6 +16,8 @@ use App\Modules\Task\Domain\ValueObjects\CardType;
  * перевести сейчас; их считает доменная политика, а не клиент.
  * idea — степень проработки: true — карточка ещё идея, false — готова
  * к реализации. Значение имеет смысл в беклоге, но отдаётся всегда.
+ * priority — приоритет карточки: он не зависит ни от колонки, ни от уровня,
+ * поэтому отдаётся всегда, как и idea.
  */
 final readonly class TaskResult
 {
@@ -25,6 +28,7 @@ final readonly class TaskResult
         public int $id,
         public CardType $type,
         public CardColumn $column,
+        public CardPriority $priority,
         public bool $idea,
         public string $title,
         public ?string $slug,
@@ -48,6 +52,7 @@ final readonly class TaskResult
             (int) $task->id,
             $task->type,
             $task->column,
+            $task->priority,
             (bool) $task->idea,
             $task->title,
             $task->slug,

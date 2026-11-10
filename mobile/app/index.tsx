@@ -40,11 +40,13 @@ import { useBoardSettings } from '../src/board/settings';
 import { useBoard } from '../src/board/store';
 import {
   COLUMNS,
+  DEFAULT_CARD_PRIORITY,
   LEVELS,
   PARENT_KIND,
   type BoardLevel as BoardLevelModel,
   type Card,
   type CardKind,
+  type CardPriority,
   type ColumnId,
   type Direction,
   type LevelId,
@@ -221,6 +223,9 @@ function buildDraft(
     noParentLabel: form.level === 'tactical' ? 'Без инициативы (нейтральный цвет)' : 'Без проекта (нейтральный цвет)',
     columnLabel: columnLabel(form.column),
     columnId: form.column,
+    // Приоритет новой карточки — средний: его же показывает форма по умолчанию,
+    // и с него начинается состояние модалки (см. CardFormModal).
+    priority: DEFAULT_CARD_PRIORITY,
     levelLabel: level.label,
   };
 }
@@ -365,8 +370,9 @@ export default function HomeScreen() {
     parentId: number | null,
     deadline: string | null,
     idea: boolean,
+    priority: CardPriority,
   ) => {
-    const error = await board.createCard(cardDraft, title, slug, description, parentId, deadline, idea);
+    const error = await board.createCard(cardDraft, title, slug, description, parentId, deadline, idea, priority);
 
     if (error === null) {
       setForm(null);
@@ -377,8 +383,9 @@ export default function HomeScreen() {
   };
 
   /**
-   * Изменение карточки: название, кодовое название, описание, срок и статус.
-   * Ошибку возвращаем модалке — она показывается внутри попапа, а не над доской.
+   * Изменение карточки: название, кодовое название, описание, срок, приоритет
+   * и статус. Ошибку возвращаем модалке — она показывается внутри попапа,
+   * а не над доской.
    */
   const saveCard = async (
     card: Card,
@@ -388,8 +395,9 @@ export default function HomeScreen() {
     column: ColumnId,
     deadline: string | null | undefined,
     idea: boolean | undefined,
+    priority: CardPriority | undefined,
   ) => {
-    const error = await board.saveCard(card, title, slug, description, column, deadline, idea);
+    const error = await board.saveCard(card, title, slug, description, column, deadline, idea, priority);
 
     if (error === null) {
       setEditedCardId(null);

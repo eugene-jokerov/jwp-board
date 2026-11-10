@@ -6,6 +6,7 @@ use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\Contracts\TaskRepository;
 use App\Modules\Task\Domain\Exceptions\TaskNotFound;
 use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 
 /**
@@ -213,6 +214,7 @@ final class InMemoryTaskRepository implements TaskRepository
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => 'backlog',
+            'priority' => CardPriority::Medium->value,
             'idea' => false,
             'title' => 'Карточка '.$id,
             'slug' => null,

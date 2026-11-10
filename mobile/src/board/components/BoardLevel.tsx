@@ -864,6 +864,7 @@ export function BoardLevel({
                               hasParent={hasParent(card)}
                               kind={card.kind}
                               deadline={card.deadline}
+                              priority={card.priority}
                               closedColumn={isClosedColumn(columnId)}
                               idea={card.idea}
                               backlogColumn={columnId === 'backlog'}
@@ -941,6 +942,7 @@ export function BoardLevel({
                                 hasParent={hasParent(card)}
                                 kind={card.kind}
                                 deadline={card.deadline}
+                                priority={card.priority}
                                 closedColumn={isClosedColumn(column.id)}
                                 idea={card.idea}
                                 backlogColumn={column.id === 'backlog'}

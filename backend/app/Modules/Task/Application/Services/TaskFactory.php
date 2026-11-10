@@ -7,6 +7,7 @@ use App\Modules\Task\Domain\Exceptions\InvalidHierarchy;
 use App\Modules\Task\Domain\Services\TaskPlacement;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
@@ -35,6 +36,7 @@ final readonly class TaskFactory
         int $userId,
         CardType $type,
         CardColumn $column,
+        CardPriority $priority,
         TaskTitle $title,
         ?TaskDescription $description,
         ?int $directionId,
@@ -53,6 +55,9 @@ final readonly class TaskFactory
             'deadline' => $deadline?->value(),
             'type' => $type,
             'column' => $column,
+            // Приоритет не зависит от колонки: карточка создаётся с тем,
+            // что выбрали в форме (или со средним по умолчанию).
+            'priority' => $priority,
             // Степень проработки — свойство беклога. Карточка, созданная сразу
             // в работе или закрытой колонке, идеей не бывает.
             'idea' => $column->acceptsIdeas() && $idea,

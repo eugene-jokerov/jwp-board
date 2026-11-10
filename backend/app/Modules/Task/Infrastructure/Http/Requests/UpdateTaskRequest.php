@@ -3,6 +3,7 @@
 namespace App\Modules\Task\Infrastructure\Http\Requests;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
 use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
@@ -44,6 +45,9 @@ final class UpdateTaskRequest extends FormRequest
             // самой даты (30 февраля и т. п.) проверяет value object.
             'deadline' => ['sometimes', 'nullable', 'string', 'regex:/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $this->deadlineRule()],
             'column' => ['sometimes', Rule::enum(CardColumn::class)],
+            // Приоритет меняется независимо от колонки и уровня: ограничений
+            // «только беклог», как у степени проработки, у него нет.
+            'priority' => ['sometimes', Rule::enum(CardPriority::class)],
             // Степень проработки: true — идея, false — готова к реализации.
             // Отсутствие ключа — «не менять»: при смене колонки флаг сохраняется.
             'idea' => ['sometimes', 'boolean'],
@@ -95,6 +99,7 @@ final class UpdateTaskRequest extends FormRequest
             'description' => 'описание',
             'deadline' => 'дедлайн',
             'column' => 'колонка',
+            'priority' => 'приоритет',
             'idea' => 'степень проработки',
             'direction_id' => 'направление',
             'initiative_id' => 'инициатива',
@@ -113,6 +118,7 @@ final class UpdateTaskRequest extends FormRequest
             'description.max' => 'Описание не может быть длиннее :max символов.',
             'deadline.regex' => 'Неверная дата дедлайна.',
             'column.enum' => 'Неизвестная колонка.',
+            'priority.enum' => 'Неизвестный приоритет карточки.',
             'idea.boolean' => 'Степень проработки — «идея» или «на реализацию».',
         ];
     }
@@ -138,12 +144,12 @@ final class UpdateTaskRequest extends FormRequest
 
     /**
      * Переданные поля карточки: заголовок, кодовое название, описание, дедлайн,
-     * колонка, степень проработки.
+     * колонка, приоритет, степень проработки.
      *
      * Ключи попадают в результат только если они пришли в запросе: отсутствие
      * ключа — «не менять», явный null — «очистить».
      *
-     * @return array{title?: string, slug?: string|null, description?: string|null, deadline?: string|null, column?: string, idea?: bool}
+     * @return array{title?: string, slug?: string|null, description?: string|null, deadline?: string|null, column?: string, priority?: string, idea?: bool}
      */
     public function toFieldPayload(): array
     {
@@ -170,6 +176,10 @@ final class UpdateTaskRequest extends FormRequest
 
         if ($this->has('column')) {
             $fields['column'] = $this->string('column')->toString();
+        }
+
+        if ($this->has('priority')) {
+            $fields['priority'] = $this->string('priority')->toString();
         }
 
         if ($this->has('idea')) {

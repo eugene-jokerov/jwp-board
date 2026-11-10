@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\User\Domain\User;
 use Carbon\CarbonInterface;
@@ -51,6 +52,7 @@ class TaskFactory extends Factory
             'project_id' => null,
             'type' => CardType::Task->value,
             'column' => CardColumn::Backlog->value,
+            'priority' => CardPriority::Medium->value,
             'idea' => false,
             // Заголовок уникален в пределах вызова fake(): суффикс из
             // счётчика не зависит от генератора случайных чисел. `unique()`
@@ -81,6 +83,16 @@ class TaskFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'column' => $column->value,
+        ]);
+    }
+
+    /**
+     * Карточка конкретного приоритета.
+     */
+    public function priority(CardPriority $priority): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'priority' => $priority->value,
         ]);
     }
 

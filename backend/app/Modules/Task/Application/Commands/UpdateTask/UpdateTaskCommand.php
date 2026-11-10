@@ -3,6 +3,7 @@
 namespace App\Modules\Task\Application\Commands\UpdateTask;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 
 /**
@@ -19,7 +20,7 @@ final readonly class UpdateTaskCommand
 {
     /**
      * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links  только присутствующие в запросе ссылки
-     * @param  array{title?: TaskTitle|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null, idea?: bool}  $changes
+     * @param  array{title?: TaskTitle|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null, priority?: CardPriority|null, idea?: bool}  $changes
      */
     public function __construct(
         public int $userId,

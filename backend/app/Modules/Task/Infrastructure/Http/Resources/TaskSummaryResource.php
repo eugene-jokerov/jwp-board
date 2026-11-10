@@ -29,6 +29,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * idea — степень проработки: true — ещё идея, false — готова к реализации.
  * Смысл имеет в беклоге (там доска ставит идеи ниже и рисует бейдж), но
  * отдаётся всегда: значение флага при смене колонки не сбрасывается.
+ * priority — приоритет карточки (low / medium / high): доска выводит его
+ * бейджем в плитке. Значение короткое и нужно для отрисовки списка, поэтому
+ * есть и в кратком представлении.
  *
  * @property-read TaskResult $resource
  */
@@ -43,6 +46,7 @@ final class TaskSummaryResource extends JsonResource
             'id' => $this->resource->id,
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
+            'priority' => $this->resource->priority->value,
             'idea' => $this->resource->idea,
             'title' => $this->resource->title,
             'slug' => $this->resource->slug,

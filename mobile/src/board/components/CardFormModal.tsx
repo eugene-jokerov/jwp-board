@@ -13,22 +13,28 @@
  * бывает, и сервер такой флаг обнуляет. Значение по умолчанию зависит от
  * уровня: инициатива и проект открываются как «Идея», задача — как «На
  * реализацию» (см. `defaultIdea`).
+ *
+ * Приоритет выбирается всегда — низкий, средний или высокий, по умолчанию
+ * средний: он не зависит ни от колонки, ни от уровня карточки.
  */
 
 import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
 import { FormAlert } from '../../components/FormAlert';
 import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
-import type { CardKind, ColumnId, ParentOptionModel } from '../types';
+import type { CardKind, CardPriority, ColumnId, ParentOptionModel } from '../types';
 import {
+  DEFAULT_CARD_PRIORITY,
   DESCRIPTION_MAX_LENGTH,
   KIND_LABEL,
   KIND_LEVEL,
   PARENT_LABEL,
+  PRIORITIES,
   SLUG_MAX_LENGTH,
   WORK_STAGE_LABEL,
 } from '../types';
@@ -53,6 +59,8 @@ export interface CardDraft {
   columnLabel: string;
   /** Колонка, в которую попадёт карточка. */
   columnId: ColumnId;
+  /** Начальный приоритет новой карточки (по умолчанию — средний). */
+  priority: CardPriority;
   /** Название уровня — для шапки формы. */
   levelLabel: string;
 }
@@ -64,6 +72,7 @@ interface CardFormModalProps {
    * `slug` — кодовое название или null (поле не заполнено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
    * `idea` — степень проработки: true — идея; вне беклога всегда false.
+   * `priority` — приоритет карточки: низкий, средний или высокий.
    */
   onCreate: (
     draft: CardDraft,
@@ -73,6 +82,7 @@ interface CardFormModalProps {
     parentId: number | null,
     deadline: string | null,
     idea: boolean,
+    priority: CardPriority,
   ) => Promise<string | null>;
   onClose: () => void;
 }
@@ -181,6 +191,11 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
    * задача — как «На реализацию».
    */
   const [idea, setIdea] = useState(() => defaultIdea(draft?.kind ?? 'initiative'));
+  /**
+   * Приоритет карточки. Начальное значение — из черновика (там всегда средний),
+   * поэтому новая форма открывается на «Среднем», как указано в требованиях.
+   */
+  const [priority, setPriority] = useState<CardPriority>(() => draft?.priority ?? DEFAULT_CARD_PRIORITY);
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -198,6 +213,9 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     // открытие формы (в том числе для карточки другого уровня) должно снова
     // начинаться со степени проработки по умолчанию.
     setIdea(defaultIdea(draft?.kind ?? 'initiative'));
+    // Приоритет тоже возвращается к умолчанию: повторное открытие формы не
+    // должно наследовать выбор предыдущей карточки.
+    setPriority(draft?.priority ?? DEFAULT_CARD_PRIORITY);
     setParentId(null);
     setTitleError(null);
     setParentError(null);
@@ -251,6 +269,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
       draft.laneId ?? parentId,
       toDeadlineDate(deadline),
       stageSelectable && idea,
+      priority,
     );
     setSaving(false);
 
@@ -340,6 +359,24 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 }}
                 placeholder="Без срока"
               />
+
+              {/* Приоритет — свойство самой карточки: выбор есть всегда, в любой
+                  колонке и на любом уровне. Переключатель компактный: три
+                  значения умещаются в строку, а длинные подписи-пояснения здесь
+                  не нужны — «Низкий» / «Средний» / «Высокий» говорят сами за
+                  себя. По умолчанию выбран средний (DEFAULT_CARD_PRIORITY). */}
+              <View className="gap-1.5">
+                <Text className="text-sm font-medium text-app">Приоритет</Text>
+
+                <SegmentedSwitch
+                  options={PRIORITIES.map((item) => ({ value: item.id, label: item.label }))}
+                  value={priority}
+                  onChange={(value) => {
+                    setPriority(value);
+                    setFormError(null);
+                  }}
+                />
+              </View>
 
               {stageSelectable ? (
                 <View className="gap-1.5">

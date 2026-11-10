@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -1318,5 +1319,136 @@ final class TasksTest extends TestCase
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => '   '])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['title']);
+    }
+
+    /**
+     * Приоритет задаётся при создании; без поля карточка становится средней.
+     */
+    public function test_priority_is_stored_on_create(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Срочная задача',
+                'priority' => 'high',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.priority', 'high');
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача без выбранного приоритета',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.priority', 'medium');
+
+        $this->assertDatabaseHas('tasks', ['user_id' => $user->id, 'title' => 'Срочная задача', 'priority' => 'high']);
+        $this->assertDatabaseHas('tasks', [
+            'user_id' => $user->id,
+            'title' => 'Задача без выбранного приоритета',
+            'priority' => 'medium',
+        ]);
+    }
+
+    /**
+     * Приоритет не привязан к колонке: карточка, созданная сразу в работе,
+     * сохраняет выбранный приоритет — в отличие от флага «идея».
+     */
+    public function test_priority_is_kept_outside_backlog_on_create(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'in_progress',
+                'title' => 'Задача сразу в работе',
+                'priority' => 'low',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.priority', 'low');
+    }
+
+    public function test_priority_must_be_known_value(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Неизвестный приоритет',
+                'priority' => 'urgent',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['priority']);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['priority' => 'urgent'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['priority']);
+    }
+
+    public function test_priority_can_be_changed(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['priority' => 'high'])
+            ->assertOk()
+            ->assertJsonPath('data.priority', 'high');
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'priority' => 'high']);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['priority' => 'low'])
+            ->assertOk()
+            ->assertJsonPath('data.priority', 'low');
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'priority' => 'low']);
+    }
+
+    /**
+     * Приоритет хранится у карточки, а не у колонки: перевод в закрытую колонку
+     * значение не сбрасывает (клиент просто не показывает бейдж).
+     */
+    public function test_priority_survives_column_change(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->priority(CardPriority::High)->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'in_progress'])
+            ->assertOk()
+            ->assertJsonPath('data.column', 'in_progress')
+            ->assertJsonPath('data.priority', 'high');
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'complete'])
+            ->assertOk()
+            ->assertJsonPath('data.column', 'complete')
+            ->assertJsonPath('data.priority', 'high');
+    }
+
+    /**
+     * Приоритет приходит и в списке доски: плитка выводит его бейджем.
+     */
+    public function test_index_returns_priority(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->priority(CardPriority::Low)->create(['user_id' => $user->id, 'column' => 'backlog']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.priority', 'low');
     }
 }

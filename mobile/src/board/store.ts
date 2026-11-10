@@ -46,7 +46,15 @@ import {
 } from './derive';
 import { parentFieldOf, toCard, toClosedTotals, toDirection } from './mappers';
 import type { CardDraft } from './components/CardFormModal';
-import { CLOSED_PAGE_SIZE, type Card, type CardKind, type ClosedTotals, type ColumnId, type Direction } from './types';
+import {
+  CLOSED_PAGE_SIZE,
+  type Card,
+  type CardKind,
+  type CardPriority,
+  type ClosedTotals,
+  type ColumnId,
+  type Direction,
+} from './types';
 
 /** Текст ошибки для интерфейса: сообщение сервера, иначе — запасное. */
 export function errorMessage(error: unknown, fallback: string): string {
@@ -64,7 +72,8 @@ interface CardActions {
   /**
    * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null,
    * `slug` — кодовое название или null (метки нет),
-   * `idea` — степень проработки: true — идея (только для беклога).
+   * `idea` — степень проработки: true — идея (только для беклога),
+   * `priority` — приоритет: низкий, средний или высокий (от колонки не зависит).
    */
   createCard: (
     draft: CardDraft,
@@ -74,13 +83,15 @@ interface CardActions {
     parentId: number | null,
     deadline: string | null,
     idea: boolean,
+    priority: CardPriority,
   ) => Promise<string | null>;
   /**
    * Сохранить карточку; `description` — null, если описание стёрли, а незагруженное
    * описание не отправляется. `deadline` — дата в формате API, null или
    * undefined (ещё не загружен — не отправлять). `slug` — так же: null очищает
    * метку, undefined — «ещё не загружено, не трогать». `idea` — степень
-   * проработки: undefined — «выбор не показывался, не трогать».
+   * проработки: undefined — «выбор не показывался, не трогать». `priority` —
+   * приоритет: undefined — «ещё не загружен, не трогать».
    */
   saveCard: (
     card: Card,
@@ -90,6 +101,7 @@ interface CardActions {
     column: ColumnId,
     deadline: string | null | undefined,
     idea: boolean | undefined,
+    priority: CardPriority | undefined,
   ) => Promise<string | null>;
   moveCard: (card: Card, column: ColumnId) => Promise<string | null>;
   removeCard: (card: Card) => Promise<string | null>;
@@ -210,7 +222,7 @@ export function useBoard(): BoardState {
   }, []);
 
   const createCard = useCallback<CardActions['createCard']>(
-    async (draft, title, slug, description, parentId, deadline, idea) => {
+    async (draft, title, slug, description, parentId, deadline, idea, priority) => {
       const input: TaskCreateInput = {
         type: draft.kind,
         column: draft.columnId,
@@ -218,6 +230,9 @@ export function useBoard(): BoardState {
         // Степень проработки отправляем всегда явно: сервер без поля считает
         // карточку готовой к реализации, а вне беклога флаг всё равно обнуляет.
         idea,
+        // Приоритет — тоже всегда явно: без поля сервер ставит средний, а
+        // форма даёт выбрать (по умолчанию — средний).
+        priority,
         // Пустую метку не отправляем: сервер и так создаёт карточку без slug.
         ...(slug === null ? {} : { slug }),
         // Пустое описание не отправляем: сервер сам нормализует пустую строку
@@ -246,13 +261,20 @@ export function useBoard(): BoardState {
   );
 
   const saveCard = useCallback<CardActions['saveCard']>(
-    async (card, title, slug, description, column, deadline, idea) => {
+    async (card, title, slug, description, column, deadline, idea, priority) => {
       const input: TaskUpdateInput = { title };
 
       // Степень проработки: undefined — выбор не показывался (карточка не из
       // беклога), ключ не отправляем, чтобы сервер не тронул сохранённый флаг.
       if (idea !== undefined) {
         input.idea = idea;
+      }
+
+      // Приоритет: undefined — значение ещё не загружено (карточка открыта,
+      // но ответ GET ещё не пришёл) — ключ не отправляем, иначе PATCH стёр бы
+      // приоритет, которого мы не видели.
+      if (priority !== undefined) {
+        input.priority = priority;
       }
 
       // Кодовое название — как и дедлайн: undefined значит «ещё не загружено»,

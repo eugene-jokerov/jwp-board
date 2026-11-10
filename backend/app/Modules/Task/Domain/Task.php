@@ -4,6 +4,7 @@ namespace App\Modules\Task\Domain;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardLevel;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $project_id
  * @property CardType $type
  * @property CardColumn $column
+ * @property CardPriority $priority
  * @property bool $idea
  * @property string $title
  * @property string|null $slug
@@ -53,6 +55,7 @@ class Task extends Model
         'project_id',
         'type',
         'column',
+        'priority',
         'idea',
         'title',
         'slug',
@@ -76,6 +79,7 @@ class Task extends Model
         return [
             'type' => CardType::class,
             'column' => CardColumn::class,
+            'priority' => CardPriority::class,
             'idea' => 'boolean',
             'deadline' => 'datetime',
         ];

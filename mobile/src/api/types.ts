@@ -59,6 +59,9 @@ export type CardColumn = 'backlog' | 'in_progress' | 'complete' | 'canceled';
 /** Тип карточки: имя узла в иерархии доски. */
 export type CardType = 'initiative' | 'project' | 'task';
 
+/** Приоритет карточки: низкий, средний или высокий. */
+export type CardPriority = 'low' | 'medium' | 'high';
+
 /** Направление движения по жизни (GET /api/v1/directions). */
 export interface Direction {
   id: number;
@@ -102,6 +105,11 @@ export interface TaskSummary {
   id: number;
   type: CardType;
   column: CardColumn;
+  /**
+   * Приоритет карточки (low / medium / high). Поле приходит всегда: приоритет
+   * не зависит ни от колонки, ни от уровня, а доска рисует его бейджем.
+   */
+  priority: CardPriority;
   title: string;
   /**
    * Кодовое название (slug): необязательная метка до 16 символов без
@@ -147,6 +155,11 @@ export interface TaskCreateInput {
   type: CardType;
   column: CardColumn;
   title: string;
+  /**
+   * Приоритет карточки: без поля сервер ставит средний. Приоритет не привязан
+   * к колонке — значение сохраняется при любом переходе между колонками.
+   */
+  priority?: CardPriority;
   /**
    * Степень проработки: true — идея, false — готова к реализации. Без поля
    * карточка создаётся готовой к реализации; вне беклога сервер флаг обнуляет.

@@ -13,6 +13,9 @@
 /** Колонки доски — одинаковый набор на всех уровнях. */
 export type ColumnId = 'backlog' | 'in_progress' | 'complete' | 'canceled';
 
+/** Приоритет карточки. */
+export type CardPriority = 'low' | 'medium' | 'high';
+
 /** Уровни доски. */
 export type LevelId = 'strategic' | 'tactical' | 'operational';
 
@@ -37,6 +40,14 @@ export interface Card {
   kind: CardKind;
   title: string;
   column: ColumnId;
+  /**
+   * Приоритет карточки: низкий, средний или высокий.
+   *
+   * Приоритет — свойство самой карточки, а не этапа: он хранится при любом
+   * переходе между колонками. Плитка выводит его бейджем в нижней строке,
+   * кроме закрытых колонок: там работа уже завершена и метка не нужна.
+   */
+  priority: CardPriority;
   /**
    * Цвет наследуется от родителя. У карточки с родителем это ключ палитры
    * направлений (`c1`…`c19`) — то же значение, что хранится в базе; null —
@@ -180,3 +191,33 @@ export const WORK_STAGE_LABEL: Record<'idea' | 'ready', string> = {
   idea: 'Идея',
   ready: 'На реализацию',
 };
+
+/**
+ * Подписи приоритетов карточки.
+ *
+ * Подписи общие для формы и бейджа на плитке, поэтому живут в модели доски.
+ */
+export const PRIORITY_LABEL: Record<CardPriority, string> = {
+  low: 'Низкий',
+  medium: 'Средний',
+  high: 'Высокий',
+};
+
+/**
+ * Приоритет по умолчанию: его показывает форма новой карточки и получает
+ * карточка без сохранённого значения.
+ *
+ * Совпадает с умолчанием сервера (CardPriority::default()), поэтому карточка
+ * без выбора не выглядит ни срочной, ни маловажной.
+ */
+export const DEFAULT_CARD_PRIORITY: CardPriority = 'medium';
+
+/**
+ * Приоритеты в порядке от низкого к высокому — в этом порядке их показывает
+ * форма. Формат тот же, что у COLUMNS: подходит сегментированному переключателю.
+ */
+export const PRIORITIES: readonly { id: CardPriority; label: string }[] = [
+  { id: 'low', label: PRIORITY_LABEL.low },
+  { id: 'medium', label: PRIORITY_LABEL.medium },
+  { id: 'high', label: PRIORITY_LABEL.high },
+];

@@ -3,6 +3,7 @@
 namespace App\Modules\Task\Application\Commands\CreateTask;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
@@ -17,6 +18,8 @@ use App\Modules\Task\Domain\ValueObjects\TaskTitle;
  * (slug) необязательны: карточка может жить без срока и без метки.
  * `idea` — степень проработки: идея или готова к реализации. Флаг имеет смысл
  * только в беклоге, поэтому вне его создание сбрасывает значение в `false`.
+ * `priority` — приоритет карточки; по умолчанию средний, ограничений
+ * по колонке и уровню у него нет.
  */
 final readonly class CreateTaskCommand
 {
@@ -32,6 +35,7 @@ final readonly class CreateTaskCommand
         public ?TaskDeadline $deadline = null,
         public ?TaskSlug $slug = null,
         public bool $idea = false,
+        public CardPriority $priority = CardPriority::Medium,
     ) {}
 
     /**
@@ -55,6 +59,9 @@ final readonly class CreateTaskCommand
                 ? TaskSlug::fromNullableString($payload['slug'] === null ? null : (string) $payload['slug'])
                 : null,
             ($payload['idea'] ?? false) === true,
+            // Без поля приоритет средний: старые клиенты и вызовы без выбора
+            // получают то же значение, что подставляет база по умолчанию.
+            CardPriority::from((string) ($payload['priority'] ?? CardPriority::Medium->value)),
         );
     }
 }

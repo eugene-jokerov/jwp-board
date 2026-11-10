@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommand;
 use App\Modules\Task\Application\Results\TaskResult;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
 use App\Modules\Task\Domain\ValueObjects\TaskSlug;
@@ -57,6 +58,10 @@ final class UpdateTaskController extends Controller
 
         if (array_key_exists('column', $fields)) {
             $changes['column'] = CardColumn::from($fields['column']);
+        }
+
+        if (array_key_exists('priority', $fields)) {
+            $changes['priority'] = CardPriority::from($fields['priority']);
         }
 
         // Степень проработки меняется отдельным полем; правила «только беклог»

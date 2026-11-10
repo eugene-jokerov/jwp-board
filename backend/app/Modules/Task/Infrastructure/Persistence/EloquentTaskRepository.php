@@ -185,6 +185,7 @@ final class EloquentTaskRepository implements TaskRepository
             'project_id' => $attributes['project_id'],
             'type' => $attributes['type']->value,
             'column' => $attributes['column']->value,
+            'priority' => $attributes['priority']->value,
             'idea' => $attributes['idea'],
             'title' => $attributes['title'],
             'slug' => $attributes['slug'],

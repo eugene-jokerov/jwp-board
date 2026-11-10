@@ -9,6 +9,7 @@ use App\Modules\Task\Domain\Services\ColumnTransitionPolicy;
 use App\Modules\Task\Domain\Services\TaskPlacement;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Domain\ValueObjects\CardPriority;
 
 /**
  * Прикладной сервис изменения карточки.
@@ -30,7 +31,7 @@ final readonly class TaskEditor
      * Изменить карточку и вернуть её актуальное состояние.
      *
      * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links  переданные ссылки иерархии
-     * @param  array{title?: string|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null, idea?: bool}  $fields
+     * @param  array{title?: string|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null, priority?: CardPriority|null, idea?: bool}  $fields
      *
      * @throws InvalidHierarchy если набор ссылок недопустим для типа карточки
      *                          или у карточки с детьми меняется родитель
@@ -71,10 +72,21 @@ final readonly class TaskEditor
             }
         }
 
+        // Простые поля сравниваются со значением из модели. Приоритет попадает
+        // сюда же: ограничений по колонке и уровню у него нет, поэтому ему
+        // достаточно общей проверки «значение изменилось».
         foreach (['title', 'description', 'slug', 'deadline'] as $field) {
             if (array_key_exists($field, $fields) && $task->{$field} !== $fields[$field]) {
                 $changes[$field] = $fields[$field];
             }
+        }
+
+        // Приоритет — enum, поэтому сравнивается значение перечисления, а не
+        // строка: в модель с атрибутом уходит сам enum, Eloquent приведёт его сам.
+        $priority = $fields['priority'] ?? null;
+
+        if ($priority instanceof CardPriority && $task->priority !== $priority) {
+            $changes['priority'] = $priority;
         }
 
         // Степень проработки меняется независимо от колонки: флаг хранится

@@ -11,6 +11,11 @@
  * в данных сохраняется — он снова станет актуальным, если карточку вернуть
  * в беклог. Поэтому `idea` отправляется, только когда его выбрали в форме.
  *
+ * Приоритет, в отличие от степени проработки, правится всегда: он не зависит
+ * ни от колонки, ни от уровня. Как и описание, приоритет приходит отдельным
+ * запросом, поэтому до его ответа в поле стоит «не загружено» и PATCH его
+ * не отправляет — иначе сохранение стёрло бы приоритет, которого мы не видели.
+ *
  * Описания в списке карточек нет, поэтому при каждом открытии модалка
  * запрашивает карточку отдельно (`GET /tasks/{task}`) и показывает общий
  * лоадер на всю форму, пока данные не придут: поля не должны появляться
@@ -32,6 +37,7 @@ import {
 import { fetchTask } from '../../api/client';
 import { getToken } from '../../auth/session';
 import { FormAlert } from '../../components/FormAlert';
+import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
@@ -39,11 +45,14 @@ import { toDeadlineDate } from '../deadline';
 import { toCardDescription, toCardSlug } from '../mappers';
 import {
   COLUMNS,
+  DEFAULT_CARD_PRIORITY,
   DESCRIPTION_MAX_LENGTH,
   KIND_LABEL,
+  PRIORITIES,
   SLUG_MAX_LENGTH,
   WORK_STAGE_LABEL,
   type Card,
+  type CardPriority,
   type ColumnId,
 } from '../types';
 
@@ -59,6 +68,7 @@ interface CardEditModalProps {
    * (ещё не загружено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null; undefined — не отправлять.
    * `idea` — степень проработки: undefined — не отправлять (выбор не показывался).
+   * `priority` — приоритет карточки: undefined — не отправлять (ещё не загружен).
    */
   onSave: (
     card: Card,
@@ -68,6 +78,7 @@ interface CardEditModalProps {
     column: ColumnId,
     deadline: string | null | undefined,
     idea: boolean | undefined,
+    priority: CardPriority | undefined,
   ) => Promise<string | null>;
   /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
   onDelete: (card: Card) => Promise<string | null>;
@@ -108,6 +119,7 @@ interface CardEditFormProps {
     column: ColumnId,
     deadline: string | null | undefined,
     idea: boolean | undefined,
+    priority: CardPriority | undefined,
   ) => Promise<string | null>;
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
@@ -163,6 +175,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
    * перезаписал бы флаг, которого мы ещё не видели.
    */
   const [idea, setIdea] = useState<boolean | undefined>(undefined);
+  /**
+   * Приоритет из полного представления; undefined — ещё не загружен.
+   * Правило то же, что у описания: незагруженное значение не отправляется,
+   * иначе PATCH перезаписал бы приоритет, которого мы ещё не видели.
+   */
+  const [priority, setPriority] = useState<CardPriority | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | null>(null);
   // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
   const [formError, setFormError] = useState<string | null>(null);
@@ -191,6 +209,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
       setSlug(toCardSlug(detail));
       setDeadline(toDeadlineDate(detail.deadline));
       setIdea(detail.idea === true);
+      setPriority(detail.priority ?? DEFAULT_CARD_PRIORITY);
       setTitle(detail.title);
       setLoadError(null);
     } catch {
@@ -238,7 +257,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     const nextIdea = ideaSelectable ? idea : undefined;
 
     setSaving(true);
-    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline, nextIdea);
+    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline, nextIdea, priority);
     setSaving(false);
 
     if (error !== null) {
@@ -376,6 +395,24 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     }}
                     placeholder="Без срока"
                   />
+
+                  {/* Приоритет правится у карточки в любой колонке: он не
+                      привязан к этапу работы. Пустое значение до загрузки
+                      карточки не показываем — вместо формы в этот момент
+                      рисуется лоадер (см. `loading`), поэтому сюда попадает
+                      уже загруженный приоритет. */}
+                  <View className="gap-1.5">
+                    <Text className="text-sm font-medium text-app">Приоритет</Text>
+
+                    <SegmentedSwitch
+                      options={PRIORITIES.map((item) => ({ value: item.id, label: item.label }))}
+                      value={priority ?? DEFAULT_CARD_PRIORITY}
+                      onChange={(value) => {
+                        setPriority(value);
+                        setFormError(null);
+                      }}
+                    />
+                  </View>
 
                   {ideaSelectable ? (
                     <View className="gap-1.5">

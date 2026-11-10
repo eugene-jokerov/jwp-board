@@ -18,6 +18,7 @@ import type {
   TaskListMeta,
 } from '../api/types';
 import type { Card, CardKind, ClosedTotals, ColumnId, Direction } from './types';
+import { DEFAULT_CARD_PRIORITY } from './types';
 
 /**
  * Типы карточки API = типы карточки доски: словарь общий.
@@ -39,6 +40,9 @@ export function toCard(task: TaskSummary): Card {
     kind: toCardKind(task.type),
     title: task.title,
     column: toColumnId(task.column),
+    // Приоритет сервер отдаёт всегда, но клиент не полагается на это: ответ
+    // без поля (старый сервер, ручная правка данных) читается как средний.
+    priority: task.priority ?? DEFAULT_CARD_PRIORITY,
     color: task.color,
     slug: task.slug ?? null,
     directionId: task.direction_id,
