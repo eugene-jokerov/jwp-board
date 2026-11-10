@@ -9,7 +9,15 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { BoardColumn } from './BoardColumn';
-import { closedHasMore, closedPageOf, columnCount, isClosedColumn, type CardAction, type ClosedPages } from '../derive';
+import {
+  closedHasMore,
+  closedPageOf,
+  columnCount,
+  isClosedColumn,
+  type CardAction,
+  type CardBreadcrumb,
+  type ClosedPages,
+} from '../derive';
 import { COLUMNS, type Card, type CardKind, type ClosedTotals, type ColumnId } from '../types';
 
 interface SwimlaneHeaderProps {
@@ -116,6 +124,8 @@ interface SwimlaneProps {
   onToggleColumn: (key: string) => void;
   /** Действие карточки по её колонке; null — иконки нет. */
   cardAction: (card: Card) => CardAction | null;
+  /** Путь карточки по иерархии для её крошек (считает `cardBreadcrumbs`). */
+  cardBreadcrumbs: (card: Card) => CardBreadcrumb[];
   /** Выполнить действие карточки (перевод в следующую колонку). */
   onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
@@ -144,6 +154,7 @@ export function Swimlane({
   onToggleColumn,
   canCreate,
   cardAction,
+  cardBreadcrumbs,
   onCardAction,
   onOpenCard,
   onAddCard,
@@ -182,6 +193,7 @@ export function Swimlane({
               showMore={isClosedColumn(column.id) && (hasMore || page.error !== null) ? page : null}
               onShowMore={() => onLoadMoreClosed(column.id)}
               cardAction={cardAction}
+              cardBreadcrumbs={cardBreadcrumbs}
               onCardAction={onCardAction}
               onOpenCard={onOpenCard}
               onAddCard={() => onAddCard(column.id)}

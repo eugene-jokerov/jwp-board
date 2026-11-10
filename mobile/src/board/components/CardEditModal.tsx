@@ -315,6 +315,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     maxLength={SLUG_MAX_LENGTH}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    // Как и в форме создания: метку вводит человек, автозаполнение
+                    // браузера в это поле подставляло случайные слова.
+                    autoComplete="off"
+                    textContentType="none"
                   />
 
                   <TextField

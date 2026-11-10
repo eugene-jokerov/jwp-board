@@ -8,7 +8,7 @@
  */
 
 import { useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +28,7 @@ import { CardFormModal, type CardDraft } from '../src/board/components/CardFormM
 import { DirectionsModal } from '../src/board/components/DirectionsModal';
 import { LevelSettingsMenu } from '../src/board/components/LevelSettingsMenu';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../src/board/directionColors';
-import { cardAction, checkDirectionDelete, parentCandidates } from '../src/board/derive';
+import { cardAction, cardBreadcrumbs, checkDirectionDelete, parentCandidates } from '../src/board/derive';
 import { parentOf } from '../src/board/mappers';
 import { useBoardSettings } from '../src/board/settings';
 import { useBoard } from '../src/board/store';
@@ -282,6 +282,16 @@ export default function HomeScreen() {
     setExpandedColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  /**
+   * Крошки карточки: путь по карточкам иерархии от корня к её родителю.
+   *
+   * Путь собирается по уже загруженным карточкам — отдельного запроса к API не
+   * нужно; направления в крошки не входят, поэтому у инициатив их нет. Функция
+   * мемоизирована: она передаётся во все плитки доски, и новая ссылка на каждом
+   * рендере ломала бы их перерисовку без причины.
+   */
+  const breadcrumbsOf = useCallback((card: Card) => cardBreadcrumbs(card, cards), [cards]);
+
   /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
   const handleCardAction = (card: Card) => {
     const action = cardAction(card);
@@ -480,6 +490,7 @@ export default function HomeScreen() {
               expandedColumns={expandedColumns}
               onToggleColumn={toggleLaneColumn}
               cardAction={cardAction}
+              cardBreadcrumbs={breadcrumbsOf}
               onCardAction={handleCardAction}
               onOpenCard={(card) => setEditedCardId(card.id)}
               onAddCard={(parentId, columnId) => openLaneForm(level, parentId, columnId)}

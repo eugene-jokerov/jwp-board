@@ -15,7 +15,7 @@ import { Pressable, Text, View } from 'react-native';
 import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
 import { ShowMoreButton } from './ShowMoreButton';
-import type { CardAction } from '../derive';
+import type { CardAction, CardBreadcrumb } from '../derive';
 import { isClosedColumn } from '../derive';
 import { hasParent } from '../mappers';
 import type { BoardColumn as BoardColumnModel, Card } from '../types';
@@ -42,6 +42,8 @@ interface BoardColumnProps {
   onShowMore: () => void;
   /** Действие карточки по её колонке; null — иконки нет. */
   cardAction: (card: Card) => CardAction | null;
+  /** Путь карточки по иерархии для её крошек (считает `cardBreadcrumbs`). */
+  cardBreadcrumbs: (card: Card) => CardBreadcrumb[];
   /** Выполнить действие карточки (перевод в следующую колонку). */
   onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
@@ -60,6 +62,7 @@ export function BoardColumn({
   showMore,
   onShowMore,
   cardAction,
+  cardBreadcrumbs,
   onCardAction,
   onOpenCard,
   onAddCard,
@@ -87,6 +90,8 @@ export function BoardColumn({
           key={card.id}
           title={card.title}
           color={card.color}
+          breadcrumbs={cardBreadcrumbs(card)}
+          slug={card.slug}
           hasParent={hasParent(card)}
           kind={card.kind}
           deadline={card.deadline}

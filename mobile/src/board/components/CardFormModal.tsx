@@ -230,6 +230,12 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 maxLength={SLUG_MAX_LENGTH}
                 autoCapitalize="none"
                 autoCorrect={false}
+                // На web браузер любит подставлять в незнакомое поле сохранённое
+                // значение (в поле кодового названия так появлялись слова вроде
+                // «empty»). Метку вводит только человек, поэтому автозаполнение
+                // отключено и для полей формы, и для нативной клавиатуры.
+                autoComplete="off"
+                textContentType="none"
               />
 
               <TextField

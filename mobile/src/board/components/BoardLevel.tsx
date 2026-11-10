@@ -40,7 +40,15 @@ import { ChevronLeftIcon, ChevronRightIcon, MenuIcon, SettingsIcon } from './Boa
 import { ShowMoreButton } from './ShowMoreButton';
 import { Swimlane, SwimlaneHeader } from './Swimlane';
 import { COLUMN_MIN_HEIGHT, type CollapsedColumns } from '../columns';
-import { closedHasMore, closedPageOf, columnCount, isClosedColumn, type CardAction, type ClosedPages } from '../derive';
+import {
+  closedHasMore,
+  closedPageOf,
+  columnCount,
+  isClosedColumn,
+  type CardAction,
+  type CardBreadcrumb,
+  type ClosedPages,
+} from '../derive';
 import { hasParent } from '../mappers';
 import {
   COLUMNS,
@@ -406,6 +414,8 @@ interface BoardLevelProps {
   onToggleColumn: (key: string) => void;
   /** Действие карточки по её колонке; null — иконки нет. */
   cardAction: (card: Card) => CardAction | null;
+  /** Путь карточки по иерархии для её крошек (считает `cardBreadcrumbs`). */
+  cardBreadcrumbs: (card: Card) => CardBreadcrumb[];
   /** Выполнить действие карточки (перевод в следующую колонку). */
   onCardAction: (card: Card) => void;
   /** Клик по карточке — открыть её на редактирование. */
@@ -439,6 +449,7 @@ export function BoardLevel({
   expandedColumns,
   onToggleColumn,
   cardAction,
+  cardBreadcrumbs,
   onCardAction,
   onOpenCard,
   onAddCard,
@@ -646,6 +657,7 @@ export function BoardLevel({
                 onToggleColumn={onToggleColumn}
                 canCreate={canAddInLane(lane)}
                 cardAction={cardAction}
+                cardBreadcrumbs={cardBreadcrumbs}
                 onCardAction={onCardAction}
                 onOpenCard={onOpenCard}
                 onAddCard={(columnId) => onAddCard(lane.parentId, columnId)}
@@ -837,6 +849,8 @@ export function BoardLevel({
                               key={card.id}
                               title={card.title}
                               color={card.color}
+                              breadcrumbs={cardBreadcrumbs(card)}
+                              slug={card.slug}
                               hasParent={hasParent(card)}
                               kind={card.kind}
                               deadline={card.deadline}
@@ -905,6 +919,8 @@ export function BoardLevel({
                                 key={card.id}
                                 title={card.title}
                                 color={card.color}
+                                breadcrumbs={cardBreadcrumbs(card)}
+                                slug={card.slug}
                                 hasParent={hasParent(card)}
                                 kind={card.kind}
                                 deadline={card.deadline}
