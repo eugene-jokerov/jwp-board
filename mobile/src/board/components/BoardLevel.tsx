@@ -801,6 +801,7 @@ export function BoardLevel({
                               hasParent={hasParent(card)}
                               kind={card.kind}
                               deadline={card.deadline}
+                              closedColumn={isClosedColumn(columnId)}
                               action={cardAction(card)}
                               onAction={() => onCardAction(card)}
                               onPress={() => onOpenCard(card)}
@@ -864,6 +865,7 @@ export function BoardLevel({
                                 hasParent={hasParent(card)}
                                 kind={card.kind}
                                 deadline={card.deadline}
+                                closedColumn={isClosedColumn(column.id)}
                                 action={cardAction(card)}
                                 onAction={() => onCardAction(card)}
                                 onPress={() => onOpenCard(card)}

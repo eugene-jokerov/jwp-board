@@ -23,6 +23,11 @@
  * «Без проекта» / «Без инициативы»; справа остаётся кнопка действия.
  * Если срок прошёл, карточка получает лёгкую красную подложку, а сама дата
  * красится в цвет ошибки — просрочка видна и без чтения даты.
+ *
+ * В закрытых колонках («Готово», «Отмена») срок не выводится и просрочка не
+ * подсвечивается: дедлайн там потерял смысл — работа уже завершена или
+ * отменена, и красная плитка читалась бы как «просрочено» без причины.
+ * Признак колонки передаёт вызывающий компонент (`closedColumn`).
  */
 
 import { Pressable, Text, View } from 'react-native';
@@ -48,6 +53,11 @@ interface BoardCardProps {
   kind: CardKind;
   /** Срок карточки строкой ISO-8601; null — срока нет. */
   deadline: string | null;
+  /**
+   * Карточка лежит в закрытой колонке («Готово», «Отмена»): срок не выводим
+   * и просрочку не подсвечиваем — см. комментарий в шапке компонента.
+   */
+  closedColumn: boolean;
   /** Действие над колонками; null — в этой колонке действий нет. */
   action: CardAction | null;
   /** Выполнить действие (перевод в следующую колонку). */
@@ -56,13 +66,26 @@ interface BoardCardProps {
   onPress: () => void;
 }
 
-export function BoardCard({ title, color, hasParent, kind, deadline, action, onAction, onPress }: BoardCardProps) {
+export function BoardCard({
+  title,
+  color,
+  hasParent,
+  kind,
+  deadline,
+  closedColumn,
+  action,
+  onAction,
+  onPress,
+}: BoardCardProps) {
   // У карточки без родителя подпись говорит, чего именно ей не хватает.
   const withoutParentLabel = hasParent ? '' : kind === 'project' ? 'Без инициативы' : 'Без проекта';
-  // Срок рисуется без времени: для дедлайна важен сам день.
-  const deadlineLabel = formatDeadlineDate(deadline);
+  // Срок рисуется без времени: для дедлайна важен сам день. В закрытых
+  // колонках срок не показываем — он теряет смысл после завершения работы.
+  const deadlineLabel = closedColumn ? null : formatDeadlineDate(deadline);
   // Просроченная карточка подсвечивается: срок прошёл, а работа ещё не закрыта.
-  const overdue = isDeadlineOverdue(deadline);
+  // В закрытых колонках подсветки нет — иначе завершённая задача выглядела бы
+  // проблемной из-за давно прошедшего срока.
+  const overdue = !closedColumn && isDeadlineOverdue(deadline);
 
   return (
     // `pointer-events-auto` возвращает клики самой карточке. Карточки закрытых

@@ -16,6 +16,7 @@ import { AddCardButton } from './AddCardButton';
 import { BoardCard } from './BoardCard';
 import { ShowMoreButton } from './ShowMoreButton';
 import type { CardAction } from '../derive';
+import { isClosedColumn } from '../derive';
 import { hasParent } from '../mappers';
 import type { BoardColumn as BoardColumnModel, Card } from '../types';
 
@@ -89,6 +90,7 @@ export function BoardColumn({
           hasParent={hasParent(card)}
           kind={card.kind}
           deadline={card.deadline}
+          closedColumn={isClosedColumn(column.id)}
           action={cardAction(card)}
           onAction={() => onCardAction(card)}
           onPress={() => onOpenCard(card)}
