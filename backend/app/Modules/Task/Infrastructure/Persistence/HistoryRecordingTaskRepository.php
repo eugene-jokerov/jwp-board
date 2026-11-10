@@ -28,6 +28,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
      */
     private const array TRACKED_FIELDS = [
         'title',
+        'slug',
         'description',
         'deadline',
         'type',
@@ -162,6 +163,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
     {
         return [
             'title' => $task->title,
+            'slug' => $task->slug,
             'description' => null,
             'deadline' => $task->deadline?->format('Y-m-d H:i:s'),
             'type' => $task->type->value,

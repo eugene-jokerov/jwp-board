@@ -5,6 +5,7 @@ namespace App\Modules\Task\Infrastructure\Http\Requests;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 use Closure;
 use DateTimeImmutable;
@@ -35,6 +36,11 @@ final class StoreTaskRequest extends FormRequest
             'type' => ['required', Rule::enum(CardType::class)],
             'column' => ['required', Rule::enum(CardColumn::class)],
             'title' => ['required', 'string', 'max:'.TaskTitle::MAX_LENGTH],
+            // Кодовое название необязательно и без ограничений по символам —
+            // проверяется только длина. Правило `max` у строки считает символы
+            // (mb_strlen), а не байты, поэтому кириллица укладывается в лимит
+            // так же, как латиница: 16 символов проходят, 17 — нет.
+            'slug' => ['sometimes', 'nullable', 'string', 'max:'.TaskSlug::MAX_LENGTH],
             'description' => ['sometimes', 'nullable', 'string', 'max:'.TaskDescription::MAX_LENGTH],
             // Формат фиксирован: дата `Y-m-d`, время — необязательно
             // (`H:i` / `H:i:s`). Несколько правил date_format здесь не годятся:
@@ -87,6 +93,7 @@ final class StoreTaskRequest extends FormRequest
             'type' => 'тип',
             'column' => 'колонка',
             'title' => 'название',
+            'slug' => 'кодовое название',
             'description' => 'описание',
             'deadline' => 'дедлайн',
             'direction_id' => 'направление',
@@ -107,6 +114,7 @@ final class StoreTaskRequest extends FormRequest
             'column.enum' => 'Неизвестная колонка.',
             'title.required' => 'Укажите название карточки.',
             'title.max' => 'Название не может быть длиннее :max символов.',
+            'slug.max' => 'Кодовое название не может быть длиннее :max символов.',
             'description.max' => 'Описание не может быть длиннее :max символов.',
             'deadline.regex' => 'Неверная дата дедлайна.',
         ];
@@ -121,6 +129,9 @@ final class StoreTaskRequest extends FormRequest
             'type' => $this->string('type')->toString(),
             'column' => $this->string('column')->toString(),
             'title' => $this->string('title')->toString(),
+            // Кодовое название передаётся только если пришло в запросе: пустая
+            // строка нормализуется в null уже в value object.
+            ...($this->has('slug') ? ['slug' => $this->input('slug')] : []),
             'description' => $this->input('description'),
             // Дедлайн передаётся только если он пришёл в запросе: отсутствие
             // ключа — «дедлайна нет», явный null — тоже, а пустая строка

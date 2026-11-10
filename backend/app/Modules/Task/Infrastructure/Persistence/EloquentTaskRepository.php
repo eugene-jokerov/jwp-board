@@ -180,6 +180,7 @@ final class EloquentTaskRepository implements TaskRepository
             'type' => $attributes['type']->value,
             'column' => $attributes['column']->value,
             'title' => $attributes['title'],
+            'slug' => $attributes['slug'],
             'description' => $attributes['description'],
             'deadline' => $attributes['deadline'],
         ]);

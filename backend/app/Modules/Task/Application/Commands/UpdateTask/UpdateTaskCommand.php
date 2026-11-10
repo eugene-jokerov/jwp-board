@@ -19,7 +19,7 @@ final readonly class UpdateTaskCommand
 {
     /**
      * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links  только присутствующие в запросе ссылки
-     * @param  array{title?: TaskTitle|null, description?: string|null, deadline?: string|null, column?: CardColumn|null}  $changes
+     * @param  array{title?: TaskTitle|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null}  $changes
      */
     public function __construct(
         public int $userId,

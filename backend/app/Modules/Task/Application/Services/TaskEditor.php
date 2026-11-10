@@ -30,7 +30,7 @@ final readonly class TaskEditor
      * Изменить карточку и вернуть её актуальное состояние.
      *
      * @param  array{direction_id?: int|null, initiative_id?: int|null, project_id?: int|null}  $links  переданные ссылки иерархии
-     * @param  array{title?: string|null, description?: string|null, deadline?: string|null, column?: CardColumn|null}  $fields
+     * @param  array{title?: string|null, description?: string|null, slug?: string|null, deadline?: string|null, column?: CardColumn|null}  $fields
      *
      * @throws InvalidHierarchy если набор ссылок недопустим для типа карточки
      *                          или у карточки с детьми меняется родитель
@@ -71,7 +71,7 @@ final readonly class TaskEditor
             }
         }
 
-        foreach (['title', 'description', 'deadline'] as $field) {
+        foreach (['title', 'description', 'slug', 'deadline'] as $field) {
             if (array_key_exists($field, $fields) && $task->{$field} !== $fields[$field]) {
                 $changes[$field] = $fields[$field];
             }

@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property CardType $type
  * @property CardColumn $column
  * @property string $title
+ * @property string|null $slug
  * @property string|null $description
  * @property Carbon|null $deadline
  * @property Carbon|null $created_at
@@ -52,6 +53,7 @@ class Task extends Model
         'type',
         'column',
         'title',
+        'slug',
         'description',
         'deadline',
     ];

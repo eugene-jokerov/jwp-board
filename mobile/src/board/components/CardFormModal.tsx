@@ -18,7 +18,7 @@ import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
-import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL } from '../types';
+import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL, SLUG_MAX_LENGTH } from '../types';
 
 export interface CardDraft {
   kind: CardKind;
@@ -48,11 +48,13 @@ interface CardFormModalProps {
   draft: CardDraft | null;
   /**
    * Создать карточку; текст ошибки сервера или null при успехе.
+   * `slug` — кодовое название или null (поле не заполнено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
    */
   onCreate: (
     draft: CardDraft,
     title: string,
+    slug: string | null,
     description: string | null,
     parentId: number | null,
     deadline: string | null,
@@ -103,6 +105,8 @@ function parentEmptyHint(kind: CardKind): string | null {
 
 export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) {
   const [title, setTitle] = useState('');
+  /** Кодовое название необязательно: пустое поле отправляется как null. */
+  const [slug, setSlug] = useState('');
   /** Описание необязательно: пустое поле отправляется как null. */
   const [description, setDescription] = useState('');
   /** Дедлайн необязателен: null — карточка без срока. */
@@ -117,6 +121,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
   const close = () => {
     setTitle('');
+    setSlug('');
     setDescription('');
     setDeadline(null);
     setParentId(null);
@@ -142,6 +147,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
   const submit = async () => {
     const titleValue = title.trim();
+    const slugValue = slug.trim();
     const descriptionValue = description.trim();
     const parentInvalid = parentRequired && selectedParent === null;
 
@@ -161,6 +167,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     const error = await onCreate(
       draft,
       titleValue,
+      slugValue === '' ? null : slugValue,
       descriptionValue === '' ? null : descriptionValue,
       draft.laneId ?? parentId,
       toDeadlineDate(deadline),
@@ -210,6 +217,19 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 error={titleError}
                 placeholder="Например: Запуск новой ветки"
                 autoFocus
+              />
+
+              <TextField
+                label="Кодовое название (необязательно)"
+                value={slug}
+                onChangeText={(value) => {
+                  setSlug(value);
+                  setFormError(null);
+                }}
+                placeholder="Например: LAUNCH"
+                maxLength={SLUG_MAX_LENGTH}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
 
               <TextField

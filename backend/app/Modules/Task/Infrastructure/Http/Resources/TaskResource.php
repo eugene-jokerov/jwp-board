@@ -23,6 +23,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * allowed_transitions — колонки, в которые карточку можно перевести сейчас;
  * их считает доменная политика, клиент только отображает.
  * deadline — необязательный срок карточки в ISO-8601; null — срока нет.
+ * slug — необязательное кодовое название (≤16 символов); null — метки нет.
  *
  * @property-read TaskResult $resource
  */
@@ -38,6 +39,7 @@ final class TaskResource extends JsonResource
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
             'title' => $this->resource->title,
+            'slug' => $this->resource->slug,
             'description' => $this->resource->description,
             'deadline' => $this->resource->deadline,
             'direction_id' => $this->resource->directionId,

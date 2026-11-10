@@ -62,11 +62,13 @@ export function errorMessage(error: unknown, fallback: string): string {
 /** Действия над карточками; каждая возвращает текст ошибки сервера или null. */
 interface CardActions {
   /**
-   * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
+   * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null,
+   * `slug` — кодовое название или null (метки нет).
    */
   createCard: (
     draft: CardDraft,
     title: string,
+    slug: string | null,
     description: string | null,
     parentId: number | null,
     deadline: string | null,
@@ -74,11 +76,13 @@ interface CardActions {
   /**
    * Сохранить карточку; `description` — null, если описание стёрли, а незагруженное
    * описание не отправляется. `deadline` — дата в формате API, null или
-   * undefined (ещё не загружен — не отправлять).
+   * undefined (ещё не загружен — не отправлять). `slug` — так же: null очищает
+   * метку, undefined — «ещё не загружено, не трогать».
    */
   saveCard: (
     card: Card,
     title: string,
+    slug: string | null | undefined,
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
@@ -191,11 +195,13 @@ export function useBoard(): BoardState {
   }, []);
 
   const createCard = useCallback<CardActions['createCard']>(
-    async (draft, title, description, parentId, deadline) => {
+    async (draft, title, slug, description, parentId, deadline) => {
       const input: TaskCreateInput = {
         type: draft.kind,
         column: draft.columnId,
         title,
+        // Пустую метку не отправляем: сервер и так создаёт карточку без slug.
+        ...(slug === null ? {} : { slug }),
         // Пустое описание не отправляем: сервер сам нормализует пустую строку
         // в null, а лишнее поле в теле запроса ничего не добавляет.
         ...(description === null ? {} : { description }),
@@ -222,8 +228,14 @@ export function useBoard(): BoardState {
   );
 
   const saveCard = useCallback<CardActions['saveCard']>(
-    async (card, title, description, column, deadline) => {
+    async (card, title, slug, description, column, deadline) => {
       const input: TaskUpdateInput = { title };
+
+      // Кодовое название — как и дедлайн: undefined значит «ещё не загружено»,
+      // пустая строка (метку стёрли) отправляется явно — сервер запишет null.
+      if (slug !== undefined) {
+        input.slug = slug;
+      }
 
       // Описание отправляем, только если оно загружено. null от модалки —
       // «не загружено, не трогать»; стёртое описание приходит пустой строкой,

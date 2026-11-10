@@ -10,6 +10,7 @@ use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 
 /**
@@ -40,11 +41,13 @@ final readonly class TaskFactory
         ?int $initiativeId,
         ?int $projectId,
         ?TaskDeadline $deadline,
+        ?TaskSlug $slug = null,
     ): Task {
         $place = $this->placement->resolve($type, $userId, $directionId, $initiativeId, $projectId);
 
         return $this->tasks->create($userId, [
             'title' => $title->value(),
+            'slug' => $slug?->value(),
             'description' => $description?->value(),
             'deadline' => $deadline?->value(),
             'type' => $type,

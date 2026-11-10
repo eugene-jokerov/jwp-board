@@ -341,18 +341,19 @@ export default function HomeScreen() {
   };
 
   /**
-   * Создание карточки: родителя и срок выбирает форма, остальное (цвет, ссылки
-   * иерархии) считает сервер, а модалке возвращается текст ошибки для показа
-   * внутри формы.
+   * Создание карточки: родителя, срок и кодовое название выбирает форма,
+   * остальное (цвет, ссылки иерархии) считает сервер, а модалке возвращается
+   * текст ошибки для показа внутри формы.
    */
   const createCard = async (
     cardDraft: CardDraft,
     title: string,
+    slug: string | null,
     description: string | null,
     parentId: number | null,
     deadline: string | null,
   ) => {
-    const error = await board.createCard(cardDraft, title, description, parentId, deadline);
+    const error = await board.createCard(cardDraft, title, slug, description, parentId, deadline);
 
     if (error === null) {
       setForm(null);
@@ -363,17 +364,18 @@ export default function HomeScreen() {
   };
 
   /**
-   * Изменение карточки: название, описание, срок и статус. Ошибку возвращаем
-   * модалке — она показывается внутри попапа, а не над доской.
+   * Изменение карточки: название, кодовое название, описание, срок и статус.
+   * Ошибку возвращаем модалке — она показывается внутри попапа, а не над доской.
    */
   const saveCard = async (
     card: Card,
     title: string,
+    slug: string | null | undefined,
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
   ) => {
-    const error = await board.saveCard(card, title, description, column, deadline);
+    const error = await board.saveCard(card, title, slug, description, column, deadline);
 
     if (error === null) {
       setEditedCardId(null);

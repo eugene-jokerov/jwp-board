@@ -57,6 +57,7 @@ class TaskFactory extends Factory
             // OverflowException, и фабрика молча теряет карточку, из-за чего
             // count(N) создаёт N-1 запись.
             'title' => 'Карточка '.self::nextTitleNumber(),
+            'slug' => null,
             'description' => null,
             'deadline' => null,
         ];

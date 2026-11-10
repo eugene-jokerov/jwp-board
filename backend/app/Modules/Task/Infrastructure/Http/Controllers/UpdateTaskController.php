@@ -8,6 +8,7 @@ use App\Modules\Task\Application\Results\TaskResult;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 use App\Modules\Task\Infrastructure\Http\Requests\UpdateTaskRequest;
 use App\Modules\Task\Infrastructure\Http\Resources\TaskResource;
@@ -39,6 +40,10 @@ final class UpdateTaskController extends Controller
 
         if (array_key_exists('title', $fields)) {
             $changes['title'] = TaskTitle::fromString($fields['title'])->value();
+        }
+
+        if (array_key_exists('slug', $fields)) {
+            $changes['slug'] = TaskSlug::fromNullableString($fields['slug'])->value();
         }
 
         if (array_key_exists('description', $fields)) {

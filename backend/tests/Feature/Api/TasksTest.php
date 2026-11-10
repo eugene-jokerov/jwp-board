@@ -197,6 +197,7 @@ final class TasksTest extends TestCase
                     'type',
                     'column',
                     'title',
+                    'slug',
                     'description',
                     'deadline',
                     'direction_id',
@@ -359,6 +360,164 @@ final class TasksTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.deadline', '2027-03-05T00:00:00+03:00');
+    }
+
+    public function test_slug_is_stored_and_returned(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача с меткой',
+                'slug' => '  LAUNCH  ',
+            ])
+            ->assertCreated()
+            // Пробелы по краям срезаются: в базе остаётся само кодовое название.
+            ->assertJsonPath('data.slug', 'LAUNCH');
+
+        $this->assertDatabaseHas('tasks', ['user_id' => $user->id, 'slug' => 'LAUNCH']);
+    }
+
+    public function test_slug_is_optional(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Задача без метки',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.slug', null);
+    }
+
+    /**
+     * Ограничений по символам нет: принимаются любые 16 символов, а 17 — уже нет.
+     */
+    public function test_slug_is_limited_to_16_characters(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Метка максимальной длины',
+                'slug' => str_repeat('Я', 16),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.slug', str_repeat('Я', 16));
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Слишком длинная метка',
+                'slug' => str_repeat('a', 17),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['slug']);
+    }
+
+    /**
+     * Лимит считается в символах, а не в байтах: 16 кириллических символов
+     * (32 байта) проходят наравне с 16 латинскими.
+     */
+    public function test_slug_length_counts_characters_not_bytes(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Кириллическая метка',
+                'slug' => 'АБВГДЕЁЖЗИЙКЛМНО',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.slug', 'АБВГДЕЁЖЗИЙКЛМНО');
+
+        // Спецсимволы и пробелы внутри тоже допустимы: ограничений по символам нет.
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => 'Метка со спецсимволами',
+                'slug' => 'a b!@#$%^&*()_+',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.slug', 'a b!@#$%^&*()_+');
+    }
+
+    /**
+     * Уникальность не проверяется: две карточки с одинаковым slug создаются.
+     */
+    public function test_slug_duplicates_are_allowed(): void
+    {
+        $user = User::factory()->create();
+
+        foreach (['Первая', 'Вторая'] as $title) {
+            $this->actingAsUser($user)
+                ->postJson(self::ENDPOINT, [
+                    'type' => 'task',
+                    'column' => 'backlog',
+                    'title' => $title,
+                    'slug' => 'SAME',
+                ])
+                ->assertCreated()
+                ->assertJsonPath('data.slug', 'SAME');
+        }
+
+        $this->assertSame(2, Task::query()->where('slug', 'SAME')->count());
+    }
+
+    public function test_slug_can_be_changed_and_cleared(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['slug' => 'NEW'])
+            ->assertOk()
+            ->assertJsonPath('data.slug', 'NEW');
+
+        // Пустая строка от формы — «метку стёрли»: хранится null.
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['slug' => ''])
+            ->assertOk()
+            ->assertJsonPath('data.slug', null);
+
+        $this->assertDatabaseHas('tasks', ['id' => $task->id, 'slug' => null]);
+    }
+
+    public function test_patch_without_slug_keeps_it(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id, 'slug' => 'KEEP']);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => 'Новое название'])
+            ->assertOk()
+            ->assertJsonPath('data.slug', 'KEEP');
+    }
+
+    /**
+     * slug короткий, поэтому приходит и в списке доски: форма редактирования
+     * берёт начальное значение прямо из карточки доски.
+     */
+    public function test_index_returns_slug(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->create(['user_id' => $user->id, 'slug' => 'BOARD']);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.slug', 'BOARD');
     }
 
     public function test_delete_is_forbidden_when_card_has_children(): void

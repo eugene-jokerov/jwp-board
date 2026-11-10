@@ -80,6 +80,12 @@ export interface TaskSummary {
   type: CardType;
   column: CardColumn;
   title: string;
+  /**
+   * Кодовое название (slug): необязательная метка до 16 символов без
+   * ограничений по символам; null — метки нет. Поле есть и в списке: оно
+   * короткое, и форма редактирования берёт из него начальное значение.
+   */
+  slug: string | null;
   direction_id: number | null;
   initiative_id: number | null;
   project_id: number | null;
@@ -112,6 +118,8 @@ export interface TaskCreateInput {
   type: CardType;
   column: CardColumn;
   title: string;
+  /** Кодовое название (slug): необязательная метка до 16 символов; null — нет метки. */
+  slug?: string | null;
   description?: string | null;
   /** Срок карточки: дата в формате `YYYY-MM-DD`; null — срока нет. */
   deadline?: string | null;

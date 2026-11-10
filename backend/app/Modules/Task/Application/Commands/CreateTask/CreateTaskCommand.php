@@ -6,14 +6,15 @@ use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskDeadline;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 
 /**
  * Команда создания карточки.
  *
  * Тип и колонка обязательны: тип задаёт уровень иерархии (и значит, какие
- * ссылки допустимы), колонка — место на доске. Дедлайн необязателен: карточка
- * может жить без срока.
+ * ссылки допустимы), колонка — место на доске. Дедлайн и кодовое название
+ * (slug) необязательны: карточка может жить без срока и без метки.
  */
 final readonly class CreateTaskCommand
 {
@@ -27,6 +28,7 @@ final readonly class CreateTaskCommand
         public ?int $initiativeId = null,
         public ?int $projectId = null,
         public ?TaskDeadline $deadline = null,
+        public ?TaskSlug $slug = null,
     ) {}
 
     /**
@@ -45,6 +47,9 @@ final readonly class CreateTaskCommand
             isset($payload['project_id']) ? (int) $payload['project_id'] : null,
             array_key_exists('deadline', $payload)
                 ? TaskDeadline::fromNullableString($payload['deadline'] === null ? null : (string) $payload['deadline'])
+                : null,
+            array_key_exists('slug', $payload)
+                ? TaskSlug::fromNullableString($payload['slug'] === null ? null : (string) $payload['slug'])
                 : null,
         );
     }

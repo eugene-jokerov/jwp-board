@@ -24,6 +24,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * их считает доменная политика, клиент только отображает.
  * deadline — срок карточки в ISO-8601 или null: доска рисует дату в плитке,
  * поэтому поле есть и в списке (оно короткое, в отличие от описания).
+ * slug — кодовое название или null; поле короткое (≤16 символов), поэтому есть
+ * и в списке: форма редактирования сверяет с ним начальное значение.
  *
  * @property-read TaskResult $resource
  */
@@ -39,6 +41,7 @@ final class TaskSummaryResource extends JsonResource
             'type' => $this->resource->type->value,
             'column' => $this->resource->column->value,
             'title' => $this->resource->title,
+            'slug' => $this->resource->slug,
             'deadline' => $this->resource->deadline,
             'direction_id' => $this->resource->directionId,
             'initiative_id' => $this->resource->initiativeId,

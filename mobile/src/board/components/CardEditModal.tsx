@@ -31,8 +31,8 @@ import { TextField } from '../../components/TextField';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
-import { toCardDescription } from '../mappers';
-import { COLUMNS, DESCRIPTION_MAX_LENGTH, KIND_LABEL, type Card, type ColumnId } from '../types';
+import { toCardDescription, toCardSlug } from '../mappers';
+import { COLUMNS, DESCRIPTION_MAX_LENGTH, KIND_LABEL, SLUG_MAX_LENGTH, type Card, type ColumnId } from '../types';
 
 interface CardEditModalProps {
   /** Редактируемая карточка; null — модалка закрыта. */
@@ -42,11 +42,14 @@ interface CardEditModalProps {
   /**
    * Сохранить изменения; возвращает текст ошибки, который показываем в модалке.
    * `description` — null, если описание ещё не загружено: поле тогда не отправляется.
+   * `slug` — кодовое название: null очищает метку, undefined — не отправлять
+   * (ещё не загружено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null; undefined — не отправлять.
    */
   onSave: (
     card: Card,
     title: string,
+    slug: string | null | undefined,
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
@@ -85,6 +88,7 @@ interface CardEditFormProps {
   onSave: (
     card: Card,
     title: string,
+    slug: string | null | undefined,
     description: string | null,
     column: ColumnId,
     deadline: string | null | undefined,
@@ -122,6 +126,12 @@ function StatusOption({ label, selected, locked, onPress }: StatusOptionProps) {
 
 function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEditFormProps) {
   const [title, setTitle] = useState(card.title);
+  /**
+   * Кодовое название из полного представления — undefined, пока не загружено.
+   * Как и описание: незагруженное значение не отправляется, иначе PATCH
+   * стёр бы метку, которую мы ещё не видели.
+   */
+  const [slug, setSlug] = useState<string | null | undefined>(undefined);
   /** Описание из полного представления карточки; null — ещё не загружено. */
   const [description, setDescription] = useState<string | null>(null);
   /**
@@ -156,6 +166,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
       const detail = await fetchTask(getToken(), card.id);
 
       setDescription(toCardDescription(detail));
+      setSlug(toCardSlug(detail));
       setDeadline(toDeadlineDate(detail.deadline));
       setTitle(detail.title);
       setLoadError(null);
@@ -195,8 +206,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     // строка, сервер нормализует её в null.
     const nextDescription = description === null ? null : descriptionValue;
 
+    // Кодовое название — по тому же правилу: undefined не отправляем, а
+    // стёртая метка уходит пустой строкой и сервер записывает null.
+    const nextSlug = slug === undefined ? undefined : (slug ?? '').trim();
+
     setSaving(true);
-    const error = await onSave(card, trimmed, nextDescription, columnId, deadline);
+    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline);
     setSaving(false);
 
     if (error !== null) {
@@ -287,6 +302,19 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     }}
                     error={titleError}
                     placeholder="Например: Запуск новой ветки"
+                  />
+
+                  <TextField
+                    label="Кодовое название (необязательно)"
+                    value={slug ?? ''}
+                    onChangeText={(value) => {
+                      setSlug(value);
+                      setFormError(null);
+                    }}
+                    placeholder="Например: LAUNCH"
+                    maxLength={SLUG_MAX_LENGTH}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
 
                   <TextField

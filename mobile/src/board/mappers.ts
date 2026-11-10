@@ -40,6 +40,7 @@ export function toCard(task: TaskSummary): Card {
     title: task.title,
     column: toColumnId(task.column),
     color: task.color,
+    slug: task.slug ?? null,
     directionId: task.direction_id,
     initiativeId: task.initiative_id,
     projectId: task.project_id,
@@ -58,6 +59,18 @@ export function toCardDescription(task: TaskDetail): string | null {
   const description = task.description?.trim() ?? '';
 
   return description === '' ? null : description;
+}
+
+/**
+ * Кодовое название (slug) из полного представления: пустая строка — это null.
+ *
+ * Как и с описанием, клиент не полагается на нормализацию сервера: форма
+ * показывает поле пустым, если метки нет.
+ */
+export function toCardSlug(task: TaskDetail): string | null {
+  const slug = task.slug?.trim() ?? '';
+
+  return slug === '' ? null : slug;
 }
 
 /** Направление API в модель доски. */

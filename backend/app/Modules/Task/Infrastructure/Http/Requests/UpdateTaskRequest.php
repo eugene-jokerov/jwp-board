@@ -4,6 +4,7 @@ namespace App\Modules\Task\Infrastructure\Http\Requests;
 
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\TaskDescription;
+use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 use Closure;
 use DateTimeImmutable;
@@ -31,6 +32,11 @@ final class UpdateTaskRequest extends FormRequest
     {
         return [
             'title' => ['sometimes', 'string', 'max:'.TaskTitle::MAX_LENGTH],
+            // Кодовое название необязательно и без ограничений по символам:
+            // явный null очищает метку, отсутствие ключа её не трогает.
+            // `max` у строки считает символы (mb_strlen), а не байты: 16
+            // кириллических символов проходят так же, как 16 латинских.
+            'slug' => ['sometimes', 'nullable', 'string', 'max:'.TaskSlug::MAX_LENGTH],
             'description' => ['sometimes', 'nullable', 'string', 'max:'.TaskDescription::MAX_LENGTH],
             // Формат фиксирован: дата `Y-m-d`, время — необязательно
             // (`H:i` / `H:i:s`). Несколько правил date_format здесь не годятся:
@@ -82,6 +88,7 @@ final class UpdateTaskRequest extends FormRequest
     {
         return [
             'title' => 'название',
+            'slug' => 'кодовое название',
             'description' => 'описание',
             'deadline' => 'дедлайн',
             'column' => 'колонка',
@@ -98,6 +105,7 @@ final class UpdateTaskRequest extends FormRequest
     {
         return [
             'title.max' => 'Название не может быть длиннее :max символов.',
+            'slug.max' => 'Кодовое название не может быть длиннее :max символов.',
             'description.max' => 'Описание не может быть длиннее :max символов.',
             'deadline.regex' => 'Неверная дата дедлайна.',
             'column.enum' => 'Неизвестная колонка.',
@@ -124,12 +132,12 @@ final class UpdateTaskRequest extends FormRequest
     }
 
     /**
-     * Переданные поля карточки: заголовок, описание, дедлайн, колонка.
+     * Переданные поля карточки: заголовок, кодовое название, описание, дедлайн, колонка.
      *
      * Ключи попадают в результат только если они пришли в запросе: отсутствие
      * ключа — «не менять», явный null — «очистить».
      *
-     * @return array{title?: string, description?: string|null, deadline?: string|null, column?: string}
+     * @return array{title?: string, slug?: string|null, description?: string|null, deadline?: string|null, column?: string}
      */
     public function toFieldPayload(): array
     {
@@ -137,6 +145,11 @@ final class UpdateTaskRequest extends FormRequest
 
         if ($this->has('title')) {
             $fields['title'] = $this->string('title')->toString();
+        }
+
+        if ($this->has('slug')) {
+            $value = $this->input('slug');
+            $fields['slug'] = $value === null ? null : (string) $value;
         }
 
         if ($this->has('description')) {
