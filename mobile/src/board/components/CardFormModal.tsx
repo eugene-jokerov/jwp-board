@@ -10,7 +10,9 @@
  *
  * Степень проработки («Идея» / «На реализацию») выбирается только для беклога:
  * карточка, которую создают сразу в работе или в закрытой колонке, идеей не
- * бывает, и сервер такой флаг обнуляет.
+ * бывает, и сервер такой флаг обнуляет. Значение по умолчанию зависит от
+ * уровня: инициатива и проект открываются как «Идея», задача — как «На
+ * реализацию» (см. `defaultIdea`).
  */
 
 import { useState } from 'react';
@@ -22,7 +24,14 @@ import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
-import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL, SLUG_MAX_LENGTH, WORK_STAGE_LABEL } from '../types';
+import {
+  DESCRIPTION_MAX_LENGTH,
+  KIND_LABEL,
+  KIND_LEVEL,
+  PARENT_LABEL,
+  SLUG_MAX_LENGTH,
+  WORK_STAGE_LABEL,
+} from '../types';
 
 export interface CardDraft {
   kind: CardKind;
@@ -105,6 +114,18 @@ function parentErrorText(kind: CardKind): string {
 }
 
 /**
+ * Степень проработки по умолчанию для карточки данного типа.
+ *
+ * На стратегическом и тактическом уровнях (инициатива, проект) новую карточку
+ * обычно заводят как замысел — «Идея»; на операционном уровне задачу берут в
+ * работу уже продуманной, поэтому по умолчанию она «На реализацию». Выбор всё
+ * равно виден в форме, значение — лишь начальное.
+ */
+function defaultIdea(kind: CardKind): boolean {
+  return KIND_LEVEL[kind] !== 'operational';
+}
+
+/**
  * Опция степени проработки: «Идея» или «На реализацию».
  *
  * Выбор показывается только для беклога: в остальных колонках карточка не
@@ -155,10 +176,11 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   /** Дедлайн необязателен: null — карточка без срока. */
   const [deadline, setDeadline] = useState<string | null>(null);
   /**
-   * Степень проработки: true — идея. По умолчанию карточка создаётся готовой
-   * к реализации, поэтому форма открывается со значением false.
+   * Степень проработки: true — идея. Начальное значение зависит от уровня
+   * карточки (см. `defaultIdea`): инициатива и проект открываются как «Идея»,
+   * задача — как «На реализацию».
    */
-  const [idea, setIdea] = useState(false);
+  const [idea, setIdea] = useState(() => defaultIdea(draft?.kind ?? 'initiative'));
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -172,7 +194,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setSlug('');
     setDescription('');
     setDeadline(null);
-    setIdea(false);
+    // Возвращаем значение по умолчанию, а не «последний выбор»: повторное
+    // открытие формы (в том числе для карточки другого уровня) должно снова
+    // начинаться со степени проработки по умолчанию.
+    setIdea(defaultIdea(draft?.kind ?? 'initiative'));
     setParentId(null);
     setTitleError(null);
     setParentError(null);
