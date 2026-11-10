@@ -1,27 +1,38 @@
 /**
  * Модалка редактирования карточки.
  *
- * Открывается кликом по карточке. Редактируются название и статус (колонка
- * доски), карточку можно удалить. Доступные статусы — `allowedTransitions`
+ * Открывается кликом по карточке. Редактируются название, описание и статус
+ * (колонка доски), карточку можно удалить. Доступные статусы — `allowedTransitions`
  * из ответа сервера: если у карточки есть дети в работе, смена статуса
  * запрещена, статусы в списке заблокированы и причина показана под ними.
+ *
+ * Описания в списке карточек нет, поэтому при каждом открытии модалка
+ * запрашивает карточку отдельно (`GET /tasks/{task}`) и показывает общий
+ * лоадер на всю форму, пока данные не придут: поля не должны появляться
+ * пустыми и перезаписываться, пока пользователь уже начал в них печатать.
  */
 
-import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
 
+import { fetchTask } from '../../api/client';
+import { getToken } from '../../auth/session';
 import { FormAlert } from '../../components/FormAlert';
 import { TextField } from '../../components/TextField';
 import { directionColorHex } from '../directionColors';
-import { COLUMNS, KIND_LABEL, type Card, type ColumnId } from '../types';
+import { toCardDescription } from '../mappers';
+import { COLUMNS, DESCRIPTION_MAX_LENGTH, KIND_LABEL, type Card, type ColumnId } from '../types';
 
 interface CardEditModalProps {
   /** Редактируемая карточка; null — модалка закрыта. */
   card: Card | null;
   /** Причина, по которой сменить статус нельзя; null — смена разрешена. */
   lockedReason: string | null;
-  /** Сохранить изменения; возвращает текст ошибки, который показываем в модалке. */
-  onSave: (card: Card, title: string, column: ColumnId) => Promise<string | null>;
+  /**
+   * Сохранить изменения; возвращает текст ошибки, который показываем в модалке.
+   * `description` — null, если описание ещё не загружено: поле тогда не отправляется.
+   */
+  onSave: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
   /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
@@ -30,9 +41,8 @@ interface CardEditModalProps {
 /**
  * Модалка с формой редактирования.
  *
- * Форма инициализируется данными карточки при монтировании, а экран монтирует
- * её заново на каждое открытие (`key` по id карточки) — эффект синхронизации
- * состояния не нужен.
+ * Экран монтирует её заново на каждое открытие (`key` по id карточки), поэтому
+ * описание грузится один раз при монтировании и привязано к конкретной карточке.
  */
 export function CardEditModal(props: CardEditModalProps) {
   if (props.card === null) {
@@ -54,7 +64,7 @@ export function CardEditModal(props: CardEditModalProps) {
 interface CardEditFormProps {
   card: Card;
   lockedReason: string | null;
-  onSave: (card: Card, title: string, column: ColumnId) => Promise<string | null>;
+  onSave: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
   onDelete: (card: Card) => Promise<string | null>;
   onClose: () => void;
 }
@@ -88,6 +98,8 @@ function StatusOption({ label, selected, locked, onPress }: StatusOptionProps) {
 
 function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEditFormProps) {
   const [title, setTitle] = useState(card.title);
+  /** Описание из полного представления карточки; null — ещё не загружено. */
+  const [description, setDescription] = useState<string | null>(null);
   const [columnId, setColumnId] = useState<ColumnId>(card.column);
   const [titleError, setTitleError] = useState<string | null>(null);
   // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
@@ -95,6 +107,48 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   const [saving, setSaving] = useState(false);
   // Удаление подтверждается в самой модалке: на web системные диалоги не работают.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /** Пока описание грузится, вместо полей показывается общий лоадер. */
+  const [loading, setLoading] = useState(true);
+  /** Ошибка загрузки описания: без неё поля показывать нельзя — сохраним пустым. */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /** Счётчик повторов: изменение значения перезапускает эффект загрузки. */
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  /**
+   * Загрузить карточку целиком ради описания.
+   *
+   * Вызывается эффектом при монтировании и кнопкой «Повторить». Состояние
+   * «загружается» ставится здесь, а не в теле эффекта: в теле это дало бы
+   * каскадный рендер при каждом открытии модалки.
+   */
+  const loadCard = useCallback(async (): Promise<void> => {
+    try {
+      const detail = await fetchTask(getToken(), card.id);
+
+      setDescription(toCardDescription(detail));
+      setTitle(detail.title);
+      setLoadError(null);
+    } catch {
+      setLoadError('Не удалось загрузить карточку. Проверьте соединение и попробуйте снова.');
+    } finally {
+      setLoading(false);
+    }
+  }, [card.id]);
+
+  useEffect(() => {
+    // Загрузка — асинхронный внешний вызов: состояние обновится после ответа API,
+    // а не синхронным setState внутри эффекта.
+    const request = Promise.resolve().then(() => loadCard());
+
+    void request;
+  }, [loadCard, loadAttempt]);
+
+  /** Повторить неудачную загрузку: сначала снова показываем лоадер. */
+  const retryLoad = () => {
+    setLoading(true);
+    setLoadError(null);
+    setLoadAttempt((attempt) => attempt + 1);
+  };
 
   const submit = async () => {
     const trimmed = title.trim();
@@ -104,8 +158,14 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
       return;
     }
 
+    const descriptionValue = description?.trim() ?? '';
+    // Незагруженное описание (null) не отправляем вовсе: иначе PATCH стёр бы
+    // текст карточки, которого мы ещё не видели. Стёртое описание — пустая
+    // строка, сервер нормализует её в null.
+    const nextDescription = description === null ? null : descriptionValue;
+
     setSaving(true);
-    const error = await onSave(card, trimmed, columnId);
+    const error = await onSave(card, trimmed, nextDescription, columnId);
     setSaving(false);
 
     if (error !== null) {
@@ -135,113 +195,160 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
             <Text className="text-xs text-muted">{KIND_LABEL[card.kind]}</Text>
           </View>
 
-          {formError ? <FormAlert message={formError} /> : null}
-
-          <TextField
-            label="Название"
-            value={title}
-            onChangeText={(value) => {
-              setTitle(value);
-              setTitleError(null);
-              setFormError(null);
-            }}
-            error={titleError}
-            placeholder="Например: Запуск новой ветки"
-          />
-
-          <View className="gap-1.5">
-            <Text className="text-sm font-medium text-app">Статус</Text>
-
-            <View className="gap-1.5">
-              {COLUMNS.map((option) => (
-                <StatusOption
-                  key={option.id}
-                  label={option.label}
-                  selected={option.id === columnId}
-                  // Заблокированы статусы, которые сервер не разрешил, — и всегда
-                  // после начала запроса, чтобы не отправлять второй раз.
-                  locked={saving || !card.allowedTransitions.includes(option.id)}
-                  onPress={() => {
-                    setColumnId(option.id);
-                    setFormError(null);
-                  }}
-                />
-              ))}
+          {loading ? (
+            // Описание приходит отдельным запросом: форму показываем целиком и
+            // сразу готовой к правке, а не с пустым полем, которое вот-вот
+            // перезапишется ответом сервера.
+            <View className="items-center gap-3 py-8">
+              <ActivityIndicator size="large" />
+              <Text className="text-sm text-muted">Загружаем карточку…</Text>
             </View>
-
-            {lockedReason ? <Text className="text-xs text-err-fg">{lockedReason}</Text> : null}
-          </View>
-
-          <View className="flex-row items-center gap-2">
-            <Text className="text-xs text-subtle">Цвет карточки</Text>
-
-            <View
-              className="h-4 w-4 rounded-full border border-border"
-              style={{ backgroundColor: directionColorHex(card.color) }}
-            />
-          </View>
-
-          {confirmingDelete ? (
-            <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-              <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
+          ) : loadError !== null ? (
+            <View className="gap-2">
+              <FormAlert message={loadError} />
 
               <View className="flex-row gap-2">
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setConfirmingDelete(false)}
-                  className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                  onPress={onClose}
+                  className="h-10 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
                 >
-                  <Text className="text-sm font-semibold text-app">Оставить</Text>
+                  <Text className="text-sm font-semibold text-app">Закрыть</Text>
                 </Pressable>
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: saving }}
-                  disabled={saving}
-                  onPress={() => void remove()}
-                  className={[
-                    'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
-                    saving ? 'opacity-60' : '',
-                  ].join(' ')}
+                  onPress={retryLoad}
+                  className="h-10 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
                 >
-                  <Text className="text-sm font-semibold text-white">Удалить</Text>
+                  <Text className="text-sm font-semibold text-white">Повторить</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: saving }}
-              disabled={saving}
-              onPress={() => setConfirmingDelete(true)}
-              className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
-            >
-              <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
-            </Pressable>
+            <>
+              {formError ? <FormAlert message={formError} /> : null}
+
+              <TextField
+                label="Название"
+                value={title}
+                onChangeText={(value) => {
+                  setTitle(value);
+                  setTitleError(null);
+                  setFormError(null);
+                }}
+                error={titleError}
+                placeholder="Например: Запуск новой ветки"
+              />
+
+              <TextField
+                label="Описание"
+                value={description ?? ''}
+                onChangeText={(value) => {
+                  setDescription(value);
+                  setFormError(null);
+                }}
+                placeholder="Что нужно сделать и зачем (необязательно)"
+                multiline
+                numberOfLines={4}
+                maxLength={DESCRIPTION_MAX_LENGTH}
+              />
+
+              <View className="gap-1.5">
+                <Text className="text-sm font-medium text-app">Статус</Text>
+
+                <View className="gap-1.5">
+                  {COLUMNS.map((option) => (
+                    <StatusOption
+                      key={option.id}
+                      label={option.label}
+                      selected={option.id === columnId}
+                      // Заблокированы статусы, которые сервер не разрешил, — и всегда
+                      // после начала запроса, чтобы не отправлять второй раз.
+                      locked={saving || !card.allowedTransitions.includes(option.id)}
+                      onPress={() => {
+                        setColumnId(option.id);
+                        setFormError(null);
+                      }}
+                    />
+                  ))}
+                </View>
+
+                {lockedReason ? <Text className="text-xs text-err-fg">{lockedReason}</Text> : null}
+              </View>
+
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xs text-subtle">Цвет карточки</Text>
+
+                <View
+                  className="h-4 w-4 rounded-full border border-border"
+                  style={{ backgroundColor: directionColorHex(card.color) }}
+                />
+              </View>
+
+              {confirmingDelete ? (
+                <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+                  <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
+
+                  <View className="flex-row gap-2">
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setConfirmingDelete(false)}
+                      className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                    >
+                      <Text className="text-sm font-semibold text-app">Оставить</Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: saving }}
+                      disabled={saving}
+                      onPress={() => void remove()}
+                      className={[
+                        'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
+                        saving ? 'opacity-60' : '',
+                      ].join(' ')}
+                    >
+                      <Text className="text-sm font-semibold text-white">Удалить</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving }}
+                  disabled={saving}
+                  onPress={() => setConfirmingDelete(true)}
+                  className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
+                >
+                  <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
+                </Pressable>
+              )}
+
+              <View className="flex-row gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onClose}
+                  className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-app">Отмена</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: titleEmpty || saving }}
+                  disabled={titleEmpty || saving}
+                  onPress={() => void submit()}
+                  className={[
+                    'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
+                    titleEmpty || saving ? 'opacity-60' : '',
+                  ].join(' ')}
+                >
+                  <Text className="text-sm font-semibold text-white">Сохранить</Text>
+                </Pressable>
+              </View>
+            </>
           )}
-
-          <View className="flex-row gap-2">
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-app">Отмена</Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: titleEmpty || saving }}
-              disabled={titleEmpty || saving}
-              onPress={() => void submit()}
-              className={[
-                'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-                titleEmpty || saving ? 'opacity-60' : '',
-              ].join(' ')}
-            >
-              <Text className="text-sm font-semibold text-white">Сохранить</Text>
-            </Pressable>
-          </View>
         </View>
       </View>
     </Modal>

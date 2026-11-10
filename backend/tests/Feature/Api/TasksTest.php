@@ -165,6 +165,71 @@ final class TasksTest extends TestCase
             ->assertJsonPath('data.description', 'Детали');
     }
 
+    /**
+     * Детальный просмотр отдаёт полный набор полей, включая описание.
+     */
+    public function test_show_returns_full_card_with_description(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id, 'color' => 'c7']);
+        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = Task::factory()->project($initiative)->create([
+            'user_id' => $user->id,
+            'title' => 'Проект',
+            'description' => 'Детали проекта',
+        ]);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT.'/'.$project->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', $project->id)
+            ->assertJsonPath('data.type', 'project')
+            ->assertJsonPath('data.title', 'Проект')
+            ->assertJsonPath('data.description', 'Детали проекта')
+            ->assertJsonPath('data.direction_id', $initiative->direction_id)
+            ->assertJsonPath('data.initiative_id', $initiative->id)
+            ->assertJsonPath('data.project_id', null)
+            ->assertJsonPath('data.color', 'c7')
+            ->assertJsonStructure([
+                'data' => [
+                    'id',
+                    'type',
+                    'column',
+                    'title',
+                    'description',
+                    'direction_id',
+                    'initiative_id',
+                    'project_id',
+                    'color',
+                    'allowed_transitions',
+                    'created_at',
+                    'updated_at',
+                ],
+            ]);
+    }
+
+    /**
+     * Список доски описания не отдаёт: оно может занимать до 2000 символов,
+     * а карточек в ответе сотни. Полные данные — в GET /tasks/{task}.
+     */
+    public function test_index_does_not_return_description(): void
+    {
+        $user = User::factory()->create();
+        Task::factory()->create([
+            'user_id' => $user->id,
+            'title' => 'Задача',
+            'description' => 'Длинное описание',
+        ]);
+
+        $this->actingAsUser($user)
+            ->getJson(self::ENDPOINT)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            // Остальные поля карточки на месте — выпало только описание.
+            ->assertJsonPath('data.0.title', 'Задача')
+            ->assertJsonMissingPath('data.0.description');
+    }
+
     public function test_description_is_limited_to_2000_characters(): void
     {
         $user = User::factory()->create();

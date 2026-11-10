@@ -8,7 +8,7 @@ use App\Modules\Task\Application\Results\ListTasksResult;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Infrastructure\Http\Requests\IndexTaskRequest;
-use App\Modules\Task\Infrastructure\Http\Resources\TaskResource;
+use App\Modules\Task\Infrastructure\Http\Resources\TaskSummaryResource;
 use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
@@ -34,6 +34,9 @@ use Illuminate\Http\JsonResponse;
  * колонки), `meta.closed_totals` — полное число закрытых карточек по паре
  * «уровень + колонка»: по нему клиент рисует «показать ещё», когда выборка
  * урезана.
+ *
+ * Карточки отдаются в кратком виде (TaskSummaryResource): описания в списке
+ * нет, полный набор полей — у детального просмотра `GET /tasks/{task}`.
  */
 final class IndexTaskController extends Controller
 {
@@ -69,7 +72,7 @@ final class IndexTaskController extends Controller
             $request->isInitialLoad(),
         ));
 
-        $response = TaskResource::collection($result->items)
+        $response = TaskSummaryResource::collection($result->items)
             ->response();
 
         // Ответ собираем явно: рядом с `data` нужен `meta`, а `with()` в Laravel

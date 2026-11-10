@@ -19,8 +19,8 @@ import type {
   DirectionInput,
   HealthPayload,
   RegisterInput,
-  Task,
   TaskCreateInput,
+  TaskDetail,
   TaskListFilters,
   TaskListPayload,
   TaskUpdateInput,
@@ -275,9 +275,21 @@ export async function fetchTasks(token: string | null, filters: TaskListFilters 
   return request<TaskListPayload>(`/tasks${query ? `?${query}` : ''}`, authHeaders(token));
 }
 
-/** Создание карточки. */
-export async function createTask(token: string | null, input: TaskCreateInput): Promise<Task> {
-  const response = await request<DataResponse<Task>>('/tasks', {
+/**
+ * Одна карточка в полном виде — с описанием.
+ *
+ * Список карточек описания не содержит, поэтому модалка редактирования
+ * запрашивает карточку отдельно при каждом открытии.
+ */
+export async function fetchTask(token: string | null, taskId: number): Promise<TaskDetail> {
+  const response = await request<DataResponse<TaskDetail>>(`/tasks/${taskId}`, authHeaders(token));
+
+  return response.data;
+}
+
+/** Создание карточки; ответ — полное представление, включая описание. */
+export async function createTask(token: string | null, input: TaskCreateInput): Promise<TaskDetail> {
+  const response = await request<DataResponse<TaskDetail>>('/tasks', {
     method: 'POST',
     body: input,
     ...authHeaders(token),
@@ -287,8 +299,8 @@ export async function createTask(token: string | null, input: TaskCreateInput): 
 }
 
 /** Изменение карточки, включая смену колонки (409 — смену блокируют дети в работе). */
-export async function updateTask(token: string | null, taskId: number, input: TaskUpdateInput): Promise<Task> {
-  const response = await request<DataResponse<Task>>(`/tasks/${taskId}`, {
+export async function updateTask(token: string | null, taskId: number, input: TaskUpdateInput): Promise<TaskDetail> {
+  const response = await request<DataResponse<TaskDetail>>(`/tasks/${taskId}`, {
     method: 'PATCH',
     body: input,
     ...authHeaders(token),

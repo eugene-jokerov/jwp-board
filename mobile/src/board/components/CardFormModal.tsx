@@ -16,7 +16,7 @@ import { TextField } from '../../components/TextField';
 import { FormAlert } from '../../components/FormAlert';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import type { CardKind, ColumnId, ParentOptionModel } from '../types';
-import { KIND_LABEL, PARENT_LABEL } from '../types';
+import { DESCRIPTION_MAX_LENGTH, KIND_LABEL, PARENT_LABEL } from '../types';
 
 export interface CardDraft {
   kind: CardKind;
@@ -45,7 +45,12 @@ export interface CardDraft {
 interface CardFormModalProps {
   draft: CardDraft | null;
   /** Создать карточку; текст ошибки сервера или null при успехе. */
-  onCreate: (draft: CardDraft, title: string, parentId: number | null) => Promise<string | null>;
+  onCreate: (
+    draft: CardDraft,
+    title: string,
+    description: string | null,
+    parentId: number | null,
+  ) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -92,6 +97,8 @@ function parentEmptyHint(kind: CardKind): string | null {
 
 export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) {
   const [title, setTitle] = useState('');
+  /** Описание необязательно: пустое поле отправляется как null. */
+  const [description, setDescription] = useState('');
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -102,6 +109,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
   const close = () => {
     setTitle('');
+    setDescription('');
     setParentId(null);
     setTitleError(null);
     setParentError(null);
@@ -125,6 +133,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
   const submit = async () => {
     const titleValue = title.trim();
+    const descriptionValue = description.trim();
     const parentInvalid = parentRequired && selectedParent === null;
 
     if (titleValue === '') {
@@ -140,7 +149,12 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     }
 
     setSaving(true);
-    const error = await onCreate(draft, titleValue, draft.laneId ?? parentId);
+    const error = await onCreate(
+      draft,
+      titleValue,
+      descriptionValue === '' ? null : descriptionValue,
+      draft.laneId ?? parentId,
+    );
     setSaving(false);
 
     if (error !== null) {
@@ -176,6 +190,19 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
             error={titleError}
             placeholder="Например: Запуск новой ветки"
             autoFocus
+          />
+
+          <TextField
+            label="Описание"
+            value={description}
+            onChangeText={(value) => {
+              setDescription(value);
+              setFormError(null);
+            }}
+            placeholder="Что нужно сделать и зачем (необязательно)"
+            multiline
+            numberOfLines={4}
+            maxLength={DESCRIPTION_MAX_LENGTH}
           />
 
           {parentOptions !== null ? (

@@ -67,13 +67,18 @@ export interface Direction {
   color: string;
 }
 
-/** Карточка доски (GET /api/v1/tasks). */
-export interface Task {
+/**
+ * Карточка доски в списке (GET /api/v1/tasks).
+ *
+ * Описания в списке нет: сервер отдаёт его только детальным представлением
+ * (`GET /api/v1/tasks/{id}`), чтобы не тащить длинные тексты в выборку из
+ * сотен карточек.
+ */
+export interface TaskSummary {
   id: number;
   type: CardType;
   column: CardColumn;
   title: string;
-  description: string | null;
   direction_id: number | null;
   initiative_id: number | null;
   project_id: number | null;
@@ -83,6 +88,14 @@ export interface Task {
   allowed_transitions: CardColumn[];
   created_at: string | null;
   updated_at: string | null;
+}
+
+/**
+ * Полное представление карточки: детальный просмотр и ответы создания/изменения.
+ * Отличается от элемента списка описанием.
+ */
+export interface TaskDetail extends TaskSummary {
+  description: string | null;
 }
 
 /** Тело создания направления. */
@@ -144,7 +157,7 @@ export interface TaskListMeta {
 
 /** Ответ списка карточек: данные и счётчики рядом. */
 export interface TaskListPayload {
-  data: Task[];
+  data: TaskSummary[];
   meta: TaskListMeta;
 }
 

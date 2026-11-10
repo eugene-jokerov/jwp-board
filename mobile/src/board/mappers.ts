@@ -4,9 +4,19 @@
  * Единственное место, где живёт перевод `direction_id` / `initiative_id` /
  * `project_id` в плоские поля карточки и обратно. Компоненты доски про API не знают,
  * `client.ts` — про модель доски: связывает их этот модуль.
+ *
+ * Описание карточки в модель доски не попадает: список его не отдаёт, а
+ * детальное представление читает модалка редактирования напрямую.
  */
 
-import type { CardColumn, CardType, Direction as ApiDirection, Task as ApiTask, TaskListMeta } from '../api/types';
+import type {
+  CardColumn,
+  CardType,
+  Direction as ApiDirection,
+  TaskDetail,
+  TaskSummary,
+  TaskListMeta,
+} from '../api/types';
 import type { Card, CardKind, ClosedTotals, ColumnId, Direction } from './types';
 
 /**
@@ -22,8 +32,8 @@ export function toColumnId(column: CardColumn): ColumnId {
   return column;
 }
 
-/** Карточка API в модель доски. */
-export function toCard(task: ApiTask): Card {
+/** Карточка API в модель доски; поля доски есть и в кратком, и в полном виде. */
+export function toCard(task: TaskSummary): Card {
   return {
     id: task.id,
     kind: toCardKind(task.type),
@@ -35,6 +45,18 @@ export function toCard(task: ApiTask): Card {
     projectId: task.project_id,
     allowedTransitions: task.allowed_transitions.map(toColumnId),
   };
+}
+
+/**
+ * Описание карточки из полного представления: пустой текст — это null.
+ *
+ * Сервер уже нормализует пустую строку в null (TaskDescription), но ответ мог
+ * быть получен после ручной правки данных, поэтому клиент не полагается на это.
+ */
+export function toCardDescription(task: TaskDetail): string | null {
+  const description = task.description?.trim() ?? '';
+
+  return description === '' ? null : description;
 }
 
 /** Направление API в модель доски. */

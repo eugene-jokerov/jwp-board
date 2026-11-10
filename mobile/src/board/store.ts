@@ -61,8 +61,14 @@ export function errorMessage(error: unknown, fallback: string): string {
 
 /** Действия над карточками; каждая возвращает текст ошибки сервера или null. */
 interface CardActions {
-  createCard: (draft: CardDraft, title: string, parentId: number | null) => Promise<string | null>;
-  saveCard: (card: Card, title: string, column: ColumnId) => Promise<string | null>;
+  createCard: (
+    draft: CardDraft,
+    title: string,
+    description: string | null,
+    parentId: number | null,
+  ) => Promise<string | null>;
+  /** `description` — null, если описание стёрли; незагруженное описание не отправляется. */
+  saveCard: (card: Card, title: string, description: string | null, column: ColumnId) => Promise<string | null>;
   moveCard: (card: Card, column: ColumnId) => Promise<string | null>;
   removeCard: (card: Card) => Promise<string | null>;
 }
@@ -171,11 +177,14 @@ export function useBoard(): BoardState {
   }, []);
 
   const createCard = useCallback<CardActions['createCard']>(
-    async (draft, title, parentId) => {
+    async (draft, title, description, parentId) => {
       const input: TaskCreateInput = {
         type: draft.kind,
         column: draft.columnId,
         title,
+        // Пустое описание не отправляем: сервер сам нормализует пустую строку
+        // в null, а лишнее поле в теле запроса ничего не добавляет.
+        ...(description === null ? {} : { description }),
         ...parentPayload(draft.kind, draft.laneId ?? parentId),
       };
 
@@ -196,8 +205,15 @@ export function useBoard(): BoardState {
   );
 
   const saveCard = useCallback<CardActions['saveCard']>(
-    async (card, title, column) => {
+    async (card, title, description, column) => {
       const input: TaskUpdateInput = { title };
+
+      // Описание отправляем, только если оно загружено. null от модалки —
+      // «не загружено, не трогать»; стёртое описание приходит пустой строкой,
+      // которую сервер нормализует в null.
+      if (description !== null) {
+        input.description = description;
+      }
 
       // Колонку отправляем только при смене: PATCH с текущей колонкой
       // всё равно проходит через правило перехода.
