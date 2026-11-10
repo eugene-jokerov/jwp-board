@@ -58,8 +58,11 @@ import {
  *
  * Панель названий свимлайнов — базовые 160 px; на окнах шире `WIDE_MIN_WIDTH`
  * она получает ещё 50 px. Колонки делят оставшееся место поровну и растут до
- * `max-w-[380px]`: пока экран узкий, доска занимает его целиком, а на больших
- * мониторах колонки упираются в предел и справа остаётся свободное место.
+ * `COLUMN_PANEL_MAX_WIDTH`: пока экран узкий, доска занимает его целиком, а на
+ * больших мониторах колонки упираются в предел и справа остаётся свободное место.
+ * Пропорции и предел задаются шириной числами (`sizeOfColumn`), а не классами:
+ * на web `flex-1` превращается в `flex: 1` и перебивает `max-width` по порядку
+ * каскада, а флексбокс с `max-width` свободное место вообще не распределяет.
  * Один класс используют и шапка колонок, и тело — иначе заголовки разъедутся
  * с самими колонками.
  *
@@ -73,7 +76,30 @@ const LANE_TITLE_WIDE_WIDTH = 210;
 const LANE_TITLE_WIDTH = 'shrink-0 w-40';
 const LANE_TITLE_WIDTH_WIDE = 'shrink-0 w-[210px]';
 const COLUMN_PANEL_MAX_WIDTH = 380;
-const COLUMN_PANEL = 'min-w-0 flex-1 max-w-[380px]';
+const COLUMN_PANEL = 'shrink-0 min-w-0';
+
+/**
+ * Ширина развёрнутой колонки — числом, а не флексом.
+ *
+ * Флексбоксу отдать эту роль нельзя. Доля поровну получается из
+ * `flex-basis: 0`, но `flex` — это shorthand: на web Tailwind печатает
+ * `.flex-1{flex:1}` раньше `.max-w-[380px]`, и `flex-basis: 0%` перебивает
+ * предел. Если перенести предел во встроенный стиль, флексбокс всё равно
+ * не раздаёт место: при `max-width` на элементе свободное пространство
+ * остаётся нераспределённым, и колонка сразу получает предел. В ряду шириной
+ * 1215 px «Беклог» и «В работе» стояли по 380 px вместо положенных поровну
+ * ~260 px и налезали на соседние колонки.
+ *
+ * Поэтому ширину задаём числом (см. `sizeOfColumn`): свободное место после
+ * панели названий делится поровну, но не больше `COLUMN_PANEL_MAX_WIDTH`.
+ * Точно такую же формулу использует `layoutOfClosedColumns`, поэтому шапка,
+ * подложка, ряды свимлайнов и слой закрытых колонок совпадают до пикселя.
+ */
+function sizeOfColumn(width: number): number {
+  const available = Math.max(0, width - laneTitleSizeOf(width) - LAYOUT_GAP * COLUMNS.length);
+
+  return Math.min(available / COLUMNS.length, COLUMN_PANEL_MAX_WIDTH);
+}
 
 /** Порядок колонок доски по id: индекс — позиция в раскладке. */
 const COLUMN_IDS = COLUMNS.map((column) => column.id);
@@ -464,6 +490,15 @@ export function BoardLevel({
   const laneTitleWidth = widthOfLaneTitle(layoutWidth);
 
   /**
+   * Ширина развёрнутой колонки в текущем окне.
+   *
+   * Одна на всю доску: её получают шапка, подложка и ячейки рядов, иначе
+   * заголовки и карточки разъедутся. Считается от ширины контейнера (до первого
+   * замера — от ширины окна), см. `sizeOfColumn`.
+   */
+  const columnWidth = sizeOfColumn(layoutWidth);
+
+  /**
    * Высота каждого списка закрытой колонки: по ним считается высота уровня.
    *
    * Слой списков абсолютный, поэтому сам он тело не растягивает. Высоту меряем
@@ -662,7 +697,7 @@ export function BoardLevel({
                   }
 
                   return (
-                    <View key={column.id} className={['px-2', COLUMN_PANEL].join(' ')}>
+                    <View key={column.id} className={['px-2', COLUMN_PANEL].join(' ')} style={{ width: columnWidth }}>
                       <View className={COLUMN_TITLE_CLASS}>
                         <View className="flex-1 flex-row items-center gap-1.5">
                           <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted">
@@ -735,7 +770,11 @@ export function BoardLevel({
                         onExpand={() => onToggleCollapsed(column.id)}
                       />
                     ) : (
-                      <View key={column.id} className={[COLUMN_BACKDROP, COLUMN_PANEL].join(' ')} />
+                      <View
+                        key={column.id}
+                        className={[COLUMN_BACKDROP, COLUMN_PANEL].join(' ')}
+                        style={{ width: columnWidth }}
+                      />
                     ),
                   )}
                 </View>
@@ -856,7 +895,11 @@ export function BoardLevel({
                         // Фон и рамку даёт подложка ряда, поэтому ячейка прозрачна:
                         // пустая группа просто растягивается по высоте ряда.
                         return (
-                          <View key={column.id} className={[LANE_COLUMN_CELL, COLUMN_PANEL].join(' ')}>
+                          <View
+                            key={column.id}
+                            className={[LANE_COLUMN_CELL, COLUMN_PANEL].join(' ')}
+                            style={{ width: columnWidth }}
+                          >
                             {laneCards.map((card) => (
                               <BoardCard
                                 key={card.id}
