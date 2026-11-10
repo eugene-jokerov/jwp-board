@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { TextField } from '../../components/TextField';
 import { FormAlert } from '../../components/FormAlert';
@@ -177,128 +177,140 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={close}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-4">
-        <View className="w-full max-w-md gap-4 rounded-2xl bg-card p-5">
-          <View className="gap-1">
-            <Text className="text-lg font-bold text-app">Новый {KIND_LABEL[draft.kind].toLowerCase()}</Text>
-            <Text className="text-xs text-muted">
-              {draft.levelLabel} · {draft.columnLabel}
-              {draft.laneTitle ? ` · ${draft.laneTitle}` : ''}
-            </Text>
-          </View>
+      {/* Форма длинная и на низком экране не помещается целиком, поэтому карточка
+          ограничена высотой экрана: шапка и кнопки закреплены, прокручивается
+          только тело. KeyboardAvoidingView поднимает форму над клавиатурой на iOS. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
+          <View className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-card p-5">
+            <View className="gap-1 pb-4">
+              <Text className="text-lg font-bold text-app">Новый {KIND_LABEL[draft.kind].toLowerCase()}</Text>
+              <Text className="text-xs text-muted">
+                {draft.levelLabel} · {draft.columnLabel}
+                {draft.laneTitle ? ` · ${draft.laneTitle}` : ''}
+              </Text>
+            </View>
 
-          {formError ? <FormAlert message={formError} /> : null}
+            <ScrollView
+              className="min-h-0 flex-1"
+              contentContainerClassName="gap-4 pb-4"
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+            >
+              {formError ? <FormAlert message={formError} /> : null}
 
-          <TextField
-            label="Название"
-            value={title}
-            onChangeText={(value) => {
-              setTitle(value);
-              setTitleError(null);
-              setFormError(null);
-            }}
-            error={titleError}
-            placeholder="Например: Запуск новой ветки"
-            autoFocus
-          />
+              <TextField
+                label="Название"
+                value={title}
+                onChangeText={(value) => {
+                  setTitle(value);
+                  setTitleError(null);
+                  setFormError(null);
+                }}
+                error={titleError}
+                placeholder="Например: Запуск новой ветки"
+                autoFocus
+              />
 
-          <TextField
-            label="Описание"
-            value={description}
-            onChangeText={(value) => {
-              setDescription(value);
-              setFormError(null);
-            }}
-            placeholder="Что нужно сделать и зачем (необязательно)"
-            multiline
-            numberOfLines={4}
-            maxLength={DESCRIPTION_MAX_LENGTH}
-          />
+              <TextField
+                label="Описание"
+                value={description}
+                onChangeText={(value) => {
+                  setDescription(value);
+                  setFormError(null);
+                }}
+                placeholder="Что нужно сделать и зачем (необязательно)"
+                multiline
+                numberOfLines={4}
+                maxLength={DESCRIPTION_MAX_LENGTH}
+              />
 
-          <DatePickerField
-            label="Дедлайн (необязательно)"
-            value={deadline}
-            onChange={(value) => {
-              setDeadline(value);
-              setFormError(null);
-            }}
-            placeholder="Без срока"
-          />
+              <DatePickerField
+                label="Дедлайн (необязательно)"
+                value={deadline}
+                onChange={(value) => {
+                  setDeadline(value);
+                  setFormError(null);
+                }}
+                placeholder="Без срока"
+              />
 
-          {parentOptions !== null ? (
-            <View className="gap-1.5">
-              <Text className="text-sm font-medium text-app">{PARENT_LABEL[draft.kind]}</Text>
+              {parentOptions !== null ? (
+                <View className="gap-1.5">
+                  <Text className="text-sm font-medium text-app">{PARENT_LABEL[draft.kind]}</Text>
 
-              <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
-                {draft.allowNoParent ? (
-                  <ParentOption
-                    label={draft.noParentLabel}
-                    color={UNPARENTED_CARD_COLOR}
-                    selected={parentId === null}
-                    onPress={() => {
-                      setParentId(null);
-                      setParentError(null);
-                    }}
-                  />
-                ) : null}
+                  <ScrollView className="max-h-48" contentContainerClassName="gap-1.5">
+                    {draft.allowNoParent ? (
+                      <ParentOption
+                        label={draft.noParentLabel}
+                        color={UNPARENTED_CARD_COLOR}
+                        selected={parentId === null}
+                        onPress={() => {
+                          setParentId(null);
+                          setParentError(null);
+                        }}
+                      />
+                    ) : null}
 
-                {parentOptions.map((option) => (
-                  <ParentOption
-                    key={option.id}
-                    label={option.title}
-                    color={option.color}
-                    selected={parentId === option.id}
-                    onPress={() => {
-                      setParentId(option.id);
-                      setParentError(null);
-                    }}
-                  />
-                ))}
-              </ScrollView>
+                    {parentOptions.map((option) => (
+                      <ParentOption
+                        key={option.id}
+                        label={option.title}
+                        color={option.color}
+                        selected={parentId === option.id}
+                        onPress={() => {
+                          setParentId(option.id);
+                          setParentError(null);
+                        }}
+                      />
+                    ))}
+                  </ScrollView>
 
-              {parentOptions.length === 0 && !draft.allowNoParent ? (
-                <Text className="text-xs text-err-fg">{parentEmptyHint(draft.kind) ?? 'Выбрать нечего.'}</Text>
+                  {parentOptions.length === 0 && !draft.allowNoParent ? (
+                    <Text className="text-xs text-err-fg">{parentEmptyHint(draft.kind) ?? 'Выбрать нечего.'}</Text>
+                  ) : null}
+
+                  {parentError ? <Text className="text-xs text-err-fg">{parentError}</Text> : null}
+                </View>
               ) : null}
 
-              {parentError ? <Text className="text-xs text-err-fg">{parentError}</Text> : null}
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xs text-subtle">Цвет карточки</Text>
+
+                <View
+                  className="h-4 w-4 rounded-full border border-border"
+                  style={{ backgroundColor: directionColorHex(previewColor) }}
+                />
+
+                <Text className="text-xs text-muted">{previewColor === null ? 'без родителя' : 'наследуется'}</Text>
+              </View>
+            </ScrollView>
+
+            <View className="flex-row gap-2">
+              <Pressable
+                accessibilityRole="button"
+                onPress={close}
+                className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+              >
+                <Text className="text-sm font-semibold text-app">Отмена</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: createDisabled }}
+                disabled={createDisabled}
+                onPress={submit}
+                className={[
+                  'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
+                  createDisabled ? 'opacity-60' : '',
+                ].join(' ')}
+              >
+                <Text className="text-sm font-semibold text-white">Создать</Text>
+              </Pressable>
             </View>
-          ) : null}
-
-          <View className="flex-row items-center gap-2">
-            <Text className="text-xs text-subtle">Цвет карточки</Text>
-
-            <View
-              className="h-4 w-4 rounded-full border border-border"
-              style={{ backgroundColor: directionColorHex(previewColor) }}
-            />
-
-            <Text className="text-xs text-muted">{previewColor === null ? 'без родителя' : 'наследуется'}</Text>
-          </View>
-
-          <View className="flex-row gap-2">
-            <Pressable
-              accessibilityRole="button"
-              onPress={close}
-              className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-app">Отмена</Text>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: createDisabled }}
-              disabled={createDisabled}
-              onPress={submit}
-              className={[
-                'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-                createDisabled ? 'opacity-60' : '',
-              ].join(' ')}
-            >
-              <Text className="text-sm font-semibold text-white">Создать</Text>
-            </Pressable>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

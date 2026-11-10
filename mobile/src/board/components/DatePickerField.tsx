@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { CalendarIcon } from './BoardIcons';
 import { dateToDeadlineDate, deadlineDateToDate, formatDeadlineDate, todayDeadlineDate } from '../deadline';
@@ -199,39 +199,45 @@ export function DatePickerField({ label, value, onChange, error, placeholder }: 
       {error ? <Text className="text-xs text-err-fg">{error}</Text> : null}
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View className="flex-1 items-center justify-center bg-black/40 px-4">
-          <View className="w-full max-w-md gap-3 rounded-2xl bg-card p-5">
-            <Text className="text-lg font-bold text-app">Дедлайн</Text>
+        {/* Календарь высокий (6 недель + кнопки): на низком экране календарь
+            прокручивается, а кнопки «Очистить/Отмена/Готово» остаются видны. */}
+        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
+            <View className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-card p-5">
+              <Text className="pb-3 text-lg font-bold text-app">Дедлайн</Text>
 
-            <DeadlineCalendar selected={draft} onSelect={setDraft} />
+              <ScrollView className="min-h-0 flex-1" contentContainerClassName="pb-3">
+                <DeadlineCalendar selected={draft} onSelect={setDraft} />
+              </ScrollView>
 
-            <View className="flex-row gap-2">
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setDraft(null)}
-                className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
-              >
-                <Text className="text-sm font-semibold text-app">Очистить</Text>
-              </Pressable>
+              <View className="flex-row gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setDraft(null)}
+                  className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-app">Очистить</Text>
+                </Pressable>
 
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setOpen(false)}
-                className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
-              >
-                <Text className="text-sm font-semibold text-app">Отмена</Text>
-              </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setOpen(false)}
+                  className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-app">Отмена</Text>
+                </Pressable>
 
-              <Pressable
-                accessibilityRole="button"
-                onPress={confirm}
-                className="h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
-              >
-                <Text className="text-sm font-semibold text-white">Готово</Text>
-              </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={confirm}
+                  className="h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
+                >
+                  <Text className="text-sm font-semibold text-white">Готово</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

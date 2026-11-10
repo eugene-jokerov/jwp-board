@@ -13,7 +13,16 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 
 import { fetchTask } from '../../api/client';
 import { getToken } from '../../auth/session';
@@ -210,179 +219,198 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 items-center justify-center bg-black/40 px-4">
-        <View className="w-full max-w-md gap-4 rounded-2xl bg-card p-5">
-          <View className="gap-1">
-            <Text className="text-lg font-bold text-app">Карточка</Text>
-            <Text className="text-xs text-muted">{KIND_LABEL[card.kind]}</Text>
-          </View>
-
-          {loading ? (
-            // Описание приходит отдельным запросом: форму показываем целиком и
-            // сразу готовой к правке, а не с пустым полем, которое вот-вот
-            // перезапишется ответом сервера.
-            <View className="items-center gap-3 py-8">
-              <ActivityIndicator size="large" />
-              <Text className="text-sm text-muted">Загружаем карточку…</Text>
+      {/* Форма длинная (описание, дедлайн, статусы, удаление) и на низком экране
+          не помещается целиком, поэтому карточка ограничена высотой экрана:
+          шапка и кнопки закреплены, прокручивается только тело.
+          KeyboardAvoidingView поднимает форму над клавиатурой на iOS. */}
+      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
+          <View className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-card p-5">
+            <View className="gap-1 pb-4">
+              <Text className="text-lg font-bold text-app">Карточка</Text>
+              <Text className="text-xs text-muted">{KIND_LABEL[card.kind]}</Text>
             </View>
-          ) : loadError !== null ? (
-            <View className="gap-2">
-              <FormAlert message={loadError} />
 
-              <View className="flex-row gap-2">
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  className="h-10 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+            {loading || loadError !== null ? (
+              // Лоадер и ошибку загрузки прокручивать незачем, но они живут в той же
+              // области тела: футер с «Отмена/Сохранить» показывается только для формы.
+              <ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 pb-4">
+                {loading ? (
+                  // Описание приходит отдельным запросом: форму показываем целиком и
+                  // сразу готовой к правке, а не с пустым полем, которое вот-вот
+                  // перезапишется ответом сервера.
+                  <View className="items-center gap-3 py-8">
+                    <ActivityIndicator size="large" />
+                    <Text className="text-sm text-muted">Загружаем карточку…</Text>
+                  </View>
+                ) : (
+                  <View className="gap-2">
+                    <FormAlert message={loadError ?? ''} />
+
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={onClose}
+                        className="h-10 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+                      >
+                        <Text className="text-sm font-semibold text-app">Закрыть</Text>
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={retryLoad}
+                        className="h-10 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
+                      >
+                        <Text className="text-sm font-semibold text-white">Повторить</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+            ) : (
+              <>
+                <ScrollView
+                  className="min-h-0 flex-1"
+                  contentContainerClassName="gap-4 pb-4"
+                  keyboardShouldPersistTaps="handled"
+                  automaticallyAdjustKeyboardInsets
                 >
-                  <Text className="text-sm font-semibold text-app">Закрыть</Text>
-                </Pressable>
+                  {formError ? <FormAlert message={formError} /> : null}
 
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={retryLoad}
-                  className="h-10 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90"
-                >
-                  <Text className="text-sm font-semibold text-white">Повторить</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <>
-              {formError ? <FormAlert message={formError} /> : null}
+                  <TextField
+                    label="Название"
+                    value={title}
+                    onChangeText={(value) => {
+                      setTitle(value);
+                      setTitleError(null);
+                      setFormError(null);
+                    }}
+                    error={titleError}
+                    placeholder="Например: Запуск новой ветки"
+                  />
 
-              <TextField
-                label="Название"
-                value={title}
-                onChangeText={(value) => {
-                  setTitle(value);
-                  setTitleError(null);
-                  setFormError(null);
-                }}
-                error={titleError}
-                placeholder="Например: Запуск новой ветки"
-              />
+                  <TextField
+                    label="Описание"
+                    value={description ?? ''}
+                    onChangeText={(value) => {
+                      setDescription(value);
+                      setFormError(null);
+                    }}
+                    placeholder="Что нужно сделать и зачем (необязательно)"
+                    multiline
+                    numberOfLines={4}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
+                  />
 
-              <TextField
-                label="Описание"
-                value={description ?? ''}
-                onChangeText={(value) => {
-                  setDescription(value);
-                  setFormError(null);
-                }}
-                placeholder="Что нужно сделать и зачем (необязательно)"
-                multiline
-                numberOfLines={4}
-                maxLength={DESCRIPTION_MAX_LENGTH}
-              />
+                  <DatePickerField
+                    label="Дедлайн (необязательно)"
+                    value={deadline ?? null}
+                    onChange={(value) => {
+                      setDeadline(value);
+                      setFormError(null);
+                    }}
+                    placeholder="Без срока"
+                  />
 
-              <DatePickerField
-                label="Дедлайн (необязательно)"
-                value={deadline ?? null}
-                onChange={(value) => {
-                  setDeadline(value);
-                  setFormError(null);
-                }}
-                placeholder="Без срока"
-              />
+                  <View className="gap-1.5">
+                    <Text className="text-sm font-medium text-app">Статус</Text>
 
-              <View className="gap-1.5">
-                <Text className="text-sm font-medium text-app">Статус</Text>
+                    <View className="gap-1.5">
+                      {COLUMNS.map((option) => (
+                        <StatusOption
+                          key={option.id}
+                          label={option.label}
+                          selected={option.id === columnId}
+                          // Заблокированы статусы, которые сервер не разрешил, — и всегда
+                          // после начала запроса, чтобы не отправлять второй раз.
+                          locked={saving || !card.allowedTransitions.includes(option.id)}
+                          onPress={() => {
+                            setColumnId(option.id);
+                            setFormError(null);
+                          }}
+                        />
+                      ))}
+                    </View>
 
-                <View className="gap-1.5">
-                  {COLUMNS.map((option) => (
-                    <StatusOption
-                      key={option.id}
-                      label={option.label}
-                      selected={option.id === columnId}
-                      // Заблокированы статусы, которые сервер не разрешил, — и всегда
-                      // после начала запроса, чтобы не отправлять второй раз.
-                      locked={saving || !card.allowedTransitions.includes(option.id)}
-                      onPress={() => {
-                        setColumnId(option.id);
-                        setFormError(null);
-                      }}
+                    {lockedReason ? <Text className="text-xs text-err-fg">{lockedReason}</Text> : null}
+                  </View>
+
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-xs text-subtle">Цвет карточки</Text>
+
+                    <View
+                      className="h-4 w-4 rounded-full border border-border"
+                      style={{ backgroundColor: directionColorHex(card.color) }}
                     />
-                  ))}
-                </View>
+                  </View>
 
-                {lockedReason ? <Text className="text-xs text-err-fg">{lockedReason}</Text> : null}
-              </View>
+                  {confirmingDelete ? (
+                    <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+                      <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
 
-              <View className="flex-row items-center gap-2">
-                <Text className="text-xs text-subtle">Цвет карточки</Text>
+                      <View className="flex-row gap-2">
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setConfirmingDelete(false)}
+                          className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                        >
+                          <Text className="text-sm font-semibold text-app">Оставить</Text>
+                        </Pressable>
 
-                <View
-                  className="h-4 w-4 rounded-full border border-border"
-                  style={{ backgroundColor: directionColorHex(card.color) }}
-                />
-              </View>
-
-              {confirmingDelete ? (
-                <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-                  <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
-
-                  <View className="flex-row gap-2">
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setConfirmingDelete(false)}
-                      className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
-                    >
-                      <Text className="text-sm font-semibold text-app">Оставить</Text>
-                    </Pressable>
-
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: saving }}
+                          disabled={saving}
+                          onPress={() => void remove()}
+                          className={[
+                            'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
+                            saving ? 'opacity-60' : '',
+                          ].join(' ')}
+                        >
+                          <Text className="text-sm font-semibold text-white">Удалить</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{ disabled: saving }}
                       disabled={saving}
-                      onPress={() => void remove()}
-                      className={[
-                        'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
-                        saving ? 'opacity-60' : '',
-                      ].join(' ')}
+                      onPress={() => setConfirmingDelete(true)}
+                      className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
                     >
-                      <Text className="text-sm font-semibold text-white">Удалить</Text>
+                      <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
                     </Pressable>
-                  </View>
+                  )}
+                </ScrollView>
+
+                <View className="flex-row gap-2">
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onClose}
+                    className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
+                  >
+                    <Text className="text-sm font-semibold text-app">Отмена</Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: titleEmpty || saving }}
+                    disabled={titleEmpty || saving}
+                    onPress={() => void submit()}
+                    className={[
+                      'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
+                      titleEmpty || saving ? 'opacity-60' : '',
+                    ].join(' ')}
+                  >
+                    <Text className="text-sm font-semibold text-white">Сохранить</Text>
+                  </Pressable>
                 </View>
-              ) : (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: saving }}
-                  disabled={saving}
-                  onPress={() => setConfirmingDelete(true)}
-                  className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
-                >
-                  <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
-                </Pressable>
-              )}
-
-              <View className="flex-row gap-2">
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onClose}
-                  className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
-                >
-                  <Text className="text-sm font-semibold text-app">Отмена</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: titleEmpty || saving }}
-                  disabled={titleEmpty || saving}
-                  onPress={() => void submit()}
-                  className={[
-                    'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-                    titleEmpty || saving ? 'opacity-60' : '',
-                  ].join(' ')}
-                >
-                  <Text className="text-sm font-semibold text-white">Сохранить</Text>
-                </Pressable>
-              </View>
-            </>
-          )}
+              </>
+            )}
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
