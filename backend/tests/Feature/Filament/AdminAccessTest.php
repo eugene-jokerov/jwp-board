@@ -6,18 +6,18 @@ use App\Filament\Auth\Login;
 use App\Modules\User\Domain\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Response;
-use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
  * Доступ в админку (/admin, Filament).
  *
- * Проверяются три вещи:
- *  - гостя панель уводит на свою страницу входа, а не на лендинг (регресс
- *    Route::fallback в routes/web.php, который перехватывает неизвестные пути);
- *  - пускает только пользователя с флагом is_admin (contract FilamentUser);
+ * Панель не афишируется: гость и авторизованный пользователь без флага
+ * is_admin получают 404 — тот же ответ, что на несуществующий адрес. Тест
+ * фиксирует три вещи:
+ *  - посторонним не достаётся ни редиректа на страницу входа, ни 403,
+ *    подтверждающего существование панели (в том числе маршрута /admin/login);
+ *  - пускает только пользователь с флагом is_admin (contract FilamentUser);
  *  - флаг нельзя поднять через публичную регистрацию в API.
  */
 final class AdminAccessTest extends TestCase
@@ -25,27 +25,51 @@ final class AdminAccessTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Гость на /admin получает редирект на страницу входа панели.
+     * Адреса, которые ведут в панель.
      *
-     * @return TestResponse<Response>
+     * @return list<string>
      */
-    private function getAdminAsGuest(): TestResponse
+    private function adminPaths(): array
     {
-        return $this->get('/admin');
+        return ['/admin', '/admin/login', '/admin/directions', '/admin/users', '/admin/tasks'];
     }
 
-    public function test_guest_is_redirected_to_panel_login(): void
+    public function test_guest_gets_404_for_panel(): void
     {
-        $response = $this->getAdminAsGuest();
+        foreach ($this->adminPaths() as $path) {
+            $response = $this->get($path);
 
-        $response->assertRedirect('/admin/login');
+            // 404, а не 302 на /admin/login: редирект выдавал бы существование панели.
+            $response->assertNotFound();
+            self::assertSame(404, $response->getStatusCode(), "Гость не должен видеть {$path}");
+        }
     }
 
-    public function test_regular_user_cannot_access_panel(): void
+    public function test_regular_user_gets_404_for_panel(): void
     {
         $user = User::factory()->create();
 
         $this->assertFalse($user->canAccessPanel(Filament::getPanel('admin')));
+
+        // Вход выполняется через форму панели (Livewire-компонент вызывается
+        // напрямую: маршрута /admin/login больше нет), но пользователь без
+        // прав не проходит проверку canAccessPanel в ней.
+        Livewire::test(Login::class)
+            ->fillForm([
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->call('authenticate')
+            ->assertHasFormErrors(['email']);
+
+        $this->assertGuest('web');
+
+        // Авторизованный не-администратор тоже не должен узнать о панели.
+        $this->actingAs($user, 'web');
+
+        foreach ($this->adminPaths() as $path) {
+            $this->get($path)->assertNotFound();
+        }
     }
 
     public function test_admin_can_access_panel(): void
@@ -68,6 +92,12 @@ final class AdminAccessTest extends TestCase
         $this->assertAuthenticatedAs($user, 'web');
 
         $this->get('/admin')->assertSuccessful();
+    }
+
+    public function test_guest_sees_landing_not_admin(): void
+    {
+        // Лендинг не задет проверкой панели: 404 отдаёт только /admin.
+        $this->get('/')->assertOk();
     }
 
     public function test_is_admin_is_not_filled_through_api_registration(): void

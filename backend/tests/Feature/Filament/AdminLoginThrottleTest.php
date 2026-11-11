@@ -17,6 +17,9 @@ use Tests\TestCase;
  * `email + IP`: заблокированная пара не пускает даже с верным паролем, а
  * успешный вход счётчик обнуляет. IP-лимит Filament (5 запросов в минуту на
  * вызов метода) не должен влиять на результат, поэтому он снимается в setUp.
+ *
+ * Сама панель скрыта от посторонних (см. AdminAccessTest), поэтому форма
+ * вызывается как Livewire-компонент, а не через маршрут /admin/login.
  */
 final class AdminLoginThrottleTest extends TestCase
 {
@@ -35,9 +38,12 @@ final class AdminLoginThrottleTest extends TestCase
         RateLimiter::clear('livewire-rate-limiter:'.sha1(Login::class.'|authenticate|127.0.0.1'));
     }
 
-    public function test_login_page_keeps_its_url(): void
+    public function test_panel_login_page_is_not_exposed(): void
     {
-        $this->get('/admin/login')->assertSuccessful();
+        // Страницы входа в панели нет: /admin/login отдаёт 404, как и остальные
+        // адреса админки для гостя. Форма входа при этом жива — её защита от
+        // перебора проверяется ниже прямым вызовом Livewire-компонента.
+        $this->get('/admin/login')->assertNotFound();
     }
 
     public function test_failed_attempts_are_counted_per_email(): void

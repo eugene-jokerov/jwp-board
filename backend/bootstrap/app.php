@@ -39,6 +39,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Гостя не уводим на именованный маршрут `login`: веб-входа в приложении
+        // нет (аутентификация — /api/v1/auth/*), и Laravel по умолчанию падал бы
+        // с RouteNotFoundException. Вместо редиректа гость получает 401, а
+        // маршруты админки переводят отказ в 404 (App\Http\Middleware\HideAdminPanel).
+        $middleware->redirectGuestsTo(fn (): ?string => null);
+
         // Allowed headers должны обрабатываться до CSRF, поэтому CORS идёт первым.
         $middleware->api(prepend: [
             HandleCors::class,
