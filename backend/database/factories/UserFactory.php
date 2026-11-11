@@ -47,4 +47,14 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Администратор: единственный, кому доступна админка (/admin).
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'is_admin' => true,
+        ]);
+    }
 }

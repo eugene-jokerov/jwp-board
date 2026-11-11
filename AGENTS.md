@@ -6,8 +6,9 @@
 и для web через `react-native-web`. Отдельного web-фронтенда нет, и на стороне бэкенда
 не бывает Vite и HTML-ответов из API-контроллеров.
 
-Исключение — публичный сайт: на `/` живёт лендинг (описание продукта и
-переход на доску), а веб-версия приложения открывается по `/board/`. Лендинг и юридические
+Исключения — публичный сайт и админка: на `/` живёт лендинг (описание продукта и
+переход на доску), веб-версия приложения открывается по `/board/`, а служебная
+админ-панель — по `/admin` (Filament 5). Лендинг и юридические
 страницы — Blade-шаблоны в `backend/resources/views/` (отдаются через веб-маршруты, провайдер
 `Illuminate\View\ViewServiceProvider`); веб-версия — сборка `mobile` (`make web-build`)
 в `backend/public/board/`. Подробности — в разделе 1.1.
@@ -27,6 +28,7 @@
 - **Роутинг только API.** Все маршруты — в `routes/api.php`, семейство v1 — внутри `Route::prefix('v1')->group(...)`. `routes/web.php` существует **только для лендинга** (см. ниже): новых веб-маршрутов и контроллеров там быть не должно.
 - **Лендинг, юридические страницы и веб-версия.** `GET /` отдаёт Blade-шаблон `resources/views/landing.blade.php` (маршрут `Route::view('/')`); файл лежит **вне веб-корня**, поэтому страниц по адресам `/landing/`, `/landing/index.html` не существует — дублей у `/` нет. Юридические документы (`GET /privacy`, `/terms`, `/cookies`) — Blade-шаблоны `resources/views/legal/*.blade.php`; отдаёт их `App\Http\Controllers\Web\LegalPagesController` через `App\Services\LegalPageService`. Общий каркас страницы — компонент `resources/views/components/legal/layout.blade.php` (шапка, `<h1>`, версия и дата редакции, футер), реквизиты оператора — `x-legal.operators` (данные из `config/legal.php`), стили — `public/css/legal.css`. Blade-провайдер подключён в `bootstrap/providers.php`. Маршруты объявлены **до** `Route::fallback`, иначе fallback уводил бы их на `/`. `/board` редиректит на `/board/`, а `/board/**` — SPA-сборка `mobile` в `public/board/`, её отдаёт веб-сервер. На хостинге маршрутизацию задаёт `.htaccess` (`public/.htaccess` и `.htaccess` внутри сборки из `mobile/public`), локально — `docker/nginx/default.conf` с той же логикой. Fallback в `routes/web.php` уводит неизвестные страницы на лендинг, но `/api/*` остаётся JSON 404.
 - **Контроллеры** — в `app/Http/Controllers/Api/V1/`, наследуются от базового `App\Http\Controllers\Controller`. Примеры имён: `HealthController`, `AuthController`, `BoardController`. Для ресурса — `index/show/store/update/destroy`.
+- **Админка (`/admin`, Filament 5 + Livewire 4).** Второе исключение из правила «только API»: панель Filament в `app/Providers/Filament/AdminPanelProvider.php` (путь `/admin`, гвард `web`, парольный брокер `users`), ресурсы — в `app/Filament/Resources/`. Доступ даёт только флаг `users.is_admin`: модель `App\Modules\User\Domain\User` реализует `FilamentUser::canAccessPanel()` и `HasName::getFilamentName()` (возвращает email, колонки `name` нет). Флаг **не в `$fillable`** — через регистрацию/API его не поднять; выдаётся точечно, сида админа нет: `make artisan cmd='tinker --execute="\App\Modules\User\Domain\User::where(\"email\", \"test@jwp-board.local\")->update([\"is_admin\" => true])"'`. В `routes/web.php` `Route::fallback` исключает `/admin*`, `livewire-*` (Livewire 4 строит префикс из `APP_KEY`) и `/filament*` — иначе служебные POST-запросы панели уводились бы на лендинг. Ассеты (`public/{css,js,fonts}/filament`) в git не хранятся: на деплое — `make artisan cmd="filament:assets"`. Код `app/Filament/*` исключён из PHPStan (это фреймворк, а не наш домен); провайдер панели остаётся в анализе.
 - **Валидация** — всегда через `FormRequest` (`app/Http/Requests/Api/V1/...`), не через `$request->validate()` в контроллере.
 - **Ответы** — через `JsonResource` (`app/Http/Resources/...`). Не возвращай Eloquent-модель напрямую: это раскрывает лишние поля (например, `password`).
 - **Формат ответа:** успех — `{ "data": ... }` для ресурсов; ошибки — стандартный JSON Laravel (`message`, `errors`). Коды: `401` — не аутентифицирован, `403` — нет прав, `404` — не найдено, `422` — ошибка валидации, `201` — создание, `204` — удаление без тела.
@@ -93,10 +95,12 @@ jwp-board/
 │  └─ nginx/default.conf        # vhost на backend/public: лендинг /, SPA /board/, fastcgi php:9000
 ├─ backend/                     # Laravel 13, headless API + лендинг
 │  ├─ app/
+│  │  ├─ Filament/Resources/        # ресурсы админки (/admin, Filament 5)
 │  │  ├─ Http/Controllers/Api/V1/   # контроллеры API
 │  │  ├─ Http/Requests/Api/V1/      # FormRequest-валидация
 │  │  ├─ Http/Resources/            # JsonResource-ответы
 │  │  ├─ Models/                    # Eloquent-модели
+│  │  ├─ Providers/Filament/        # AdminPanelProvider — настройка панели /admin
 │  │  ├─ Modules/<Module>/          # доменные модули (User, Board, …)
 │  │  │  ├─ Application/            # Commands/<UseCase>/{Command,CommandHandler}, Queries/<UseCase>/{Query,QueryHandler}, Results
 │  │  │  ├─ Domain/                 # сущности, value objects, порты, доменные сервисы/исключения

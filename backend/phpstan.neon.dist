@@ -27,6 +27,10 @@ parameters:
         - vendor/*
         - storage/*
         - bootstrap/cache/*
+        # Ресурсы и схемы админки: код фреймворка Filament (Livewire-компоненты),
+        # а не наш домен — level 6 на нём даёт шум, не связанный с проектом.
+        # Провайдер панели (app/Providers/Filament) остаётся в анализе.
+        - app/Filament/*
 
     # В проекте нет declare(strict_types=1): не считаем типы из PHPDoc гарантией.
     treatPhpDocTypesAsCertain: false

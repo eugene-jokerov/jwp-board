@@ -12,6 +12,11 @@
 /public/storage
 # Сборка веб-версии (make web-build): артефакт, на хостинг копируется отдельно.
 /public/board
+# Ассеты админки (Filament): копируются командой `make artisan cmd="filament:assets"`,
+# на хостинге пересобираются при деплое — в git не храним.
+/public/css/filament
+/public/fonts/filament
+/public/js/filament
 # Скомпилированные Blade-вью и прочий рантайм-кэш Laravel. IDE может добавлять
 # их в патчи как новые файлы: коммитить такой мусор нельзя.
 /storage/framework/views/*.php
