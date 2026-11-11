@@ -20,11 +20,14 @@ use App\Modules\Task\Domain\ValueObjects\TaskTitle;
  * только в беклоге, поэтому вне его создание сбрасывает значение в `false`.
  * `priority` — приоритет карточки; по умолчанию средний, ограничений
  * по колонке и уровню у него нет.
+ *
+ * `userId` необязателен, потому что у команды два входа: API (владелец —
+ * аутентифицированный пользователь, его подставляет fromArray) и админка
+ * (владельца выбирает администратор, см. CreateTaskForAdmin).
  */
 final readonly class CreateTaskCommand
 {
     public function __construct(
-        public int $userId,
         public CardType $type,
         public CardColumn $column,
         public TaskTitle $title,
@@ -36,7 +39,29 @@ final readonly class CreateTaskCommand
         public ?TaskSlug $slug = null,
         public bool $idea = false,
         public CardPriority $priority = CardPriority::Medium,
+        public ?int $userId = null,
     ) {}
+
+    /**
+     * Команда с явно заданным владельцем карточки.
+     */
+    public function withUserId(int $userId): self
+    {
+        return new self(
+            $this->type,
+            $this->column,
+            $this->title,
+            $this->description,
+            $this->directionId,
+            $this->initiativeId,
+            $this->projectId,
+            $this->deadline,
+            $this->slug,
+            $this->idea,
+            $this->priority,
+            $userId,
+        );
+    }
 
     /**
      * @param  array<string, mixed>  $payload
@@ -44,7 +69,6 @@ final readonly class CreateTaskCommand
     public static function fromArray(int $userId, array $payload): self
     {
         return new self(
-            $userId,
             CardType::from((string) $payload['type']),
             CardColumn::from((string) $payload['column']),
             TaskTitle::fromString((string) $payload['title']),
@@ -62,6 +86,7 @@ final readonly class CreateTaskCommand
             // Без поля приоритет средний: старые клиенты и вызовы без выбора
             // получают то же значение, что подставляет база по умолчанию.
             CardPriority::from((string) ($payload['priority'] ?? CardPriority::Medium->value)),
+            $userId,
         );
     }
 }

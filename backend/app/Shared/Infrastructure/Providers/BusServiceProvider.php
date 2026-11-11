@@ -4,20 +4,32 @@ namespace App\Shared\Infrastructure\Providers;
 
 use App\Modules\Direction\Application\Commands\CreateDirection\CreateDirectionCommand;
 use App\Modules\Direction\Application\Commands\CreateDirection\CreateDirectionCommandHandler;
+use App\Modules\Direction\Application\Commands\CreateDirectionForAdmin\CreateDirectionForAdminCommand;
+use App\Modules\Direction\Application\Commands\CreateDirectionForAdmin\CreateDirectionForAdminCommandHandler;
 use App\Modules\Direction\Application\Commands\DeleteDirection\DeleteDirectionCommand;
 use App\Modules\Direction\Application\Commands\DeleteDirection\DeleteDirectionCommandHandler;
+use App\Modules\Direction\Application\Commands\DeleteDirectionForAdmin\DeleteDirectionForAdminCommand;
+use App\Modules\Direction\Application\Commands\DeleteDirectionForAdmin\DeleteDirectionForAdminCommandHandler;
 use App\Modules\Direction\Application\Commands\UpdateDirection\UpdateDirectionCommand;
 use App\Modules\Direction\Application\Commands\UpdateDirection\UpdateDirectionCommandHandler;
+use App\Modules\Direction\Application\Commands\UpdateDirectionForAdmin\UpdateDirectionForAdminCommand;
+use App\Modules\Direction\Application\Commands\UpdateDirectionForAdmin\UpdateDirectionForAdminCommandHandler;
 use App\Modules\Direction\Application\Queries\ListDirections\ListDirectionsQuery;
 use App\Modules\Direction\Application\Queries\ListDirections\ListDirectionsQueryHandler;
 use App\Modules\Direction\Application\Queries\ShowDirection\ShowDirectionQuery;
 use App\Modules\Direction\Application\Queries\ShowDirection\ShowDirectionQueryHandler;
 use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
 use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommandHandler;
+use App\Modules\Task\Application\Commands\CreateTaskForAdmin\CreateTaskForAdminCommand;
+use App\Modules\Task\Application\Commands\CreateTaskForAdmin\CreateTaskForAdminCommandHandler;
 use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommand;
 use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommandHandler;
+use App\Modules\Task\Application\Commands\DeleteTaskForAdmin\DeleteTaskForAdminCommand;
+use App\Modules\Task\Application\Commands\DeleteTaskForAdmin\DeleteTaskForAdminCommandHandler;
 use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommand;
 use App\Modules\Task\Application\Commands\UpdateTask\UpdateTaskCommandHandler;
+use App\Modules\Task\Application\Commands\UpdateTaskForAdmin\UpdateTaskForAdminCommand;
+use App\Modules\Task\Application\Commands\UpdateTaskForAdmin\UpdateTaskForAdminCommandHandler;
 use App\Modules\Task\Application\Queries\ListTasks\ListTasksQuery;
 use App\Modules\Task\Application\Queries\ListTasks\ListTasksQueryHandler;
 use App\Modules\Task\Application\Queries\ShowTask\ShowTaskQuery;
@@ -65,6 +77,14 @@ final class BusServiceProvider extends ServiceProvider
         CreateTaskCommand::class => CreateTaskCommandHandler::class,
         UpdateTaskCommand::class => UpdateTaskCommandHandler::class,
         DeleteTaskCommand::class => DeleteTaskCommandHandler::class,
+        // Команды админки (/admin): те же сценарии, но владельца карточки или
+        // направления выбирает администратор, а не аутентификация.
+        CreateDirectionForAdminCommand::class => CreateDirectionForAdminCommandHandler::class,
+        UpdateDirectionForAdminCommand::class => UpdateDirectionForAdminCommandHandler::class,
+        DeleteDirectionForAdminCommand::class => DeleteDirectionForAdminCommandHandler::class,
+        CreateTaskForAdminCommand::class => CreateTaskForAdminCommandHandler::class,
+        UpdateTaskForAdminCommand::class => UpdateTaskForAdminCommandHandler::class,
+        DeleteTaskForAdminCommand::class => DeleteTaskForAdminCommandHandler::class,
     ];
 
     /**

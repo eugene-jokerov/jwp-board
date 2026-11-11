@@ -6,6 +6,7 @@ use App\Modules\Task\Application\Results\TaskResult;
 use App\Modules\Task\Application\Services\TaskDirectionColor;
 use App\Modules\Task\Application\Services\TaskFactory;
 use App\Modules\Task\Domain\Services\ColumnTransitionPolicy;
+use LogicException;
 
 /**
  * Хендлер команды создания карточки.
@@ -23,8 +24,12 @@ final readonly class CreateTaskCommandHandler
 
     public function handle(CreateTaskCommand $command): TaskResult
     {
+        // Владельца задаёт вход: в API — аутентификация, в админке — форма.
+        // Команда без владельца — ошибка сборки команды, а не данных запроса.
+        $userId = $command->userId ?? throw new LogicException('Не указан владелец создаваемой карточки.');
+
         $task = $this->factory->create(
-            $command->userId,
+            $userId,
             $command->type,
             $command->column,
             $command->priority,
@@ -41,7 +46,7 @@ final readonly class CreateTaskCommandHandler
         return TaskResult::fromTask(
             $task,
             $this->policy->allowedTransitions($task),
-            $this->colors->of($command->userId, $task->direction_id),
+            $this->colors->of($userId, $task->direction_id),
         );
     }
 }

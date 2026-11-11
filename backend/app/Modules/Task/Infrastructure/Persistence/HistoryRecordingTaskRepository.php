@@ -154,6 +154,59 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
     }
 
     /**
+     * Каскадное удаление: запись в журнал по каждой карточке поддерева.
+     *
+     * Журнал модерации должен показывать всё вычищенное, а не только корень:
+     * id потомков собираются теми же запросами, что и в адаптере, но до
+     * удаления — после DELETE восстанавливать состав поддерева не из чего.
+     */
+    public function deleteTree(Task $task): void
+    {
+        $projects = Task::query()
+            ->where('user_id', $task->user_id)
+            ->where('type', CardType::Project->value)
+            ->where('initiative_id', $task->id)
+            ->get();
+
+        $entries = [];
+
+        foreach ($projects as $project) {
+            $entries[] = HistoryEntry::deleted(EntityType::Task, (int) $project->id, (int) $project->user_id);
+
+            foreach ($this->children($project) as $child) {
+                $entries[] = HistoryEntry::deleted(EntityType::Task, (int) $child->id, (int) $child->user_id);
+            }
+        }
+
+        // Задачи, привязанные напрямую к корню: так бывает, когда корень — проект.
+        foreach ($this->children($task) as $child) {
+            $entries[] = HistoryEntry::deleted(EntityType::Task, (int) $child->id, (int) $child->user_id);
+        }
+
+        $this->history->recordMany($entries);
+
+        $this->history->record(
+            HistoryEntry::deleted(EntityType::Task, (int) $task->id, (int) $task->user_id),
+        );
+
+        $this->inner->deleteTree($task);
+    }
+
+    /**
+     * Задачи проекта — потомки второго уровня.
+     *
+     * @return list<Task>
+     */
+    private function children(Task $project): array
+    {
+        return Task::query()
+            ->where('user_id', $project->user_id)
+            ->where('project_id', $project->id)
+            ->get()
+            ->all();
+    }
+
+    /**
      * Строковый снимок отслеживаемых полей для old_value и new_value.
      *
      * Enum'ы приводятся к значениям, id — к строке, description не пишется,

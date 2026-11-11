@@ -3,9 +3,13 @@
 namespace App\Modules\Direction\Domain;
 
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
+use App\Modules\Task\Domain\Task;
+use App\Modules\User\Domain\User;
 use Database\Factories\DirectionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -62,6 +66,33 @@ class Direction extends Model
     protected static function newFactory(): DirectionFactory
     {
         return DirectionFactory::new();
+    }
+
+    /**
+     * Владелец направления.
+     *
+     * Связь нужна админке: Filament строит по ней поле выбора владельца, колонку
+     * таблицы и фильтр. Прикладной слой по-прежнему работает с user_id.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Карточки направления (всех уровней).
+     *
+     * Связь объявлена для админки: Filament строит по ней колонку-счётчик
+     * и список карточек на странице направления. Денормализация direction_id
+     * на карточках делает связь одним join'ом, без обхода иерархии.
+     *
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
     }
 
     /**

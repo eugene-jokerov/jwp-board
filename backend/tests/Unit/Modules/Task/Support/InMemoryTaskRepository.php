@@ -193,6 +193,17 @@ final class InMemoryTaskRepository implements TaskRepository
         unset($this->tasks[(int) $task->id]);
     }
 
+    public function deleteTree(Task $task): void
+    {
+        $this->delete($task);
+
+        foreach ($this->tasks as $candidate) {
+            if ($candidate->initiative_id === (int) $task->id || $candidate->project_id === (int) $task->id) {
+                $this->delete($candidate);
+            }
+        }
+    }
+
     public function directionExists(int $userId, int $directionId): bool
     {
         return ($this->directions[$directionId] ?? null) === $userId;

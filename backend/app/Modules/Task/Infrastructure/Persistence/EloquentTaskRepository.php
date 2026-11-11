@@ -209,6 +209,43 @@ final class EloquentTaskRepository implements TaskRepository
         $task->delete();
     }
 
+    /**
+     * Удалить карточку и всех её потомков.
+     *
+     * Иерархия трёхуровневая (инициатива → проекты → задачи), поэтому id
+     * поддерева собираются тремя запросами, а не рекурсивным CTE: так запрос
+     * одинаково работает в MySQL и SQLite. Владелец проверяется по user_id —
+     * чужие карточки в выборку не попадают.
+     */
+    public function deleteTree(Task $task): void
+    {
+        $userId = (int) $task->user_id;
+        $rootId = (int) $task->id;
+
+        // Тип в условии обязателен: у задач проекта денормализован initiative_id,
+        // и без него в «проекты инициативы» попали бы и задачи.
+        $projectIds = Task::query()
+            ->where('user_id', $userId)
+            ->where('type', CardType::Project->value)
+            ->where('initiative_id', $rootId)
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        // Задачи поддерева: дети проектов и (если корень сам проект) его дети.
+        $childIds = Task::query()
+            ->where('user_id', $userId)
+            ->whereIn('project_id', [...$projectIds, $rootId])
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        Task::query()
+            ->where('user_id', $userId)
+            ->whereIn('id', [$rootId, ...$projectIds, ...$childIds])
+            ->delete();
+    }
+
     public function directionExists(int $userId, int $directionId): bool
     {
         return Direction::query()
