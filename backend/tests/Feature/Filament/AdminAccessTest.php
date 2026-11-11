@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Filament\Auth\Login;
 use App\Modules\User\Domain\User;
-use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
