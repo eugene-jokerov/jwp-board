@@ -69,6 +69,9 @@ final class WebAuthTest extends TestCase
         // Токена в ответе нет: доказательство входа — только сессионная cookie.
         self::assertStringNotContainsString('token', (string) $response->getContent());
 
+        // Веб-клиент получает тот же признак режима, что и мобильный.
+        $response->assertJsonPath('data.readonly', false);
+
         $this->sessionCookieValue($response);
     }
 

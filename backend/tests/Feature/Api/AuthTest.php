@@ -39,6 +39,9 @@ final class AuthTest extends TestCase
         // Пароль в ответе не должен фигурировать; имени у пользователя больше нет.
         self::assertStringNotContainsString('password', (string) $response->getContent());
         self::assertArrayNotHasKey('name', $response->json('data.user'));
+
+        // Режим «только чтение» клиент узнаёт сразу при входе: поле всегда есть.
+        $response->assertJsonPath('data.user.readonly', false);
     }
 
     public function test_login_is_case_insensitive_for_email(): void
