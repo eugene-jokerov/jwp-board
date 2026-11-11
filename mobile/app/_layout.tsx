@@ -7,6 +7,8 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
 import { BRAND_NAME, BrandTitle } from '../src/components/BrandTitle';
+import { NotificationProvider } from '../src/notifications/NotificationContext';
+import { NotificationHost } from '../src/notifications/NotificationHost';
 
 /**
  * Лого и слоган в заголовке: вместо одной строки «JWP Board» — название и под
@@ -40,12 +42,17 @@ const SCREEN_OPTIONS = {
  * Корневой layout приложения (expo-router).
  * AuthProvider хранит текущую сессию и восстанавливает её из SecureStore;
  * RootNavigator пускает гостя только на экран входа, авторизованного — на главный.
+ * NotificationProvider даёт всплывающие уведомления (тосты) любому экрану, а
+ * NotificationHost рисует их поверх приложения — и над доской, и над попапами.
  */
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="auto" />
-      <RootNavigator />
+      <NotificationProvider>
+        <StatusBar style="auto" />
+        <RootNavigator />
+        <NotificationHost />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

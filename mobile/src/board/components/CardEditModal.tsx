@@ -22,7 +22,7 @@
  * пустыми и перезаписываться, пока пользователь уже начал в них печатать.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -32,15 +32,14 @@ import {
   ScrollView,
   Text,
   View,
-  type LayoutChangeEvent,
-  type ScrollViewInstance,
 } from 'react-native';
 
 import { fetchTask } from '../../api/client';
 import { getToken } from '../../auth/session';
-import { FormAlert } from '../../components/FormAlert';
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
+import { useFormErrorToast } from '../../notifications/useFormErrorToast';
+import { useUnavailableReasonToast } from '../../notifications/useUnavailableReasonToast';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
@@ -194,18 +193,23 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
   const [priority, setPriority] = useState<CardPriority | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | null>(null);
   /**
-   * Ошибка сохранения (например, запрет сервера). Показывается над полями:
-   * правка любого поля её сбрасывает — причина отказа чаще всего в самих данных.
+   * Ошибка сохранения (например, запрет сервера) показывается тостом — единым
+   * стилем со всеми ошибками доски. Правка любого поля её снимает: причина
+   * отказа чаще всего в самих данных.
    */
-  const [formError, setFormError] = useState<string | null>(null);
+  const { show: showSaveError, clear: clearSaveError } = useFormErrorToast({
+    formKey: `card-edit-${card.id}`,
+    title: 'Не удалось сохранить карточку',
+  });
   /**
-   * Ошибка удаления — отдельно от `formError`: причина отказа (409 — есть
+   * Ошибка удаления — отдельный слот и заголовок: причина отказа (409 — есть
    * дочерние карточки) от полей формы не зависит, поэтому правка названия или
-   * статуса не должна её гасить. Показывается у самой кнопки удаления в конце
-   * прокручиваемого тела, а `deleteSectionRef` вместе с `scrollToDeleteSection`
-   * прокручивает форму к этому блоку, чтобы сообщение не осталось за экраном.
+   * статуса не должна её гасить.
    */
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { show: showDeleteError, clear: clearDeleteError } = useFormErrorToast({
+    formKey: `card-edit-${card.id}`,
+    title: 'Не удалось удалить карточку',
+  });
   const [saving, setSaving] = useState(false);
   // Удаление подтверждается в самой модалке: на web системные диалоги не работают.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -213,42 +217,16 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
   const [loading, setLoading] = useState(true);
   /** Ошибка загрузки описания: без неё поля показывать нельзя — сохраним пустым. */
   const [loadError, setLoadError] = useState<string | null>(null);
+  /**
+   * Причина неудачной загрузки показывается тостом: в самой форме остаётся
+   * только действие («Повторить»/«Закрыть»), текст ошибки не занимает тело.
+   */
+  const { show: showLoadError, clear: clearLoadError } = useFormErrorToast({
+    formKey: `card-edit-${card.id}`,
+    title: 'Не удалось загрузить карточку',
+  });
   /** Счётчик повторов: изменение значения перезапускает эффект загрузки. */
   const [loadAttempt, setLoadAttempt] = useState(0);
-  /** Тело формы: нужно, чтобы прокрутить его к блоку удаления. */
-  const scrollRef = useRef<ScrollViewInstance>(null);
-  /** Смещение блока удаления от начала прокручиваемого тела (`onLayout`). */
-  const deleteSectionOffset = useRef<number | null>(null);
-
-  /**
-   * Запомнить, где в теле формы начинается блок удаления.
-   *
-   * Блок лежит в конце прокрутки, а причина отказа сервера появляется под
-   * кнопкой удаления — без прокрутки она осталась бы за нижней границей экрана,
-   * и отказ выглядел бы как «ничего не произошло».
-   */
-  const handleDeleteSectionLayout = (event: LayoutChangeEvent) => {
-    deleteSectionOffset.current = event.nativeEvent.layout.y;
-  };
-
-  /**
-   * Прокрутить тело к блоку удаления.
-   *
-   * Если `onLayout` ещё не отчитался (модалку только открыли), прокручиваем
-   * в конец: удаление — последний блок формы, так что цель та же.
-   */
-  const scrollToDeleteSection = () => {
-    const offset = deleteSectionOffset.current;
-
-    if (offset === null) {
-      scrollRef.current?.scrollToEnd({ animated: true });
-
-      return;
-    }
-
-    scrollRef.current?.scrollTo({ y: offset, animated: true });
-  };
-
   /**
    * Загрузить карточку целиком ради описания.
    *
@@ -267,12 +245,15 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
       setPriority(detail.priority ?? DEFAULT_CARD_PRIORITY);
       setTitle(detail.title);
       setLoadError(null);
+      clearLoadError();
     } catch {
       setLoadError('Не удалось загрузить карточку. Проверьте соединение и попробуйте снова.');
+      // Причина — тостом: в форме остаётся только кнопка «Повторить».
+      showLoadError('Проверьте соединение с сервером и попробуйте снова.');
     } finally {
       setLoading(false);
     }
-  }, [card.id]);
+  }, [card.id, showLoadError, clearLoadError]);
 
   useEffect(() => {
     // Загрузка — асинхронный внешний вызов: состояние обновится после ответа API,
@@ -284,6 +265,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
 
   /** Повторить неудачную загрузку: сначала снова показываем лоадер. */
   const retryLoad = () => {
+    clearLoadError();
     setLoading(true);
     setLoadError(null);
     setLoadAttempt((attempt) => attempt + 1);
@@ -316,35 +298,31 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
     setSaving(false);
 
     if (error !== null) {
-      setFormError(error);
+      showSaveError(error);
     }
   };
 
   /**
    * Удалить карточку.
    *
-   * Ошибку показываем у самой кнопки удаления (`deleteError`), а не над полями:
-   * пользователь нажимает «Удалить» внизу формы, и сообщение сервера должно
-   * появиться там же. `finally` возвращает кнопки в рабочее состояние, даже
-   * если действие упадёт исключением: иначе форма осталась бы навсегда
-   * заблокированной (`saving`).
+   * Причину отказа (409 — есть дочерние карточки) показывает тост: он всплывает
+   * поверх попапа, поэтому сообщение видно, даже если кнопка удаления внизу
+   * прокручиваемой формы. Правка полей его не снимает — отказ от них не зависит.
+   * `finally` возвращает кнопки в рабочее состояние, даже если действие упадёт
+   * исключением: иначе форма осталась бы навсегда заблокированной (`saving`).
    */
   const remove = async () => {
     setSaving(true);
-    setDeleteError(null);
+    clearDeleteError();
 
     try {
       const error = await onDelete(card);
 
       if (error !== null) {
-        setDeleteError(error);
-        // Подтверждение прячем: причина отказа видна под кнопкой удаления,
-        // а повторное действие начинается заново.
+        showDeleteError(error);
+        // Подтверждение прячем: причина отказа уже показана, а повторное
+        // действие начинается заново.
         setConfirmingDelete(false);
-        // Сообщение длиннее кнопки и может оказаться за нижней границей экрана —
-        // прокручиваем форму к блоку удаления. Колбэк — после перерисовки,
-        // чтобы высота блока уже учитывала баннер.
-        requestAnimationFrame(scrollToDeleteSection);
       }
     } finally {
       setSaving(false);
@@ -353,7 +331,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
 
   /** Открыть подтверждение удаления: прошлая причина отказа уже не актуальна. */
   const askDeleteConfirmation = () => {
-    setDeleteError(null);
+    clearDeleteError();
     setConfirmingDelete(true);
   };
 
@@ -364,6 +342,14 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
    * пропадает, а сохранённое значение флага остаётся в данных.
    */
   const ideaSelectable = card.column === 'backlog';
+
+  /**
+   * Причину заблокированных статусов показывает тост — единым стилем со всеми
+   * ошибками доски. Экран считает её по разрешённым переходам сервера, поэтому
+   * берем `lockedReason` из пропсов, а не собираем свой текст. Тост снимается,
+   * когда блокировка уходит или попап закрывают.
+   */
+  useUnavailableReasonToast(lockedReason, `card-status-${card.id}`, 'Статус недоступен');
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -393,7 +379,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
             {loading || loadError !== null ? (
               // Лоадер и ошибку загрузки прокручивать незачем, но они живут в той же
               // области тела: футер с «Отмена/Сохранить» показывается только для формы.
-              <ScrollView ref={scrollRef} className="min-h-0 flex-1" contentContainerClassName="gap-4 px-0.5 pb-4">
+              <ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 px-0.5 pb-4">
                 {loading ? (
                   // Описание приходит отдельным запросом: форму показываем целиком и
                   // сразу готовой к правке, а не с пустым полем, которое вот-вот
@@ -403,10 +389,12 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                     <Text className="text-sm text-muted">Загружаем карточку…</Text>
                   </View>
                 ) : (
-                  <View className="gap-2">
-                    <FormAlert message={loadError ?? ''} />
+                  <View className="items-center gap-3 py-6">
+                    {/* Причину неудачной загрузки показывает тост (см. `loadCard`), здесь
+                        остаётся только действие: повторить или закрыть. */}
+                    <Text className="text-sm text-muted">Карточка не загрузилась</Text>
 
-                    <View className="flex-row gap-2">
+                    <View className="w-full flex-row gap-2">
                       <Pressable
                         accessibilityRole="button"
                         onPress={onClose}
@@ -434,15 +422,13 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                   keyboardShouldPersistTaps="handled"
                   automaticallyAdjustKeyboardInsets
                 >
-                  {formError ? <FormAlert message={formError} /> : null}
-
                   <TextField
                     label="Название"
                     value={title}
                     onChangeText={(value) => {
                       setTitle(value);
                       setTitleError(null);
-                      setFormError(null);
+                      clearSaveError();
                     }}
                     error={titleError}
                     placeholder="Например: Запуск новой ветки"
@@ -453,7 +439,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                     value={slug ?? ''}
                     onChangeText={(value) => {
                       setSlug(value);
-                      setFormError(null);
+                      clearSaveError();
                     }}
                     placeholder="Например: LAUNCH"
                     maxLength={SLUG_MAX_LENGTH}
@@ -470,7 +456,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                     value={description ?? ''}
                     onChangeText={(value) => {
                       setDescription(value);
-                      setFormError(null);
+                      clearSaveError();
                     }}
                     placeholder="Что нужно сделать и зачем (необязательно)"
                     multiline
@@ -483,7 +469,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                     value={deadline ?? null}
                     onChange={(value) => {
                       setDeadline(value);
-                      setFormError(null);
+                      clearSaveError();
                     }}
                     placeholder="Без срока"
                   />
@@ -501,7 +487,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                       value={priority ?? DEFAULT_CARD_PRIORITY}
                       onChange={(value) => {
                         setPriority(value);
-                        setFormError(null);
+                        clearSaveError();
                       }}
                     />
                   </View>
@@ -517,7 +503,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                           locked={saving}
                           onPress={() => {
                             setIdea(true);
-                            setFormError(null);
+                            clearSaveError();
                           }}
                         />
 
@@ -527,7 +513,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                           locked={saving}
                           onPress={() => {
                             setIdea(false);
-                            setFormError(null);
+                            clearSaveError();
                           }}
                         />
                       </View>
@@ -549,13 +535,11 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                           locked={readOnly || saving || !card.allowedTransitions.includes(option.id)}
                           onPress={() => {
                             setColumnId(option.id);
-                            setFormError(null);
+                            clearSaveError();
                           }}
                         />
                       ))}
                     </View>
-
-                    {lockedReason ? <Text className="text-xs text-err-fg">{lockedReason}</Text> : null}
                   </View>
 
                   <View className="flex-row items-center gap-2">
@@ -577,7 +561,7 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                       Режим только для чтения: данные карточки можно только просматривать.
                     </Text>
                   ) : (
-                    <View className="gap-2" onLayout={handleDeleteSectionLayout}>
+                    <View className="gap-2">
                       {confirmingDelete ? (
                         <View className="gap-2 rounded-xl border border-border bg-surface p-3">
                           <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
@@ -623,8 +607,6 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                           <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
                         </Pressable>
                       )}
-
-                      {deleteError !== null ? <FormAlert message={deleteError} /> : null}
                     </View>
                   )}
                 </ScrollView>

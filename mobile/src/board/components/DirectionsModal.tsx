@@ -21,8 +21,9 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { CircleCheck, Pencil, Trash2 } from 'lucide-react-native';
 
-import { FormAlert } from '../../components/FormAlert';
 import { TextField } from '../../components/TextField';
+import { useFormErrorToast } from '../../notifications/useFormErrorToast';
+import { useUnavailableReasonToast } from '../../notifications/useUnavailableReasonToast';
 import { DIRECTION_COLORS, directionColorHex, firstFreeDirectionColor } from '../directionColors';
 import type { Direction } from '../types';
 
@@ -125,9 +126,24 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
   const [title, setTitle] = useState(direction.title);
   const [color, setColor] = useState(direction.color);
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  /**
+   * Ошибки строки (сохранение и удаление) показываются тостом — единым стилем
+   * со всеми ошибками доски: сообщение не зависит от режима строки и остаётся
+   * видимым, даже если строка свернулась в режим просмотра.
+   */
+  const { show: showFormError, clear: clearFormError } = useFormErrorToast({
+    formKey: `direction-${direction.id}`,
+    title: 'Не удалось сохранить направление',
+  });
   // Пока идёт запрос, кнопки строки заблокированы: повторный клик не нужен.
   const [saving, setSaving] = useState(false);
+
+  /**
+   * Причину недоступности удаления показывает тост, а не мелкий серый текст под
+   * строкой: это блокировка, она должна читаться как предупреждение. Тост
+   * снимается, как только направление снова можно удалить.
+   */
+  useUnavailableReasonToast(deleteReason, `direction-delete-${direction.id}`, 'Удаление недоступно');
 
   const titleEmpty = title.trim() === '';
 
@@ -135,7 +151,7 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
     setTitle(direction.title);
     setColor(direction.color);
     setTitleError(null);
-    setFormError(null);
+    clearFormError();
     setMode('edit');
   };
 
@@ -152,7 +168,7 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
     setSaving(false);
 
     if (error !== null) {
-      setFormError(error);
+      showFormError(error);
       return;
     }
 
@@ -165,7 +181,7 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
     setSaving(false);
 
     if (error !== null) {
-      setFormError(error);
+      showFormError(error);
     }
 
     setMode('view');
@@ -174,15 +190,13 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
   if (mode === 'edit') {
     return (
       <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-        {formError ? <FormAlert message={formError} /> : null}
-
         <TextField
           label="Название"
           value={title}
           onChangeText={(value) => {
             setTitle(value);
             setTitleError(null);
-            setFormError(null);
+            clearFormError();
           }}
           error={titleError}
           placeholder="Например: Продукт"
@@ -197,7 +211,7 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
             usedColors={usedColors}
             onChange={(value) => {
               setColor(value);
-              setFormError(null);
+              clearFormError();
             }}
           />
 
@@ -276,10 +290,6 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
         )}
       </View>
 
-      {deleteReason === null ? null : <Text className="text-[11px] text-subtle">{deleteReason}</Text>}
-
-      {formError !== null && mode === 'view' ? <FormAlert message={formError} /> : null}
-
       {mode === 'confirmDelete' ? (
         <View className="gap-2 rounded-lg bg-err-bg p-2.5">
           <Text className="text-xs font-semibold text-err-fg">Удалить направление «{direction.title}»?</Text>
@@ -330,7 +340,11 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
   const [title, setTitle] = useState('');
   const [color, setColor] = useState(() => firstFreeDirectionColor(usedColors));
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  /** Ошибка создания показывается тостом — так же, как остальные ошибки доски. */
+  const { show: showFormError, clear: clearFormError } = useFormErrorToast({
+    formKey: 'direction-create',
+    title: 'Не удалось добавить направление',
+  });
   const [saving, setSaving] = useState(false);
 
   const titleEmpty = title.trim() === '';
@@ -348,13 +362,13 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
     setSaving(false);
 
     if (error !== null) {
-      setFormError(error);
+      showFormError(error);
       return;
     }
 
     setTitle('');
     setTitleError(null);
-    setFormError(null);
+    clearFormError();
     // Закрываем форму: при следующем открытии она сама возьмёт первый свободный цвет.
     onClose();
   };
@@ -363,15 +377,13 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
     <View className="gap-2 rounded-xl border border-border bg-surface p-3">
       <Text className="text-sm font-semibold text-app">Новое направление</Text>
 
-      {formError ? <FormAlert message={formError} /> : null}
-
       <TextField
         label="Название"
         value={title}
         onChangeText={(value) => {
           setTitle(value);
           setTitleError(null);
-          setFormError(null);
+          clearFormError();
         }}
         error={titleError}
         placeholder="Например: Продукт"
@@ -385,7 +397,7 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
           usedColors={usedColors}
           onChange={(value) => {
             setColor(value);
-            setFormError(null);
+            clearFormError();
           }}
         />
       </View>

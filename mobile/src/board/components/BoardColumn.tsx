@@ -43,7 +43,7 @@ interface BoardColumnProps {
    * открытых колонок всё загружено, у закрытых — последний свимлайн ещё не
    * дошёл до ленты).
    */
-  showMore: { loading: boolean; error: string | null } | null;
+  showMore: { loading: boolean } | null;
   /** Догрузить следующую страницу закрытой колонки. */
   onShowMore: () => void;
   /** Действие карточки по её колонке; null — иконки нет. */
@@ -115,9 +115,7 @@ export function BoardColumn({
 
       {/* «Показать ещё» закрытой колонки стоит после загруженной порции: догрузка
           продолжает список вниз, как лента. */}
-      {showMore === null ? null : (
-        <ShowMoreButton onPress={onShowMore} loading={showMore.loading} error={showMore.error} />
-      )}
+      {showMore === null ? null : <ShowMoreButton onPress={onShowMore} loading={showMore.loading} />}
 
       {/* Создать карточку можно только из «Беклога»: остальные колонки живут
           переносом карточки действием на самой карточке, а создание идёт

@@ -182,7 +182,9 @@ export function Swimlane({
               onToggle={() => onToggleColumn(key)}
               canCreate={canCreate}
               addLabel="+ добавить"
-              showMore={isClosedColumn(column.id) && (hasMore || page.error !== null) ? page : null}
+              showMore={
+                isClosedColumn(column.id) && (hasMore || page.error !== null) ? { loading: page.loading } : null
+              }
               onShowMore={() => onLoadMoreClosed(column.id)}
               cardAction={cardAction}
               cardBreadcrumbs={cardBreadcrumbs}

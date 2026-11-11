@@ -9,16 +9,7 @@
 
 import { useNavigation } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type LevelCreateHintModel, type SwimlaneModel } from '../src/board/components/BoardLevel';
@@ -51,9 +42,9 @@ import {
   type Direction,
   type LevelId,
 } from '../src/board/types';
-import { FormAlert } from '../src/components/FormAlert';
 import { MainMenu } from '../src/components/MainMenu';
 import { ReadOnlyBanner } from '../src/components/ReadOnlyBanner';
+import { useNotifications } from '../src/notifications/NotificationContext';
 
 /** Ниже этой ширины доска переключается в одноколоночный режим (телефон). */
 const COMPACT_MAX_WIDTH = 900;
@@ -65,10 +56,13 @@ const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
  * Пояснение при попытке изменить данные в режиме «только чтение».
  *
  * Плашка над доской объясняет режим, но действие всё равно может «попасться
- * под руку» (кнопка переноса, карточка). Текст короткий: он показывается в
- * строке-уведомлении над доской.
+ * под руку» (кнопка переноса, карточка). Текст короткий: он показывается
+ * всплывающим уведомлением.
  */
 const READ_ONLY_ACTION_MESSAGE = 'Режим только для чтения: изменения недоступны.';
+
+/** Заголовок уведомлений об отказе в режиме «только чтение». */
+const READ_ONLY_NOTICE_TITLE = 'Только для чтения';
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -268,13 +262,20 @@ export default function HomeScreen() {
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
   const [editedCardId, setEditedCardId] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
   /** true — открыт попап настроек направлений. */
   const [directionsOpen, setDirectionsOpen] = useState(false);
   /** true — открыто главное меню (гамбургер в шапке). */
   const [mainMenuOpen, setMainMenuOpen] = useState(false);
+
+  /**
+   * Разовые сообщения доски (запрет переноса, ошибки догрузки, отказ режима
+   * «только чтение») показываются всплывающими уведомлениями поверх экрана:
+   * баннер в теле доски на телефоне уезжал вместе с прокруткой, а системный
+   * Alert на web не работает вовсе.
+   */
+  const { notifyError, notifyWarning } = useNotifications();
 
   // Гамбургер главного меню — в правом углу шапки стека. Настройки шапки
   // задаются экраном (см. app/_layout.tsx), само меню — модалка MainMenu.
@@ -314,7 +315,7 @@ export default function HomeScreen() {
     // В режиме «только чтение» колонку сменить нельзя: сервер ответит 403,
     // поэтому объясняем отказ сразу, не отправляя запрос.
     if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
+      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
 
       return;
     }
@@ -326,36 +327,30 @@ export default function HomeScreen() {
     }
 
     if (action.blockReason === null) {
-      setNotice(null);
       // Перевод в следующую колонку — PATCH /tasks/{id}; при 409 сервер объясняет запрет.
       void board.moveCard(card, action.target).then((error) => {
         if (error !== null) {
-          setNotice(error);
+          notifyError(error, { title: 'Не удалось перенести карточку' });
         }
       });
 
       return;
     }
 
-    setNotice(action.blockReason);
-
-    // На web Alert не работает, там текст показывается баннером над доской.
-    if (Platform.OS !== 'web') {
-      Alert.alert('Перенос запрещён', action.blockReason);
-    }
+    notifyError(action.blockReason, { title: 'Перенос запрещён' });
   };
 
   /**
    * «Показать ещё» в закрытой колонке: следующая страница пары «уровень + колонка».
    *
-   * Ошибку дублируем баннером над доской: кнопка показывает её у себя, но на
-   * телефоне лента может оказаться ниже экрана, а причина отказа должна быть
+   * Ошибку показываем тостом: у самой кнопки она была бы мелкой подписью, а на
+   * телефоне лента может оказаться ниже экрана — причина отказа должна быть
    * видна сразу после клика.
    */
   const handleLoadMoreClosed = (column: ColumnId, kind: CardKind) => {
     void board.loadMoreClosed(column, kind).then((error) => {
       if (error !== null) {
-        setNotice(error);
+        notifyError(error, { title: 'Не удалось загрузить карточки' });
       }
     });
   };
@@ -364,7 +359,7 @@ export default function HomeScreen() {
   const openLaneForm = (level: BoardLevelModel, parentId: number | null, column: ColumnId) => {
     // Read-only: форма всё равно не сохранится (403), поэтому сразу объясняем запрет.
     if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
+      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
 
       return;
     }
@@ -375,7 +370,7 @@ export default function HomeScreen() {
   /** Форма из шапки уровня: родителя выбирают вручную, карточка — в беклог. */
   const openLevelForm = (level: BoardLevelModel) => {
     if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
+      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
 
       return;
     }
@@ -407,7 +402,6 @@ export default function HomeScreen() {
 
     if (error === null) {
       setForm(null);
-      setNotice(null);
     }
 
     return error;
@@ -416,7 +410,7 @@ export default function HomeScreen() {
   /**
    * Изменение карточки: название, кодовое название, описание, срок, приоритет
    * и статус. Ошибку возвращаем модалке — она показывается внутри попапа,
-   * а не над доской.
+   * рядом с полями.
    */
   const saveCard = async (
     card: Card,
@@ -432,7 +426,6 @@ export default function HomeScreen() {
 
     if (error === null) {
       setEditedCardId(null);
-      setNotice(null);
     }
 
     return error;
@@ -444,7 +437,6 @@ export default function HomeScreen() {
 
     if (error === null) {
       setEditedCardId(null);
-      setNotice(null);
     }
 
     return error;
@@ -467,14 +459,18 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-surface">
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-3 py-3">
-        {/* Режим «только чтение» — самое заметное место: выше ошибок и доски. */}
+        {/* Режим «только чтение» — статус, поэтому он остаётся плашкой над доской.
+            Разовые ошибки действий всплывают тостами (src/notifications): баннер в
+            прокручиваемом теле доски уезжал с экрана. */}
         {isReadonly ? <ReadOnlyBanner /> : null}
 
-        {notice ? <FormAlert message={notice} /> : null}
-
+        {/* Доска не загрузилась — это состояние экрана, а не разовое сообщение,
+            поэтому в теле доски остаётся блок с кнопкой «Повторить» в том же
+            оформлении, что и у ошибки загрузки карточки. */}
         {loadError !== null ? (
-          <View className="gap-2 rounded-xl border border-border bg-card p-3">
-            <FormAlert message={loadError} />
+          <View className="items-center gap-3 rounded-xl border border-border bg-card p-4">
+            <Text className="text-sm font-semibold text-app">Не удалось загрузить доску</Text>
+            <Text className="text-center text-xs text-muted">Проверьте соединение с сервером и повторите.</Text>
 
             <Pressable
               accessibilityRole="button"
@@ -482,7 +478,7 @@ export default function HomeScreen() {
               disabled={isRefreshing}
               onPress={() => void reloadBoard()}
               className={[
-                'h-10 items-center justify-center rounded-xl bg-app active:opacity-90',
+                'h-10 w-full items-center justify-center rounded-xl bg-app active:opacity-90',
                 isRefreshing ? 'opacity-60' : '',
               ].join(' ')}
             >

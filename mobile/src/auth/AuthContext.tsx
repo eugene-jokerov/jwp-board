@@ -54,6 +54,19 @@ function applyWebUser(user: { id: number; email: string; readonly: boolean; crea
   setSession({ token: '', token_type: 'Bearer', user });
 }
 
+/**
+ * Режим «только чтение» из сессии.
+ *
+ * `session.user` может оказаться и undefined: сохранённая сессия остаётся от
+ * предыдущих версий приложения и у пользователя ещё нет поля `readonly`, а
+ * на web сессия появляется раньше её проверки. Неполная сессия означает для
+ * интерфейса «обычный пользователь», а не падение всего экрана: сервер всё
+ * равно ответит 403 на запись, если флаг реально включён.
+ */
+function readonlyOf(session: Session | null): boolean {
+  return session?.user?.readonly === true;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<Session | null>(() => getSession());
   const [isRestoring, setIsRestoring] = useState(true);
@@ -138,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       session,
       isAuthenticated: session !== null,
-      isReadonly: session?.user.readonly === true,
+      isReadonly: readonlyOf(session),
       isRestoring,
       signIn,
       signUp,

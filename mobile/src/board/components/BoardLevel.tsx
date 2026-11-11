@@ -876,12 +876,12 @@ export function BoardLevel({
 
                           {/* «Показать ещё» закрытой колонки завершает список:
                               порция догружается вниз, а кнопка остаётся на месте,
-                              пока у пары есть незагруженные карточки. */}
+                              пока у пары есть незагруженные карточки. Причина
+                              неудачной догрузки показывается тостом. */}
                           {isClosedColumn(columnId) && (hasMore || page.error !== null) ? (
                             <ShowMoreButton
                               onPress={() => onLoadMoreClosed(columnId, kindOfLevel)}
                               loading={page.loading}
-                              error={page.error}
                             />
                           ) : null}
                         </View>

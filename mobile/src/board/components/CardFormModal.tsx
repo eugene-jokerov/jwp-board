@@ -18,12 +18,13 @@
  * средний: он не зависит ни от колонки, ни от уровня карточки.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
-import { FormAlert } from '../../components/FormAlert';
+import { useNotifications } from '../../notifications/NotificationContext';
+import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
@@ -198,10 +199,66 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const [priority, setPriority] = useState<CardPriority>(() => draft?.priority ?? DEFAULT_CARD_PRIORITY);
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [parentError, setParentError] = useState<string | null>(null);
-  // Ошибка сервера (валидация иерархии, нет прав) показывается в самой форме.
-  const [formError, setFormError] = useState<string | null>(null);
+  /**
+   * Отправлять без родителя нажали, но родителя нет: причина считается на
+   * рендере (`parentChoiceMissing`), а не хранится в состоянии — иначе её
+   * пришлось бы сбрасывать при каждом выборе.
+   */
+  const [parentTouched, setParentTouched] = useState(false);
+  /** Ключ тоста «родитель обязателен, но не выбран». */
+  const parentMissingKey = 'card-create-parent-missing';
+  /**
+   * Ошибка сервера (валидация иерархии, лимит, нет прав) показывается тостом —
+   * единым стилем со всеми ошибками доски. Тост «липкий» и снимается, как только
+   * поле поправили или форму закрыли.
+   */
+  const { show: showFormError, clear: clearFormError } = useFormErrorToast({
+    formKey: 'card-create',
+    title: 'Не удалось создать карточку',
+  });
+  const { notifyError, dismissKey } = useNotifications();
   const [saving, setSaving] = useState(false);
+
+  const parentOptions = draft?.parentOptions ?? null;
+  /** Родитель обязателен, когда список есть, а карточка без него невозможна. */
+  const parentRequired = parentOptions !== null && draft?.allowNoParent === false;
+  const selectedParent = parentOptions?.find((card) => card.id === parentId) ?? null;
+
+  /**
+   * Почему родителя выбрать нельзя: список пуст, а без родителя такую карточку
+   * сервер не создаст. Это блокировка, поэтому показывается сразу.
+   */
+  const parentBlockedReason =
+    parentRequired && parentOptions !== null && parentOptions.length === 0
+      ? (parentEmptyHint(draft?.kind ?? 'initiative') ?? 'Выбрать нечего.')
+      : null;
+
+  /**
+   * Причина показа тоста о невыбранном родителе.
+   *
+   * `parentBlockedReason` виден сразу — выбирать нечего, поэтому ждать нажатия
+   * кнопки незачем. «Родитель не выбран» показывается только после попытки
+   * сохранить: до этого выбор просто ещё не сделан.
+   */
+  const parentChoiceMissing =
+    parentBlockedReason ??
+    (parentTouched && parentRequired && selectedParent === null ? parentErrorText(draft?.kind ?? 'initiative') : null);
+
+  /**
+   * Показывать/снимать тост о родителе.
+   *
+   * Хук стоит до раннего возврата `draft === null`: порядок хуков не должен
+   * зависеть от пропсов.
+   */
+  useEffect(() => {
+    if (parentChoiceMissing === null) {
+      dismissKey(parentMissingKey);
+
+      return;
+    }
+
+    notifyError(parentChoiceMissing, { title: 'Родитель не выбран', duration: 'sticky', key: parentMissingKey });
+  }, [parentChoiceMissing, notifyError, dismissKey, parentMissingKey]);
 
   // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
   const close = () => {
@@ -218,8 +275,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setPriority(draft?.priority ?? DEFAULT_CARD_PRIORITY);
     setParentId(null);
     setTitleError(null);
-    setParentError(null);
-    setFormError(null);
+    setParentTouched(false);
+    clearFormError();
     setSaving(false);
     onClose();
   };
@@ -228,9 +285,6 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     return null;
   }
 
-  const parentOptions = draft.parentOptions;
-  const parentRequired = parentOptions !== null && !draft.allowNoParent;
-  const selectedParent = parentOptions?.find((card) => card.id === parentId) ?? null;
   const previewColor = draft.laneColor ?? selectedParent?.color ?? null;
   /**
    * Степень проработки выбирается только для беклога: остальные колонки
@@ -253,7 +307,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     }
 
     if (parentInvalid) {
-      setParentError(parentErrorText(draft.kind));
+      // Причину покажет тост: она вычислена на рендере и уже на экране.
+      setParentTouched(true);
     }
 
     if (titleValue === '' || parentInvalid) {
@@ -274,7 +329,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setSaving(false);
 
     if (error !== null) {
-      setFormError(error);
+      showFormError(error);
       return;
     }
 
@@ -311,15 +366,13 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
               keyboardShouldPersistTaps="handled"
               automaticallyAdjustKeyboardInsets
             >
-              {formError ? <FormAlert message={formError} /> : null}
-
               <TextField
                 label="Название"
                 value={title}
                 onChangeText={(value) => {
                   setTitle(value);
                   setTitleError(null);
-                  setFormError(null);
+                  clearFormError();
                 }}
                 error={titleError}
                 placeholder="Например: Запуск новой ветки"
@@ -331,7 +384,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={slug}
                 onChangeText={(value) => {
                   setSlug(value);
-                  setFormError(null);
+                  clearFormError();
                 }}
                 placeholder="Например: LAUNCH"
                 maxLength={SLUG_MAX_LENGTH}
@@ -350,7 +403,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={description}
                 onChangeText={(value) => {
                   setDescription(value);
-                  setFormError(null);
+                  clearFormError();
                 }}
                 placeholder="Что нужно сделать и зачем (необязательно)"
                 multiline
@@ -363,7 +416,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={deadline}
                 onChange={(value) => {
                   setDeadline(value);
-                  setFormError(null);
+                  clearFormError();
                 }}
                 placeholder="Без срока"
               />
@@ -381,7 +434,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                   value={priority}
                   onChange={(value) => {
                     setPriority(value);
-                    setFormError(null);
+                    clearFormError();
                   }}
                 />
               </View>
@@ -396,7 +449,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                     selected={idea}
                     onPress={() => {
                       setIdea(true);
-                      setFormError(null);
+                      clearFormError();
                     }}
                   />
 
@@ -406,7 +459,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                     selected={!idea}
                     onPress={() => {
                       setIdea(false);
-                      setFormError(null);
+                      clearFormError();
                     }}
                   />
                 </View>
@@ -424,7 +477,6 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                         selected={parentId === null}
                         onPress={() => {
                           setParentId(null);
-                          setParentError(null);
                         }}
                       />
                     ) : null}
@@ -437,17 +489,13 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                         selected={parentId === option.id}
                         onPress={() => {
                           setParentId(option.id);
-                          setParentError(null);
                         }}
                       />
                     ))}
                   </ScrollView>
 
-                  {parentOptions.length === 0 && !draft.allowNoParent ? (
-                    <Text className="text-xs text-err-fg">{parentEmptyHint(draft.kind) ?? 'Выбрать нечего.'}</Text>
-                  ) : null}
-
-                  {parentError ? <Text className="text-xs text-err-fg">{parentError}</Text> : null}
+                  {/* Причина, по которой выбрать родителя нельзя, всплывает
+                      тостом (см. `parentBlockReason` выше). */}
                 </View>
               ) : null}
 
