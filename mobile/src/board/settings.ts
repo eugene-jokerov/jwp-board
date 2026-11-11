@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchUserSettings, updateUserSettings } from '../api/client';
 import type { UserSettingsInput } from '../api/types';
-import { getToken } from '../auth/session';
+import { getSession, getToken } from '../auth/session';
 import type { ColumnId, LevelId } from './types';
 
 /** Ключ настройки «свёрнутые уровни»: `{ strategic: true }`. */
@@ -135,6 +135,12 @@ export function useBoardSettings(): BoardSettingsState {
     pending.current = {};
 
     if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    // Режим «только чтение» закрывает и запись настроек (403): очередь просто
+    // отбрасываем, а свернутые уровни остаются локальными до конца сессии.
+    if (getSession()?.user.readonly === true) {
       return;
     }
 

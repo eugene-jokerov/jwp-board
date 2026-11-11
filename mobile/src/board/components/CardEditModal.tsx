@@ -84,6 +84,13 @@ interface CardEditModalProps {
   ) => Promise<string | null>;
   /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
   onDelete: (card: Card) => Promise<string | null>;
+  /**
+   * Режим «только чтение»: карточка открывается на просмотр.
+   *
+   * Поля остаются видимыми, но кнопок «Сохранить» и «Удалить» нет: сервер
+   * отклонил бы запись (403), поэтому форма не обещает невыполнимого.
+   */
+  readOnly?: boolean;
   onClose: () => void;
 }
 
@@ -103,6 +110,7 @@ export function CardEditModal(props: CardEditModalProps) {
       key={props.card.id}
       card={props.card}
       lockedReason={props.lockedReason}
+      readOnly={props.readOnly ?? false}
       onSave={props.onSave}
       onDelete={props.onDelete}
       onClose={props.onClose}
@@ -113,6 +121,7 @@ export function CardEditModal(props: CardEditModalProps) {
 interface CardEditFormProps {
   card: Card;
   lockedReason: string | null;
+  readOnly: boolean;
   onSave: (
     card: Card,
     title: string,
@@ -154,7 +163,7 @@ function StatusOption({ label, selected, locked, onPress }: StatusOptionProps) {
   );
 }
 
-function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEditFormProps) {
+function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose }: CardEditFormProps) {
   const [title, setTitle] = useState(card.title);
   /**
    * Кодовое название из полного представления — undefined, пока не загружено.
@@ -376,6 +385,9 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
             <View className="gap-1 pb-4">
               <Text className="text-lg font-bold text-app">Карточка</Text>
               <Text className="text-xs text-muted">{KIND_LABEL[card.kind]}</Text>
+              {/* Статус учётной записи важнее подписи типа: по нему понятно,
+                  почему в форме нет кнопок сохранения и удаления. */}
+              {readOnly ? <Text className="text-xs font-semibold text-amber-800">Режим только для чтения</Text> : null}
             </View>
 
             {loading || loadError !== null ? (
@@ -533,7 +545,8 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                           selected={option.id === columnId}
                           // Заблокированы статусы, которые сервер не разрешил, — и всегда
                           // после начала запроса, чтобы не отправлять второй раз.
-                          locked={saving || !card.allowedTransitions.includes(option.id)}
+                          // В режиме «только чтение» выбор недоступен вовсе.
+                          locked={readOnly || saving || !card.allowedTransitions.includes(option.id)}
                           onPress={() => {
                             setColumnId(option.id);
                             setFormError(null);
@@ -557,54 +570,63 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                   {/* Удаление живёт в конце прокручиваемого тела, как и раньше.
                       Чтобы причина отказа (409 — есть дочерние карточки) не
                       терялась, её текст показывается здесь же — у самой кнопки,
-                      и тело прокручивается к этому блоку (см. `remove`). */}
-                  <View className="gap-2" onLayout={handleDeleteSectionLayout}>
-                    {confirmingDelete ? (
-                      <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-                        <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
+                      и тело прокручивается к этому блоку (см. `remove`).
+                      В режиме «только чтение» блока нет: удаление запрещено. */}
+                  {readOnly ? (
+                    <Text className="text-xs text-muted">
+                      Режим только для чтения: данные карточки можно только просматривать.
+                    </Text>
+                  ) : (
+                    <View className="gap-2" onLayout={handleDeleteSectionLayout}>
+                      {confirmingDelete ? (
+                        <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+                          <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
 
-                        <View className="flex-row gap-2">
-                          <Pressable
-                            accessibilityRole="button"
-                            onPress={() => setConfirmingDelete(false)}
-                            className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
-                          >
-                            <Text className="text-sm font-semibold text-app">Оставить</Text>
-                          </Pressable>
+                          <View className="flex-row gap-2">
+                            <Pressable
+                              accessibilityRole="button"
+                              onPress={() => setConfirmingDelete(false)}
+                              className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                            >
+                              <Text className="text-sm font-semibold text-app">Оставить</Text>
+                            </Pressable>
 
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityState={{ disabled: saving, busy: saving }}
-                            disabled={saving}
-                            onPress={() => void remove()}
-                            className={[
-                              'h-10 flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-err-fg active:opacity-90',
-                              saving ? 'opacity-60' : '',
-                            ].join(' ')}
-                          >
-                            {/* Запрос идёт до 15 секунд (API_TIMEOUT_MS): спиннер
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityState={{ disabled: saving, busy: saving }}
+                              disabled={saving}
+                              onPress={() => void remove()}
+                              className={[
+                                'h-10 flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-err-fg active:opacity-90',
+                                saving ? 'opacity-60' : '',
+                              ].join(' ')}
+                            >
+                              {/* Запрос идёт до 15 секунд (API_TIMEOUT_MS): спиннер
                                 показывает, что нажатие принято, и удерживает от
                                 повторного клика. */}
-                            {saving ? <ActivityIndicator size="small" color="#fff" /> : null}
+                              {saving ? <ActivityIndicator size="small" color="#fff" /> : null}
 
-                            <Text className="text-sm font-semibold text-white">{saving ? 'Удаляем…' : 'Удалить'}</Text>
-                          </Pressable>
+                              <Text className="text-sm font-semibold text-white">
+                                {saving ? 'Удаляем…' : 'Удалить'}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
-                      </View>
-                    ) : (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: saving }}
-                        disabled={saving}
-                        onPress={askDeleteConfirmation}
-                        className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
-                      >
-                        <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
-                      </Pressable>
-                    )}
+                      ) : (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: saving }}
+                          disabled={saving}
+                          onPress={askDeleteConfirmation}
+                          className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
+                        >
+                          <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
+                        </Pressable>
+                      )}
 
-                    {deleteError !== null ? <FormAlert message={deleteError} /> : null}
-                  </View>
+                      {deleteError !== null ? <FormAlert message={deleteError} /> : null}
+                    </View>
+                  )}
                 </ScrollView>
 
                 <View className="flex-row gap-2">
@@ -613,21 +635,25 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     onPress={onClose}
                     className="h-11 flex-1 items-center justify-center rounded-xl bg-surface active:opacity-80"
                   >
-                    <Text className="text-sm font-semibold text-app">Отмена</Text>
+                    <Text className="text-sm font-semibold text-app">{readOnly ? 'Закрыть' : 'Отмена'}</Text>
                   </Pressable>
 
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: titleEmpty || saving }}
-                    disabled={titleEmpty || saving}
-                    onPress={() => void submit()}
-                    className={[
-                      'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
-                      titleEmpty || saving ? 'opacity-60' : '',
-                    ].join(' ')}
-                  >
-                    <Text className="text-sm font-semibold text-white">Сохранить</Text>
-                  </Pressable>
+                  {/* В режиме «только чтение» сохранять нечего: кнопки нет,
+                      поля остаются для просмотра. */}
+                  {readOnly ? null : (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: titleEmpty || saving }}
+                      disabled={titleEmpty || saving}
+                      onPress={() => void submit()}
+                      className={[
+                        'h-11 flex-1 items-center justify-center rounded-xl bg-app active:opacity-90',
+                        titleEmpty || saving ? 'opacity-60' : '',
+                      ].join(' ')}
+                    >
+                      <Text className="text-sm font-semibold text-white">Сохранить</Text>
+                    </Pressable>
+                  )}
                 </View>
               </>
             )}

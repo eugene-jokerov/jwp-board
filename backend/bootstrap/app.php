@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\DenyReadOnlyWrites;
 use App\Modules\Direction\Domain\Exceptions\DirectionHasCards;
 use App\Modules\Direction\Domain\Exceptions\DirectionLimitReached;
 use App\Modules\Direction\Domain\Exceptions\DirectionNotFound;
@@ -8,6 +9,7 @@ use App\Modules\Task\Domain\Exceptions\InvalidHierarchy;
 use App\Modules\Task\Domain\Exceptions\TaskHasChildren;
 use App\Modules\Task\Domain\Exceptions\TaskNotFound;
 use App\Modules\User\Domain\Exceptions\EmailAlreadyRegistered;
+use App\Modules\User\Domain\Exceptions\ReadOnlyMode;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -48,6 +50,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // Allowed headers должны обрабатываться до CSRF, поэтому CORS идёт первым.
         $middleware->api(prepend: [
             HandleCors::class,
+        ]);
+
+        // Режим «только чтение» — последним в группе: аутентификация к этому
+        // моменту уже выполнена, и флаг пользователя известен. Один хук
+        // закрывает все изменяющие маршруты /api/v1, включая будущие.
+        $middleware->api(append: [
+            DenyReadOnlyWrites::class,
         ]);
 
         // Два канала аутентификации:
@@ -104,4 +113,14 @@ return Application::configure(basePath: dirname(__DIR__))
                 'direction' => [$e->getMessage()],
             ],
         ], Response::HTTP_UNPROCESSABLE_ENTITY));
+
+        // Режим «только чтение»: запись запрещена самой учётной записью, а не
+        // состоянием данных. Ключ `account` — чтобы клиент вывел текст рядом с
+        // действием, а не потерял его в общем баннере.
+        $exceptions->render(fn (ReadOnlyMode $e) => response()->json([
+            'message' => $e->getMessage(),
+            'errors' => [
+                'account' => [$e->getMessage()],
+            ],
+        ], Response::HTTP_FORBIDDEN));
     })->create();

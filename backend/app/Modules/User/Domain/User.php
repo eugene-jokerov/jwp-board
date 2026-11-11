@@ -22,6 +22,10 @@ use Laravel\Sanctum\NewAccessToken;
  *
  * Доступ в админку (Filament, /admin) даёт флаг is_admin. Флаг намеренно не
  * в $fillable: иначе его можно было бы поднять через регистрацию или API.
+ *
+ * Флаг readonly переводит учётную запись в режим «только чтение»: пользователь
+ * видит доску, но не меняет её. Как и is_admin, флаг не массово заполняемый —
+ * выдаётся только из админки.
  */
 class User extends Authenticatable implements FilamentUser, HasName
 {
@@ -82,7 +86,21 @@ class User extends Authenticatable implements FilamentUser, HasName
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'readonly' => 'boolean',
         ];
+    }
+
+    /**
+     * Режим «только чтение».
+     *
+     * Пользователь с этим флагом не может создавать, изменять и удалять данные:
+     * запрет проверяют DenyReadOnlyWrites (HTTP) и DenyReadOnlyCommands (шина).
+     * Явное приведение — как в canAccessPanel(): у строк, созданных до появления
+     * колонки, атрибут может отсутствовать, и null здесь значит «нет».
+     */
+    public function isReadonly(): bool
+    {
+        return (bool) $this->readonly;
     }
 
     /**

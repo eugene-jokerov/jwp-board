@@ -57,4 +57,14 @@ class UserFactory extends Factory
             'is_admin' => true,
         ]);
     }
+
+    /**
+     * Учётная запись в режиме «только чтение»: данные видны, изменения запрещены.
+     */
+    public function readonly(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'readonly' => true,
+        ]);
+    }
 }

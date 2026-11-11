@@ -30,6 +30,13 @@ import { clearSession, getSession, restoreSession, revokeServerSession, setSessi
 interface AuthContextValue {
   session: Session | null;
   isAuthenticated: boolean;
+  /**
+   * Учётная запись работает в режиме «только чтение».
+   *
+   * Источник правды — сервер (поле `readonly` в пользователе): по нему экраны
+   * гасят действия, а сервер независимо отвечает 403 на любую запись.
+   */
+  isReadonly: boolean;
   /** true, пока сессия восстанавливается при старте приложения. */
   isRestoring: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -43,7 +50,7 @@ const IS_WEB = Platform.OS === 'web';
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /** Записать в контекст пользователя веб-сессии (токена у неё нет). */
-function applyWebUser(user: { id: number; email: string; created_at: string | null }): void {
+function applyWebUser(user: { id: number; email: string; readonly: boolean; created_at: string | null }): void {
   setSession({ token: '', token_type: 'Bearer', user });
 }
 
@@ -131,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       session,
       isAuthenticated: session !== null,
+      isReadonly: session?.user.readonly === true,
       isRestoring,
       signIn,
       signUp,

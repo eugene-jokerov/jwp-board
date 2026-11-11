@@ -55,11 +55,19 @@ interface MainMenuProps {
   visible: boolean;
   /** Email текущего пользователя — подпись в шапке меню. */
   email: string;
+  /**
+   * Учётная запись работает в режиме «только чтение».
+   *
+   * Флаг показывается бейджем рядом с email: плашка над доской объясняет
+   * режим на главном экране, а здесь статус виден там, где пользователь
+   * смотрит данные аккаунта.
+   */
+  readOnly?: boolean;
   items: readonly MainMenuItem[];
   onClose: () => void;
 }
 
-export function MainMenu({ visible, email, items, onClose }: MainMenuProps) {
+export function MainMenu({ visible, email, readOnly = false, items, onClose }: MainMenuProps) {
   /** Пункт, ожидающий подтверждения; null — ни один не ждёт. */
   const [pending, setPending] = useState<ConfirmedMainMenuItem | null>(null);
 
@@ -110,6 +118,13 @@ export function MainMenu({ visible, email, items, onClose }: MainMenuProps) {
             <Text className="text-xs text-muted" numberOfLines={1}>
               {email}
             </Text>
+
+            {/* Статус аккаунта: в режиме «только чтение» изменения недоступны. */}
+            {readOnly ? (
+              <View className="mt-1 self-start rounded-full bg-amber-100 px-2 py-0.5">
+                <Text className="text-[11px] font-semibold text-amber-900">Только чтение</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Ожидание подтверждения заменяет список: пока пользователь не ответил,

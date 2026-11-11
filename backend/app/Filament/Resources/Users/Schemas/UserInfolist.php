@@ -20,6 +20,9 @@ class UserInfolist
                 IconEntry::make('is_admin')
                     ->label('Администратор')
                     ->boolean(),
+                IconEntry::make('readonly')
+                    ->label('Только чтение')
+                    ->boolean(),
                 IconEntry::make('email_verified_at')
                     ->label('Email подтверждён')
                     ->boolean()

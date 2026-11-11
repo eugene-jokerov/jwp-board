@@ -32,6 +32,10 @@ class UsersTable
                     ->label('Админ')
                     ->boolean()
                     ->sortable(),
+                IconColumn::make('readonly')
+                    ->label('Только чтение')
+                    ->boolean()
+                    ->sortable(),
                 IconColumn::make('email_verified_at')
                     ->label('Email подтверждён')
                     ->boolean()
@@ -44,6 +48,8 @@ class UsersTable
             ->filters([
                 TernaryFilter::make('is_admin')
                     ->label('Администратор'),
+                TernaryFilter::make('readonly')
+                    ->label('Только чтение'),
             ])
             ->recordActions([
                 ViewAction::make(),

@@ -40,6 +40,10 @@ class UserForm
                     ->label('Администратор')
                     ->helperText('Доступ в админку (/admin).')
                     ->default(false),
+                Toggle::make('readonly')
+                    ->label('Только чтение')
+                    ->helperText('Пользователь видит доску, но не может создавать, изменять и удалять данные.')
+                    ->default(false),
                 DateTimePicker::make('email_verified_at')
                     ->label('Email подтверждён')
                     ->seconds(false),

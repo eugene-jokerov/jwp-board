@@ -47,6 +47,7 @@ use App\Modules\User\Application\Queries\ListUserSettings\ListUserSettingsQueryH
 use App\Shared\Application\Bus\CommandBus;
 use App\Shared\Application\Bus\LaravelCommandBus;
 use App\Shared\Application\Bus\LaravelQueryBus;
+use App\Shared\Application\Bus\Middleware\DenyReadOnlyCommands;
 use App\Shared\Application\Bus\Middleware\TransactionMiddleware;
 use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Contracts\Bus\Dispatcher as DispatcherContract;
@@ -102,11 +103,60 @@ final class BusServiceProvider extends ServiceProvider
     ];
 
     /**
-     * Пайпы, применяемые к каждой команде.
+     * Пайпы команд: команда → набор пайпов.
+     *
+     * По умолчанию — транзакция и запрет записи в режиме «только чтение»
+     * (WRITE_PIPES). Исключения:
+     *  - команды админки (/admin) — только транзакция: администратор правит
+     *    доски read-only пользователей из панели, и флаг их учётки не помеха;
+     *  - регистрация — тоже только транзакция: новой учётной записи ещё нет,
+     *    а гость под флагом предыдущей сессии не должен блокировать регистрацию.
+     *
+     * Набор задаётся явно, а не условием внутри пайпа: тогда правило видно
+     * прямо в карте, а не в коде проверки.
+     *
+     * @var array<class-string, array<int, class-string>>
+     */
+    private const array COMMAND_PIPES = [
+        RegisterUserCommand::class => self::PLAIN_PIPES,
+        CreateDirectionCommand::class => self::WRITE_PIPES,
+        UpdateDirectionCommand::class => self::WRITE_PIPES,
+        DeleteDirectionCommand::class => self::WRITE_PIPES,
+        CreateTaskCommand::class => self::WRITE_PIPES,
+        UpdateTaskCommand::class => self::WRITE_PIPES,
+        DeleteTaskCommand::class => self::WRITE_PIPES,
+        UpdateUserSettingsCommand::class => self::WRITE_PIPES,
+        DeleteUserSettingsCommand::class => self::WRITE_PIPES,
+        CreateDirectionForAdminCommand::class => self::PLAIN_PIPES,
+        UpdateDirectionForAdminCommand::class => self::PLAIN_PIPES,
+        DeleteDirectionForAdminCommand::class => self::PLAIN_PIPES,
+        CreateTaskForAdminCommand::class => self::PLAIN_PIPES,
+        UpdateTaskForAdminCommand::class => self::PLAIN_PIPES,
+        DeleteTaskForAdminCommand::class => self::PLAIN_PIPES,
+    ];
+
+    /**
+     * Пайпы команд из API: транзакция и запрет записи в режиме «только чтение».
+     *
+     * Порядок важен: транзакция идёт первой, чтобы проверка права на запись
+     * выполнялась внутри неё и отказ откатывал запрос атомарно.
+     *
+     * Этот же набор получают команды, которых нет в карте COMMAND_PIPES:
+     * безопасное поведение по умолчанию — транзакция плюс проверка прав.
      *
      * @var array<int, class-string>
      */
-    private const array COMMAND_PIPES = [
+    private const array WRITE_PIPES = [
+        TransactionMiddleware::class,
+        DenyReadOnlyCommands::class,
+    ];
+
+    /**
+     * Пайпы без проверки права на запись: только транзакция.
+     *
+     * @var array<int, class-string>
+     */
+    private const array PLAIN_PIPES = [
         TransactionMiddleware::class,
     ];
 
@@ -120,6 +170,7 @@ final class BusServiceProvider extends ServiceProvider
             $app->make(Pipeline::class),
             $app->make(DispatcherContract::class),
             self::COMMAND_PIPES,
+            self::WRITE_PIPES,
         ));
 
         // Запросы только читают данные: транзакционного пайпа у них нет.

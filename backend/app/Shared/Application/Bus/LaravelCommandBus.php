@@ -13,18 +13,23 @@ use RuntimeException;
  * Команда проходит через пайпы (валидация, транзакция и т.п.) и передаётся
  * хендлеру. Соответствие «команда → хендлер» задаётся через Bus::map()
  * в BusServiceProvider, поэтому конвенций по именам классов нет.
+ *
+ * Набор пайпов тоже живёт в BusServiceProvider — картой «команда → пайпы»:
+ * у команд API и команд админки разные правила (см. COMMAND_PIPES).
  */
 final readonly class LaravelCommandBus implements CommandBus
 {
     /**
      * @param  Pipeline  $pipeline  конвейер пайпов (Illuminate\Pipeline\Pipeline)
      * @param  Dispatcher  $dispatcher  шина Laravel: хранит маппинг команд на хендлеры
-     * @param  array<int, class-string>  $pipes  пайпы, применяемые ко всем командам
+     * @param  array<class-string, array<int, class-string>>  $pipes  наборы пайпов: команда → пайпы
+     * @param  array<int, class-string>  $defaultPipes  пайпы для команд, которых нет в карте
      */
     public function __construct(
         private Pipeline $pipeline,
         private Dispatcher $dispatcher,
         private array $pipes,
+        private array $defaultPipes,
     ) {}
 
     /**
@@ -36,7 +41,7 @@ final readonly class LaravelCommandBus implements CommandBus
     {
         return $this->pipeline
             ->send($command)
-            ->through($this->pipes)
+            ->through($this->pipes[$command::class] ?? $this->defaultPipes)
             ->then(function (object $command): mixed {
                 return $this->invokeHandler($command);
             });

@@ -53,12 +53,22 @@ import {
 } from '../src/board/types';
 import { FormAlert } from '../src/components/FormAlert';
 import { MainMenu } from '../src/components/MainMenu';
+import { ReadOnlyBanner } from '../src/components/ReadOnlyBanner';
 
 /** Ниже этой ширины доска переключается в одноколоночный режим (телефон). */
 const COMPACT_MAX_WIDTH = 900;
 
 /** Колонка, в которую попадает карточка, созданная из шапки уровня: всегда «Беклог». */
 const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
+
+/**
+ * Пояснение при попытке изменить данные в режиме «только чтение».
+ *
+ * Плашка над доской объясняет режим, но действие всё равно может «попасться
+ * под руку» (кнопка переноса, карточка). Текст короткий: он показывается в
+ * строке-уведомлении над доской.
+ */
+const READ_ONLY_ACTION_MESSAGE = 'Режим только для чтения: изменения недоступны.';
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -231,7 +241,7 @@ function buildDraft(
 }
 
 export default function HomeScreen() {
-  const { session, signOut } = useAuth();
+  const { session, signOut, isReadonly } = useAuth();
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const compact = width < COMPACT_MAX_WIDTH;
@@ -301,6 +311,14 @@ export default function HomeScreen() {
 
   /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
   const handleCardAction = (card: Card) => {
+    // В режиме «только чтение» колонку сменить нельзя: сервер ответит 403,
+    // поэтому объясняем отказ сразу, не отправляя запрос.
+    if (isReadonly) {
+      setNotice(READ_ONLY_ACTION_MESSAGE);
+
+      return;
+    }
+
     const action = cardAction(card);
 
     if (action === null) {
@@ -344,11 +362,24 @@ export default function HomeScreen() {
 
   /** Форма из свимлайна: родитель предопределён. */
   const openLaneForm = (level: BoardLevelModel, parentId: number | null, column: ColumnId) => {
+    // Read-only: форма всё равно не сохранится (403), поэтому сразу объясняем запрет.
+    if (isReadonly) {
+      setNotice(READ_ONLY_ACTION_MESSAGE);
+
+      return;
+    }
+
     setForm({ level: level.id, kind: LEVEL_CARD_KIND[level.id], parentId, column });
   };
 
   /** Форма из шапки уровня: родителя выбирают вручную, карточка — в беклог. */
   const openLevelForm = (level: BoardLevelModel) => {
+    if (isReadonly) {
+      setNotice(READ_ONLY_ACTION_MESSAGE);
+
+      return;
+    }
+
     setForm({
       level: level.id,
       kind: LEVEL_CARD_KIND[level.id],
@@ -436,6 +467,9 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-surface">
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-3 py-3">
+        {/* Режим «только чтение» — самое заметное место: выше ошибок и доски. */}
+        {isReadonly ? <ReadOnlyBanner /> : null}
+
         {notice ? <FormAlert message={notice} /> : null}
 
         {loadError !== null ? (
@@ -481,8 +515,9 @@ export default function HomeScreen() {
           const levelCards = cards.filter((card) => card.kind === LEVEL_CARD_KIND[level.id]);
           // Кнопку блокирует только стратегический уровень: инициативе родитель
           // (направление) обязателен, а проекту и задаче родитель не нужен —
-          // они создаются и «без инициативы» / «без проекта».
-          const canCreate = level.id !== 'strategic' || directions.length > 0;
+          // они создаются и «без инициативы» / «без проекта». В режиме «только
+          // чтение» создание недоступно на всех уровнях: сервер отклонит запрос.
+          const canCreate = !isReadonly && (level.id !== 'strategic' || directions.length > 0);
 
           return (
             <BoardLevel
@@ -509,7 +544,18 @@ export default function HomeScreen() {
               onCreateInLevel={() => openLevelForm(level)}
               createLabel={LEVEL_CREATE_LABEL[level.id]}
               canCreate={canCreate}
-              createHint={canCreate ? null : createHintOf(level.id, () => setDirectionsOpen(true))}
+              createHint={
+                canCreate
+                  ? null
+                  : isReadonly
+                    ? {
+                        before: 'Режим только для чтения: ',
+                        link: null,
+                        after: 'создание недоступно',
+                        onPressLink: () => undefined,
+                      }
+                    : createHintOf(level.id, () => setDirectionsOpen(true))
+              }
               onOpenSettings={() => setSettingsLevel(level.id)}
             />
           );
@@ -525,6 +571,7 @@ export default function HomeScreen() {
       <MainMenu
         visible={mainMenuOpen}
         email={session?.user?.email ?? '—'}
+        readOnly={isReadonly}
         items={[
           { label: 'Выйти', confirm: true, confirmQuestion: 'Выйти из аккаунта?', onPress: () => void handleSignOut() },
         ]}
@@ -556,6 +603,7 @@ export default function HomeScreen() {
         visible={directionsOpen}
         directions={directions}
         limit={board.directionLimit}
+        readOnly={isReadonly}
         onAdd={board.addDirection}
         onUpdate={board.editDirection}
         onDelete={board.removeDirection}
@@ -568,6 +616,7 @@ export default function HomeScreen() {
       <CardEditModal
         card={editedCard}
         lockedReason={editedCardLockedReason}
+        readOnly={isReadonly}
         onSave={saveCard}
         onDelete={removeCard}
         onClose={() => setEditedCardId(null)}
