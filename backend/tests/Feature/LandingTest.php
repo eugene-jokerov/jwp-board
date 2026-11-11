@@ -101,12 +101,12 @@ final class LandingTest extends TestCase
         self::assertStringContainsString('152-ФЗ', $html);
     }
 
-    public function test_legal_pages_are_not_redirected_by_fallback(): void
+    public function test_legal_pages_are_not_caught_by_fallback(): void
     {
-        // Регрессия на порядок маршрутов: fallback уводит неизвестные страницы
-        // на «/», и юридические адреса должны быть объявлены раньше него.
+        // Регрессия на порядок маршрутов: fallback отдаёт 404 неизвестным
+        // адресам, и юридические страницы должны быть объявлены раньше него.
         foreach (['/privacy', '/terms', '/cookies'] as $path) {
-            self::assertSame(200, $this->get($path)->getStatusCode(), "{$path} не должен редиректить");
+            self::assertSame(200, $this->get($path)->getStatusCode(), "{$path} не должен отдавать 404");
         }
     }
 
@@ -121,9 +121,9 @@ final class LandingTest extends TestCase
         self::assertFileExists(resource_path('views/landing.blade.php'));
         self::assertFileExists(resource_path('views/legal/privacy.blade.php'));
 
-        $this->get('/landing/')->assertStatus(302);
-        $this->get('/landing/index.html')->assertStatus(302);
-        $this->get('/legal/privacy.html')->assertStatus(302);
+        $this->get('/landing/')->assertNotFound();
+        $this->get('/landing/index.html')->assertNotFound();
+        $this->get('/legal/privacy.html')->assertNotFound();
     }
 
     public function test_board_without_trailing_slash_redirects(): void
@@ -134,12 +134,14 @@ final class LandingTest extends TestCase
         self::assertSame('/board/', $response->headers->get('Location'));
     }
 
-    public function test_unknown_page_redirects_to_landing(): void
+    public function test_unknown_page_returns_404(): void
     {
+        // Неизвестный адрес — настоящий 404, а не редирект на лендинг: битые
+        // ссылки и чужой deep-link не должны открываться как главная страница.
         $response = $this->get('/auth');
 
-        $response->assertStatus(302);
-        self::assertSame('/', $response->headers->get('Location'));
+        $response->assertNotFound();
+        self::assertNull($response->headers->get('Location'), 'Неизвестная страница не должна редиректить');
     }
 
     public function test_unknown_api_route_still_returns_json_404(): void
