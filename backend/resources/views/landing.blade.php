@@ -6,13 +6,13 @@
     <title>JWP Board — персональный канбан для личных целей</title>
     <meta
       name="description"
-      content="JWP Board — персональный канбан: направления, инициативы, проекты и задачи на одном экране. Работа видна целиком, статусы меняются по правилам, доска одинаково открыта на всех устройствах."
+      content="JWP Board — персональный канбан: направления, инициативы, проекты и задачи на одной доске. Один аккаунт для веба и мобильного приложения."
     />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="JWP Board — персональный канбан" />
     <meta
       property="og:description"
-      content="Три уровня вместо одного списка: направления, инициативы, проекты и задачи. Доска с правилами перехода и одной точкой правды для всех устройств."
+      content="Три уровня вместо одного списка: направления, инициативы, проекты и задачи. Одна доска для веба и мобильного приложения."
     />
     <meta property="og:image" content="/images/board.png" />
     {{--
@@ -20,6 +20,12 @@
       Сборки нет: стили инлайновые, палитра совпадает с mobile/tailwind.config.js
       (app/surface/card/muted/border/lane/ink). Год в футере берётся из now(),
       адрес демо — маршрут приложения /board/.
+
+      Страница намеренно короткая: тексты ещё не проработаны, поэтому блоков
+      ровно столько, сколько нужно, чтобы объяснить идею — hero, три уровня
+      доски, три факта и призыв открыть демо. Скриншот /images/board.png
+      кладётся в public/images отдельно; до появления файла блок держит размер
+      (aspect-ratio и фон lane), а подпись объясняет, что на нём будет.
     --}}
     <style>
       :root {
@@ -32,7 +38,6 @@
         --color-lane: #f1f2f4;
         --color-ink: #172b4d;
         --color-accent: #1f6feb;
-        --color-accent-soft: #e8f0fe;
         --radius: 16px;
         --shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.06);
       }
@@ -69,7 +74,7 @@
 
       .container {
         width: 100%;
-        max-width: 1080px;
+        max-width: 1000px;
         margin: 0 auto;
         padding: 0 24px;
       }
@@ -108,23 +113,6 @@
         letter-spacing: 0.02em;
         text-transform: none;
         color: var(--color-muted);
-      }
-
-      .topbar__nav {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-      }
-
-      .topbar__nav a:not(.button) {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--color-muted);
-        text-decoration: none;
-      }
-
-      .topbar__nav a:not(.button):hover {
-        color: var(--color-app);
       }
 
       /* Кнопки */
@@ -171,65 +159,97 @@
 
       /* Hero */
       .hero {
-        padding: 64px 0 40px;
+        padding: 56px 0 40px;
+        text-align: center;
       }
 
-      .eyebrow {
-        display: inline-block;
-        margin-bottom: 16px;
-        padding: 5px 12px;
-        border-radius: 999px;
-        background: var(--color-accent-soft);
-        color: #1a4fb4;
-        font-size: 13px;
-        font-weight: 600;
-      }
-
+      /*
+        Заголовок держим в одну строку: 23 символа при 48px — это ~640px даже
+        широким DejaVu Sans (в system-ui/Arial заметно меньше), а полная ширина
+        контейнера на десктопе — 952px, так что запас есть. Прежний max-width
+        22ch (~528px) был уже самой строки и заставлял её переноситься; вместо
+        него запрет переноса, а на очень узких экранах (телефон) размер
+        подбирается так, чтобы строка влезла по ширине, — там допустимо
+        уменьшение ниже обычного масштаба.
+      */
       h1 {
-        max-width: 18ch;
-        margin: 0 0 16px;
-        font-size: clamp(32px, 5vw, 52px);
+        margin: 0 auto 16px;
+        font-size: clamp(19px, 6.4vw, 48px);
         line-height: 1.1;
         letter-spacing: -0.025em;
+        text-wrap: nowrap;
+        white-space: nowrap;
       }
 
       .hero__lead {
-        max-width: 62ch;
-        margin: 0 0 28px;
-        font-size: clamp(16px, 2vw, 19px);
+        max-width: 54ch;
+        margin: 0 auto 28px;
+        font-size: clamp(16px, 2vw, 18px);
         color: var(--color-muted);
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
+        justify-content: center;
         gap: 12px;
         margin-bottom: 12px;
       }
 
       .actions__note {
-        margin: 0 0 28px;
+        margin: 0;
         font-size: 13px;
         color: var(--color-subtle);
       }
 
-      /* Скриншот */
+      /*
+        Скриншот доски: 1600×686 (пропорция 2.33:1).
+
+        Ширины 100% мало: внутри ограниченного по высоте окна картинка вместе со
+        всем hero съезжала вниз и упиралась в сгиб. Поэтому блок ограничен по
+        высоте (max-height на .shot img), а не по пропорции: по умолчанию
+        картинка открывается целиком, а при низком окне (ноутбук, mobile
+        landscape) ужимается до 52vh — ширину тогда задаёт само соотношение
+        сторон, и правый край с колонкой «Отменено» виден без обрезки.
+
+        На телефоне ограничение по высоте снимается (см. @media ниже): при
+        ширине экрана 375px пропорция 2.33:1 давала полоску ~145px, в которой
+        не читался ни один текст карточки. Там картинка идёт в естественную
+        высоту и её можно приблизить (pinch-zoom), а тап открывает файл целиком.
+      */
       .shot {
-        margin: 0;
+        margin: 40px 0 0;
         border-radius: var(--radius);
         border: 1px solid var(--color-border);
         background: var(--color-lane);
         box-shadow: var(--shadow);
         overflow: hidden;
+        text-align: left;
       }
 
       .shot img {
         display: block;
         width: 100%;
-        height: auto;
-        /* До появления файла блок не выглядит пустым провалом: фон слоя lane. */
-        min-height: 220px;
+        max-width: 100%;
+        /* 1600 / 686 — точная пропорция файла, поэтому без кропа. */
+        aspect-ratio: 1600 / 686;
+        max-height: 52vh;
+        /* Если высоту урезал max-height, картинка центрируется, а не липнет влево. */
+        margin-inline: auto;
+        object-fit: contain;
         background: var(--color-lane);
+      }
+
+      /* Ссылка-обёртка нужна только на тач-экранах: тап открывает скриншот целиком. */
+      .shot__link {
+        display: block;
+      }
+
+      .shot__hint {
+        display: none;
+        margin: 10px 0 0;
+        font-size: 13px;
+        color: var(--color-subtle);
       }
 
       .shot figcaption {
@@ -242,31 +262,32 @@
 
       /* Секции */
       section {
-        padding: 56px 0;
+        padding: 48px 0;
       }
 
       .section-head {
-        max-width: 720px;
-        margin-bottom: 28px;
+        max-width: 640px;
+        margin: 0 auto 28px;
+        text-align: center;
       }
 
       h2 {
         margin: 0 0 10px;
-        font-size: clamp(24px, 3vw, 32px);
+        font-size: clamp(22px, 3vw, 30px);
         line-height: 1.2;
         letter-spacing: -0.015em;
       }
 
       .section-head p {
         margin: 0;
-        font-size: 17px;
+        font-size: 16px;
         color: var(--color-muted);
       }
 
       .grid {
         display: grid;
         gap: 16px;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       }
 
       .card {
@@ -277,7 +298,7 @@
       }
 
       .card h3 {
-        margin: 0 0 8px;
+        margin: 0 0 6px;
         font-size: 17px;
       }
 
@@ -287,45 +308,23 @@
         color: var(--color-muted);
       }
 
-      .card__marker {
-        display: inline-block;
-        margin-bottom: 10px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--color-accent);
-      }
-
       /* Уровни доски */
-      .levels {
-        display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        counter-reset: level;
-      }
-
       .level {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        padding: 20px 22px;
-        border-radius: var(--radius);
-        border: 1px solid var(--color-border);
+        gap: 8px;
         background: var(--color-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        padding: 22px 24px;
       }
 
       .level__step {
-        counter-increment: level;
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--color-muted);
-      }
-
-      .level__step::before {
-        content: 'Уровень ' counter(level) ' · ';
       }
 
       .level h3 {
@@ -344,7 +343,7 @@
         flex-wrap: wrap;
         gap: 6px;
         margin-top: auto;
-        padding-top: 6px;
+        padding-top: 8px;
       }
 
       .chip {
@@ -364,48 +363,37 @@
       }
 
       .rule {
-        margin-top: 16px;
+        margin: 16px 0 0;
         padding: 14px 18px;
         border-left: 3px solid var(--color-accent);
         border-radius: 0 12px 12px 0;
-        background: var(--color-accent-soft);
+        background: #e8f0fe;
         font-size: 15px;
         color: #1e3a8a;
       }
 
-      .rule strong {
-        display: block;
-        margin-bottom: 4px;
-      }
-
       /* CTA */
       .cta {
-        margin-bottom: 56px;
-        padding: 40px;
-        border-radius: 20px;
-        background: var(--color-app);
-        color: #ffffff;
-        text-align: center;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 24px 28px;
+        border-radius: var(--radius);
+        border: 1px solid var(--color-border);
+        background: var(--color-card);
       }
 
       .cta h2 {
-        margin-bottom: 10px;
+        margin: 0 0 4px;
+        font-size: 20px;
       }
 
       .cta p {
-        margin: 0 auto 24px;
-        max-width: 56ch;
-        color: #d1d5db;
-      }
-
-      .cta .button {
-        background: #ffffff;
-        border-color: #ffffff;
-        color: var(--color-app);
-      }
-
-      .cta .button:hover {
-        background: #f3f4f6;
+        margin: 0;
+        font-size: 15px;
+        color: var(--color-muted);
       }
 
       /* Футер */
@@ -416,18 +404,12 @@
         color: var(--color-muted);
       }
 
-      .footer__top {
+      .footer__inner {
         display: flex;
         flex-wrap: wrap;
-        gap: 24px;
+        align-items: center;
         justify-content: space-between;
-        margin-bottom: 24px;
-      }
-
-      .footer__brand p {
-        margin: 6px 0 0;
-        font-size: 13px;
-        color: var(--color-subtle);
+        gap: 12px 24px;
       }
 
       .footer__links {
@@ -446,48 +428,64 @@
         text-decoration: underline;
       }
 
-      .footer__legal {
-        margin: 0 0 8px;
-        font-size: 13px;
-      }
-
-      .footer__legal a {
-        color: var(--color-app);
-      }
-
       .footer__copyright {
+        margin: 16px 0 0;
         font-size: 13px;
         color: var(--color-subtle);
       }
 
       /* Адаптив */
-      @media (max-width: 900px) {
-        .hero {
-          padding-top: 40px;
-        }
-
-        .topbar__nav a:not(.button) {
-          display: none;
-        }
-      }
-
       @media (max-width: 640px) {
         .container {
           padding: 0 16px;
         }
 
-        section {
-          padding: 40px 0;
+        .hero {
+          padding-top: 48px;
         }
 
-        .cta {
-          padding: 28px 20px;
-          margin-bottom: 40px;
+        section {
+          padding: 36px 0;
         }
 
         .card,
         .level {
           padding: 18px;
+        }
+
+        .cta {
+          padding: 20px;
+        }
+
+        /*
+          Скриншот на телефоне. Вся доска в ширину 343px — это масштаб ~0.21:
+          подписи карточек выходят ~3px, то есть при любой высоте блока блок
+          остаётся «пёстрой полоской». Поэтому здесь показывается не вся доска,
+          а её кадр: левый край в натуральном масштабе (уровни направлений и
+          первая колонка с карточками читаемого размера), а целиком скриншот
+          открывается тапом по ссылке.
+        */
+        .shot {
+          margin-top: 28px;
+        }
+
+        .shot__link {
+          aspect-ratio: 4 / 3;
+          overflow: hidden;
+        }
+
+        .shot img {
+          width: 300%;
+          max-width: none;
+          aspect-ratio: auto;
+          max-height: none;
+          margin-inline: 0;
+          object-fit: cover;
+          object-position: left top;
+        }
+
+        .shot__hint {
+          display: block;
         }
       }
 
@@ -506,140 +504,61 @@
     <header class="topbar">
       <div class="container topbar__inner">
         <a class="brand" href="/">JWP Board<small>Персональный канбан</small></a>
-        <nav class="topbar__nav" aria-label="Основная навигация">
-          <a href="#features">Возможности</a>
-          <a href="#how">Как работает</a>
-          <a class="button button--small" href="/board/">Посмотреть демо</a>
-        </nav>
+        <a class="button button--small" href="/board/">Открыть доску</a>
       </div>
     </header>
 
     <main>
       <div class="container hero">
-        <span class="eyebrow">Личный планировщик по методу канбан</span>
-
-        <h1>Персональный канбан для целей, а не для совещаний</h1>
+        <h1>Канбан для личных целей</h1>
 
         <p class="hero__lead">
-          JWP Board связывает большую цель с конкретным действием: направления, инициативы,
-          проекты и задачи живут на одной доске с разными уровнями детализации. Вы всегда видите,
-          где находится работа, — без переключения между таблицами, заметками и приложениями.
+          Направления, инициативы, проекты и задачи — на одной доске. Видно, что в работе, а что
+          стоит без движения.
         </p>
 
         <div class="actions">
           <a class="button" href="/board/">Посмотреть демо</a>
           <a class="button button--secondary" href="#how">Как это устроено</a>
         </div>
-        <p class="actions__note">
-          Демо открывает веб-версию приложения. Для входа нужен аккаунт — он создаётся при
-          регистрации; мобильное приложение работает с тем же аккаунтом и той же доской.
-        </p>
 
         <figure class="shot">
-          <img
-            src="/images/board.png"
-            alt="Доска JWP Board: три уровня — стратегический с инициативами по направлениям, тактический с проектами и операционный с задачами; карточки разложены по колонкам «Беклог», «В работе» и «Готово»."
-            width="1600"
-            height="1000"
-            loading="lazy"
-            decoding="async"
-          />
+          {{--
+            Обёртка-ссылка: на телефоне тап открывает скриншот в натуральном
+            размере (браузер даёт зум). На десктопе это обычная ссылка на файл,
+            вреда нет; показывать её как действие подсказывает .shot__hint,
+            который виден только на узких экранах.
+          --}}
+          <a class="shot__link" href="/images/board.png">
+            <img
+              src="/images/board.png"
+              alt="Доска JWP Board: три уровня — инициативы по направлениям, проекты и задачи; карточки разложены по колонкам «Беклог», «В работе» и «Готово»."
+              width="1600"
+              height="686"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
           <figcaption>
             Доска JWP Board: направления задают цвет карточек, уровни раскладывают работу от
             стратегии к задачам, колонки показывают статус.
           </figcaption>
+          <p class="shot__hint">Нажмите на скриншот, чтобы рассмотреть доску целиком.</p>
         </figure>
       </div>
-
-      <section id="features">
-        <div class="container">
-          <div class="section-head">
-            <h2>Зачем канбан, если задачи ведёт один человек</h2>
-            <p>
-              Канбан помогает не только командам. Его главная идея — сделать поток работы видимым
-              и ограничить число одновременных дел. Для личного планирования это значит меньше
-              брошенных проектов и меньше дел «в работе», которые на самом деле стоят.
-            </p>
-          </div>
-
-          <div class="grid">
-            <article class="card">
-              <span class="card__marker">Видимость</span>
-              <h3>Вся работа на одном экране</h3>
-              <p>
-                Список дел скрывает реальность: сколько проектов начато и ни один не доведён.
-                Канбан-доска показывает это сразу — по колонкам видно, где скопилась работа.
-              </p>
-            </article>
-
-            <article class="card">
-              <span class="card__marker">Поток</span>
-              <h3>Ограничение незавершённой работы</h3>
-              <p>
-                Главный принцип канбана — меньше дел одновременно. Здесь он встроен в карточки:
-                родитель остаётся в работе, пока не завершены его подзадачи. Закрыть проект «на
-                бумаге» не получится.
-              </p>
-            </article>
-
-            <article class="card">
-              <span class="card__marker">Контекст</span>
-              <h3>Цель не теряется в задачах</h3>
-              <p>
-                Направление и инициатива — не ярлыки, а реальные родители. Цвет карточки
-                наследуется от направления, поэтому на любом уровне видно, к какой области жизни
-                относится работа.
-              </p>
-            </article>
-
-            <article class="card">
-              <span class="card__marker">Одно место</span>
-              <h3>Одна доска — все устройства</h3>
-              <p>
-                Доска хранится на сервере и открывается в браузере и в мобильном приложении.
-                Задача, перенесённая на телефоне, уже в нужной колонке на компьютере.
-              </p>
-            </article>
-
-            <article class="card">
-              <span class="card__marker">Фокус</span>
-              <h3>Меньше переключений</h3>
-              <p>
-                Уровни и колонки сворачиваются в узкие полосы: на экране остаётся только то, что
-                важно сейчас. Раскладка сохраняется на сервере и переживает перезагрузку.
-              </p>
-            </article>
-
-            <article class="card">
-              <span class="card__marker">Порядок</span>
-              <h3>История изменений</h3>
-              <p>
-                Создание, правка и удаление карточек фиксируются в журнале. Возвращаясь к проекту
-                через месяц, вы видите, что и когда менялось, а не гадаете.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
 
       <section id="how">
         <div class="container">
           <div class="section-head">
             <h2>Три уровня вместо одного списка</h2>
-            <p>
-              Обычный список задач теряет связь с целью: через неделю непонятно, зачем эта задача
-              нужна. В JWP Board у каждой карточки есть родитель — связь не теряется никогда.
-            </p>
+            <p>У каждой карточки есть родитель, поэтому задача не теряет связи с целью.</p>
           </div>
 
-          <div class="levels">
+          <div class="grid">
             <article class="level">
-              <span class="level__step">Стратегия</span>
+              <span class="level__step">Стратегический уровень</span>
               <h3>Инициативы по направлениям</h3>
-              <p>
-                Направление — это область жизни: работа, здоровье, обучение, дом. Инициатива — то,
-                что вы собираетесь в этой области изменить.
-              </p>
+              <p>Направление — область жизни, например: работа, здоровье, обучение, дом.</p>
               <div class="chips">
                 <span class="chip">Работа</span>
                 <span class="chip">Здоровье</span>
@@ -648,12 +567,9 @@
             </article>
 
             <article class="level">
-              <span class="level__step">Тактика</span>
-              <h3>Проекты по инициативам в работе</h3>
-              <p>
-                Разложите инициативу на проекты, которые реально можно закончить. Проекты
-                показываются внутри своей инициативы, пока она в работе.
-              </p>
+              <span class="level__step">Тактический уровень</span>
+              <h3>Проекты по инициативам</h3>
+              <p>Инициатива раскладывается на проекты, которые реально закончить.</p>
               <div class="chips">
                 <span class="chip">Беклог</span>
                 <span class="chip">В работе</span>
@@ -662,26 +578,41 @@
             </article>
 
             <article class="level">
-              <span class="level__step">Операции</span>
-              <h3>Задачи по проектам в работе</h3>
-              <p>
-                Самый нижний уровень — конкретные дела. Они видны внутри своего проекта, а не
-                свалены в общий список на сотню пунктов.
-              </p>
+              <span class="level__step">Операционный уровень</span>
+              <h3>Задачи по проектам</h3>
+              <p>Самый нижний уровень — конкретные дела внутри своего проекта.</p>
               <div class="chips">
                 <span class="chip">Сегодня</span>
-                <span class="chip">На этой неделе</span>
+                <span class="chip">На неделе</span>
                 <span class="chip chip--done">Сделано</span>
               </div>
             </article>
           </div>
 
-          <div class="rule">
-            <strong>Правило потока</strong>
-            Пока у карточки есть дочерние карточки в работе, её нельзя перевести вперёд: проект не
-            уйдёт из «В работе», пока в нём живут незавершённые задачи, а инициатива — пока в работе
-            её проекты. Интерфейс предлагает только разрешённые переходы: их рассчитывает сервер
-            (поле <code>allowedTransitions</code>), поэтому правило нельзя обойти случайно.
+          <p class="rule">
+            Карточка остаётся в работе, пока не завершены вложенные: проект не закроется с живыми
+            задачами, инициатива — с незакрытыми проектами.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <div class="container">
+          <div class="grid">
+            <article class="card">
+              <h3>Вся работа на одном экране</h3>
+              <p>По колонкам видно, где скопилась работа, а где всё стоит.</p>
+            </article>
+
+            <article class="card">
+              <h3>Один аккаунт — все устройства</h3>
+              <p>Доска хранится на сервере: телефон и компьютер показывают одно и то же.</p>
+            </article>
+
+            <article class="card">
+              <h3>История изменений</h3>
+              <p>Создание, правка и удаление карточек фиксируются в журнале.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -689,11 +620,10 @@
       <section>
         <div class="container">
           <div class="cta">
-            <h2>Попробуйте доску на своих целях</h2>
-            <p>
-              Откройте демо и разложите одну реальную цель по уровням: направление, инициатива,
-              проект, задачи. Обычно уже на этом шаге видно, что стоит «в работе» слишком долго.
-            </p>
+            <div>
+              <h2>Попробуйте на своих целях</h2>
+              <p>Разложите одну реальную цель по уровням — начните с демо.</p>
+            </div>
             <a class="button" href="/board/">Посмотреть демо</a>
           </div>
         </div>
@@ -702,14 +632,10 @@
 
     <footer>
       <div class="container">
-        <div class="footer__top">
-          <div class="footer__brand">
-            <a class="brand" href="/">JWP Board<small>Персональный канбан</small></a>
-            <p>Личный инструмент планирования: направления, инициативы, проекты и задачи.</p>
-          </div>
+        <div class="footer__inner">
+          <a class="brand" href="/">JWP Board<small>Персональный канбан</small></a>
 
           <nav class="footer__links" aria-label="Разделы сайта">
-            <a href="/">Главная</a>
             <a href="/privacy">Политика конфиденциальности</a>
             <a href="/terms">Пользовательское соглашение</a>
             <a href="/cookies">Cookie</a>
