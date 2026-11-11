@@ -165,6 +165,25 @@ export function useBoardSettings(): BoardSettingsState {
     }, SAVE_DEBOUNCE_MS);
   }, [flush]);
 
+  /**
+   * Сохранить очередь при размонтировании экрана.
+   *
+   * Пользователь может свернуть уровень и сразу закрыть доску: дебаунс ещё
+   * не истёк, таймер снимается — и последние переключения потерялись бы.
+   * Поэтому на размонтировании отправляем накопленное сразу.
+   */
+  useEffect(
+    () => () => {
+      if (saveTimer.current !== null) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+
+      void flush();
+    },
+    [flush],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -197,15 +216,6 @@ export function useBoardSettings(): BoardSettingsState {
       cancelled = true;
     };
   }, []);
-
-  useEffect(
-    () => () => {
-      if (saveTimer.current !== null) {
-        clearTimeout(saveTimer.current);
-      }
-    },
-    [],
-  );
 
   const toggleLevel = useCallback<BoardSettingsState['toggleLevel']>(
     (levelId) => {

@@ -3,7 +3,6 @@
 namespace App\Providers\Filament;
 
 use App\Http\Middleware\HideAdminPanel;
-use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -84,7 +83,6 @@ class AdminPanelProvider extends PanelProvider
                 // панели; маршрута входа больше нет, поэтому до неё доходят
                 // только администраторы (остальные отсечены выше).
                 AuthenticateSession::class,
-                Authenticate::class,
             ])
             // Livewire-запросы панели идут на свой эндпоинт и в HTTP-группу выше
             // не попадают: HideAdminPanel добавляется им явно (persistent

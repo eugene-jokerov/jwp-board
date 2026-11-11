@@ -75,9 +75,21 @@ final readonly class TaskEditor
         // Простые поля сравниваются со значением из модели. Приоритет попадает
         // сюда же: ограничений по колонке и уровню у него нет, поэтому ему
         // достаточно общей проверки «значение изменилось».
-        foreach (['title', 'description', 'slug', 'deadline'] as $field) {
+        foreach (['title', 'description', 'slug'] as $field) {
             if (array_key_exists($field, $fields) && $task->{$field} !== $fields[$field]) {
                 $changes[$field] = $fields[$field];
+            }
+        }
+
+        // Дедлайн сравнивается отдельно: в модели это Carbon (каст `datetime`),
+        // а из запроса приходит строка `Y-m-d H:i:s`. Прямое сравнение объекта
+        // со строкой всегда истинно, и одно и то же значение попадало бы в
+        // изменения — в журнал уходила бы запись «дедлайн: то же → то же».
+        if (array_key_exists('deadline', $fields)) {
+            $deadline = $fields['deadline'];
+
+            if ($task->deadline?->format('Y-m-d H:i:s') !== $deadline) {
+                $changes['deadline'] = $deadline;
             }
         }
 

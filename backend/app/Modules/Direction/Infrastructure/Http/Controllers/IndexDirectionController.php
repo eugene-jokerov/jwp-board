@@ -40,12 +40,12 @@ final class IndexDirectionController extends Controller
         /** @var list<DirectionResult> $directions */
         $directions = $this->queries->ask(new ListDirectionsQuery((int) $user->getKey()));
 
-        $response = DirectionResource::collection($directions)->response();
-
         // Ответ собираем явно: рядом с `data` нужен `meta`, а `with()` в Laravel
         // кладёт поля плоско — на одном уровне с ключом `data`, а не в `meta`.
+        // Данные берём из ресурсов напрямую: сериализация в JSON и обратный
+        // разбор строки дали бы ту же структуру, но через лишний проход.
         $payload = [
-            'data' => json_decode((string) $response->getContent(), true)['data'] ?? [],
+            'data' => DirectionResource::collection($directions)->resolve($request),
             'meta' => [
                 'limit' => (int) config('direction.max_per_user'),
             ],

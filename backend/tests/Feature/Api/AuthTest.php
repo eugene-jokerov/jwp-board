@@ -97,6 +97,49 @@ final class AuthTest extends TestCase
     }
 
     /**
+     * Токен мобильного клиента живёт год, а не бессрочно: с `expiration` в
+     * конфиге Sanctum считает `created_at + срок`.
+     */
+    public function test_issued_token_expires_in_one_year(): void
+    {
+        $user = User::factory()->create(['password' => 'secret-password']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret-password',
+            'device_name' => 'phpunit',
+        ])->assertOk();
+
+        $token = $user->tokens()->firstOrFail();
+
+        self::assertSame(525600, config('sanctum.expiration'));
+        self::assertNotNull($token->expires_at);
+        // 365 дней = 525600 минут: токен живёт от момента выдачи до года.
+        self::assertSame(
+            $token->created_at->copy()->addMinutes(525600)->getTimestamp(),
+            $token->expires_at->getTimestamp(),
+            'Срок жизни выданного токена должен быть равен году.',
+        );
+        self::assertSame(now()->addYear()->getTimestamp(), $token->expires_at->getTimestamp());
+    }
+
+    /**
+     * Просроченный токен больше не аутентифицирует: клиент получит 401 и
+     * попросит войти заново.
+     */
+    public function test_expired_token_is_rejected(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('phpunit');
+        $token->accessToken->forceFill(['expires_at' => now()->subMinute()])->save();
+        $plain = $token->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$plain)
+            ->getJson('/api/v1/auth/me')
+            ->assertUnauthorized();
+    }
+
+    /**
      * Перебор пароля должен упираться в лимитер, а не в БД.
      */
     public function test_login_is_rate_limited(): void
@@ -113,5 +156,30 @@ final class AuthTest extends TestCase
             'email' => 'brute@jwp-board.local',
             'password' => 'wrong-password',
         ])->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
+    }
+
+    /**
+     * У регистрации свой счётчик: исчерпанный лимит попыток входа не должен
+     * закрывать регистрацию новому пользователю.
+     */
+    public function test_registration_is_not_blocked_by_login_throttle(): void
+    {
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
+            $this->postJson('/api/v1/auth/login', [
+                'email' => 'brute@jwp-board.local',
+                'password' => 'wrong-password',
+            ])->assertUnauthorized();
+        }
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'brute@jwp-board.local',
+            'password' => 'wrong-password',
+        ])->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
+
+        $this->postJson('/api/v1/user/register', [
+            'email' => 'newcomer@jwp-board.local',
+            'password' => 'secret-password',
+            'password_confirmation' => 'secret-password',
+        ])->assertCreated();
     }
 }

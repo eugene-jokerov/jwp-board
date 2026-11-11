@@ -17,6 +17,12 @@ use Illuminate\Foundation\Http\FormRequest;
 final class UpdateUserSettingsRequest extends FormRequest
 {
     /**
+     * Предел размера значения настройки в байтах — совпадает с колонкой
+     * `meta_value` (TEXT). Лимит в байтах, а не в символах: база считает байты.
+     */
+    public const int MAX_VALUE_BYTES = 65535;
+
+    /**
      * Настройки меняет только аутентифицированный пользователь (auth:sanctum).
      */
     public function authorize(): bool
@@ -48,7 +54,19 @@ final class UpdateUserSettingsRequest extends FormRequest
                     }
                 },
             ],
-            'settings.*' => ['present', 'nullable', 'json', 'max:65535'],
+            // `max` у строки считает символы, а колонка `meta_value` — байты
+            // (TEXT = 65535 байт): кириллица в UTF-8 занимает два байта, и
+            // строка в 65535 символов не сохранилась бы. Предел задан в байтах,
+            // а не символах, поэтому правило проверяет strlen.
+            'settings.*' => ['present', 'nullable', 'json', function (string $attribute, mixed $value, Closure $fail): void {
+                if ($value === null) {
+                    return;
+                }
+
+                if (strlen((string) $value) > self::MAX_VALUE_BYTES) {
+                    $fail('Значение настройки не может быть длиннее '.self::MAX_VALUE_BYTES.' байт.');
+                }
+            }],
         ];
     }
 
@@ -72,7 +90,6 @@ final class UpdateUserSettingsRequest extends FormRequest
             'settings.array' => 'Настройки передаются объектом «ключ — значение».',
             'settings.min' => 'Передайте хотя бы одну настройку.',
             'settings.*.json' => 'Значение настройки должно быть корректным JSON.',
-            'settings.*.max' => 'Значение настройки не может быть длиннее 65535 символов.',
         ];
     }
 

@@ -29,9 +29,15 @@ Route::prefix('v1')->group(function (): void {
         ->name('api.v1.auth.login');
 
     // Аутентификация веб-клиента: сессия в HttpOnly-cookie вместо токена.
-    Route::prefix('auth/web')->middleware('throttle:auth')->group(function (): void {
-        Route::post('login', [WebAuthController::class, 'login'])->name('api.v1.auth.web.login');
-        Route::post('register', [WebAuthController::class, 'register'])->name('api.v1.auth.web.register');
+    // Регистрация веба идёт отдельным лимитером, как и мобильная: у входа свой
+    // счётчик попыток (перебор пароля), у регистрации — свой.
+    Route::prefix('auth/web')->group(function (): void {
+        Route::post('login', [WebAuthController::class, 'login'])
+            ->middleware('throttle:auth')
+            ->name('api.v1.auth.web.login');
+        Route::post('register', [WebAuthController::class, 'register'])
+            ->middleware('throttle:auth-register')
+            ->name('api.v1.auth.web.register');
     });
 
     // Защищённые маршруты: shared для токена и сессии.

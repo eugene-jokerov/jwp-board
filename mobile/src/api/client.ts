@@ -54,6 +54,80 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Ответ 401 означает, что сессия больше не действует: Bearer-токен истёк
+ * (срок жизни — год) или отозван, cookie-сессия завершилась.
+ *
+ * Канал закрывается в единственном месте — здесь, а не в экранах: любой запрос
+ * (доска, настройки, карточка) может получить 401, и все они должны привести
+ * к одному результату — гостю на экране входа. Подписчики (AuthContext)
+ * получают null и уводят пользователя на /auth.
+ *
+ * Слушатель регистрируется из AuthContext, чтобы у этого модуля не было
+ * циклической зависимости с хранилищем сессии.
+ */
+type UnauthorizedListener = () => void;
+
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+let unauthorizedNotified = false;
+
+/** Сколько проверок сессии на входе сейчас подавляют уведомления о 401. */
+let unauthenticatedChecks = 0;
+
+/**
+ * Подписка на «сессия истекла»; возвращает функцию отписки.
+ */
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
+/**
+ * Сбросить признак «уже сообщили» — вызывается при новом входе.
+ */
+export function resetUnauthorizedNotice(): void {
+  unauthorizedNotified = false;
+}
+
+/**
+ * Включить ручной режим уведомлений на время проверки сессии.
+ *
+ * При старте приложения `restoreSession()` намеренно проверяет токен запросом
+ * `GET /auth/me`, и 401 здесь — ожидаемый ответ «сессии нет», а не событие
+ * «сессия истекла посреди работы». На время проверки уведомления подавляются,
+ * чтобы гость не получал лишний сигнал; после — снова включаются.
+ *
+ * Возвращает функцию, которая возвращает прежнее поведение.
+ */
+export function suppressUnauthorizedNotice(): () => void {
+  unauthenticatedChecks += 1;
+
+  return () => {
+    unauthenticatedChecks = Math.max(0, unauthenticatedChecks - 1);
+  };
+}
+
+/**
+ * Сообщить о 401 подписчикам.
+ *
+ * Несколько параллельных запросов получат 401 одновременно (загрузка доски и
+ * настроек), а экран входа нужен один: повторные уведомления подавляются до
+ * следующего входа.
+ */
+function notifyUnauthorized(): void {
+  // Идёт проверка сессии на входе — 401 ожидаем, это не «истекла посреди работы».
+  if (unauthorizedNotified || unauthenticatedChecks > 0) {
+    return;
+  }
+
+  unauthorizedNotified = true;
+
+  unauthorizedListeners.forEach((listener) => listener());
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -88,10 +162,18 @@ async function ensureCsrfToken(): Promise<void> {
     return;
   }
 
+  // Токен из cookie нужен только stateful-запросам (веб). Если cookie нет,
+  // её выдаёт любой ответ Laravel на этот адрес; достаточно GET, у которого
+  // 401 ожидаем. Сеть могла упасть — тогда POST уйдёт без заголовка и вернёт
+  // 419, как и раньше: это не повод закрывать сессию.
   try {
-    await request<void>('/auth/web/me');
+    await fetch(`${API_URL}/api/v1/auth/web/me`, {
+      method: 'GET',
+      credentials: IS_WEB ? 'include' : 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
   } catch {
-    // 401 здесь ожидаем: важен только Set-Cookie в ответе.
+    // Set-Cookie не пришёл — важен только следующий запрос.
   }
 }
 
@@ -130,10 +212,17 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       return undefined as T;
     }
 
-    const payload = (await response.json()) as T | ApiErrorPayload;
+    const payload = (await response.json().catch(() => null)) as T | ApiErrorPayload | null;
 
     if (!response.ok) {
-      throw new ApiError(response.status, payload as ApiErrorPayload);
+      // 401 по защищённому адресу — сессия истекла: сообщаем подписчикам,
+      // чтобы приложение вернулось на экран входа. Проверки сессии на входе
+      // (`ensureCsrfToken`) сюда не попадают — они ходят через fetch напрямую.
+      if (response.status === 401) {
+        notifyUnauthorized();
+      }
+
+      throw new ApiError(response.status, (payload ?? {}) as ApiErrorPayload);
     }
 
     return payload as T;

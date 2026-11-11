@@ -13,7 +13,7 @@
 
 import { Platform } from 'react-native';
 
-import { webMe } from '../api/client';
+import { ApiError, fetchMe, logout, suppressUnauthorizedNotice, webLogout, webMe } from '../api/client';
 import type { AuthPayload, TokenType, User } from '../api/types';
 import { loadSession, removeSession, saveSession } from './storage';
 
@@ -44,7 +44,12 @@ function toSession(payload: AuthPayload): Session {
   };
 }
 
-/** Сохранить сессию после входа или регистрации (мобильный клиент). */
+/**
+ * Сохранить сессию после входа или регистрации (мобильный клиент).
+ *
+ * Возвращает сессию и управляет хранилищем; при повторном входе подписка
+ * вызывается заново, поэтому экраны не кэшируют пользователя между входами.
+ */
 export function setSession(payload: AuthPayload): Session {
   current = toSession(payload);
 
@@ -58,6 +63,34 @@ export function setSession(payload: AuthPayload): Session {
   notify();
 
   return current;
+}
+
+/**
+ * Сбросить сессию на сервере: отозвать Bearer-токен или закрыть cookie-сессию.
+ *
+ * Нужен там, где сессия уже недействительна (401): повторный запрос вернёт
+ * 401, и отказ проглатывается — для клиента это не ошибка, а уборка.
+ */
+export async function revokeServerSession(): Promise<void> {
+  if (current === null) {
+    return;
+  }
+
+  const token = current.token;
+
+  try {
+    if (IS_WEB) {
+      await webLogout();
+    } else if (token !== '') {
+      await logout(token);
+    }
+  } catch {
+    // Токен уже просрочен или отозван — серверу сказать нечего.
+  }
+
+  // Cookie сессии ставит сервер, и после `webLogout` она гасится только на
+  // текущем домене. На web дополнительная уборка не нужна: следующий запрос
+  // уйдёт с той же cookie, сервер ответит 401, а гвард всё равно покажет вход.
 }
 
 /** Текущая сессия или null для гостя. */
@@ -75,9 +108,17 @@ export function getToken(): string | null {
  *
  * На web единственный признак входа — сессионная cookie: спрашиваем сервер.
  * На iOS/Android читаем сохранённый Bearer-токен из SecureStore.
+ *
+ * В обоих каналах сессия проверяется запросом к серверу: сохранённый токен
+ * мог истечь (срок жизни — год) или быть отозван, и тогда приложение должно
+ * открыться как гость, а не показывать доску с ошибками загрузки.
  */
 export async function restoreSession(): Promise<Session | null> {
   if (IS_WEB) {
+    // 401 здесь — ожидаемый ответ «сессии нет», а не «сессия истекла посреди
+    // работы»: уведомление подавляем на время проверки.
+    const resume = suppressUnauthorizedNotice();
+
     try {
       const user = await webMe();
 
@@ -89,6 +130,8 @@ export async function restoreSession(): Promise<Session | null> {
       // 401 — сессии нет (или истекла): пользователь остаётся гостем.
       current = null;
       notify();
+    } finally {
+      resume();
     }
 
     return current;
@@ -100,8 +143,33 @@ export async function restoreSession(): Promise<Session | null> {
     return null;
   }
 
-  current = toSession(payload);
-  notify();
+  // Так же при проверке сохранённого токена: истёкший токен — не событие,
+  // о котором посреди экрана стоит сообщать.
+  const resume = suppressUnauthorizedNotice();
+
+  try {
+    // Токен проверяется им же: `GET /auth/me` отвечает 401, если срок истёк.
+    const user = await fetchMe(payload.token);
+
+    current = toSession({ ...payload, user });
+    // Обновлённые данные пользователя кладём и в хранилище: они могли
+    // измениться на сервере, пока приложение было закрыто.
+    void saveSession({ ...payload, user });
+    notify();
+  } catch (error) {
+    // Сеть недоступна — не выкидываем пользователя: сессия могла быть живой.
+    // 401 — токен больше не действует, локальную копию удаляем.
+    if (error instanceof ApiError && error.status === 401) {
+      await removeSession();
+
+      return null;
+    }
+
+    current = toSession(payload);
+    notify();
+  } finally {
+    resume();
+  }
 
   return current;
 }

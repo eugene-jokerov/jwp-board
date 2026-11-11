@@ -72,13 +72,12 @@ final class IndexTaskController extends Controller
             $request->isInitialLoad(),
         ));
 
-        $response = TaskSummaryResource::collection($result->items)
-            ->response();
-
         // Ответ собираем явно: рядом с `data` нужен `meta`, а `with()` в Laravel
         // кладёт поля плоско — на одном уровне с ключом `data`, а не в `meta`.
+        // Данные берём из ресурсов напрямую: сериализация в JSON и обратный
+        // разбор строки дали бы ту же структуру, но через лишний проход.
         $payload = [
-            'data' => json_decode((string) $response->getContent(), true)['data'] ?? [],
+            'data' => TaskSummaryResource::collection($result->items)->resolve($request),
             'meta' => [
                 'total' => $result->total,
                 // Счётчики по всем парам: отсутствующая в выборке пара — это

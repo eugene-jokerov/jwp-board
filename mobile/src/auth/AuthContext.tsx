@@ -17,13 +17,15 @@ import { Platform } from 'react-native';
 import {
   login as loginRequest,
   logout as logoutRequest,
+  onUnauthorized,
   register as registerRequest,
+  resetUnauthorizedNotice,
   webLogin,
   webLogout,
   webRegister,
 } from '../api/client';
 import type { Session } from './session';
-import { clearSession, getSession, restoreSession, setSession, subscribe } from './session';
+import { clearSession, getSession, restoreSession, revokeServerSession, setSession, subscribe } from './session';
 
 interface AuthContextValue {
   session: Session | null;
@@ -52,6 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = subscribe(setSessionState);
 
+    // 401 на любом запросе означает, что сессия больше не действует (токен
+    // истёк или отозван, cookie-сессия закончилась). Локальную копию чистим
+    // и закрываем сессию на сервере: экраны получают null и гвард уводит
+    // гостя на форму входа, без «залипшей» ошибки загрузки доски.
+    const unsubscribeUnauthorized = onUnauthorized(() => {
+      void revokeServerSession().finally(clearSession);
+    });
+
     let active = true;
 
     void restoreSession().finally(() => {
@@ -63,18 +73,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       unsubscribe();
+      unsubscribeUnauthorized();
     };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string): Promise<void> => {
     if (IS_WEB) {
       applyWebUser(await webLogin(email.trim(), password));
+      resetUnauthorizedNotice();
 
       return;
     }
 
     const payload = await loginRequest(email.trim(), password);
     setSession(payload);
+    resetUnauthorizedNotice();
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, passwordConfirmation: string): Promise<void> => {
@@ -87,11 +100,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (IS_WEB) {
       // Регистрация на сайте сразу авторизует: сервер открывает сессию.
       applyWebUser(await webRegister(input));
+      resetUnauthorizedNotice();
 
       return;
     }
 
     setSession(await registerRequest(input));
+    resetUnauthorizedNotice();
   }, []);
 
   const signOut = useCallback(async (): Promise<void> => {

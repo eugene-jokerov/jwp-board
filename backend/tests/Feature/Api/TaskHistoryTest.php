@@ -7,6 +7,7 @@ use App\Modules\History\Infrastructure\Persistence\HistoryRecord;
 use App\Modules\Task\Domain\Task;
 use App\Modules\User\Domain\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -99,6 +100,52 @@ final class TaskHistoryTest extends TestCase
             ->assertOk();
 
         self::assertSame(0, HistoryRecord::query()->where('action', 'update')->count());
+    }
+
+    public function test_unchanged_deadline_is_not_logged(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+            'user_id' => $user->id,
+            'title' => 'Старое название',
+        ]);
+
+        // Клиент присылает дедлайн при каждом сохранении формы: значение то же,
+        // поэтому в журнал не должно попасть записи «дедлайн: то же → то же».
+        $this->actingAsUser($user)
+            ->patchJson('/api/v1/tasks/'.$task->id, [
+                'title' => 'Новое название',
+                'deadline' => '2027-02-01',
+            ])
+            ->assertOk();
+
+        $entries = HistoryRecord::query()
+            ->where('entity_id', $task->id)
+            ->where('action', 'update')
+            ->get();
+
+        self::assertCount(1, $entries);
+        self::assertSame('title', $entries->first()?->field);
+    }
+
+    public function test_changed_deadline_is_logged(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+            'user_id' => $user->id,
+        ]);
+
+        $this->actingAsUser($user)
+            ->patchJson('/api/v1/tasks/'.$task->id, ['deadline' => '2027-03-01'])
+            ->assertOk();
+
+        $entry = HistoryRecord::query()
+            ->where('entity_id', $task->id)
+            ->where('field', 'deadline')
+            ->firstOrFail();
+
+        self::assertSame('2027-02-01 00:00:00', $entry->old_value);
+        self::assertSame('2027-03-01 00:00:00', $entry->new_value);
     }
 
     public function test_deleting_card_writes_delete_entry(): void

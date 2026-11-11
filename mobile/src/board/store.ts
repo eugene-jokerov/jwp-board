@@ -39,6 +39,7 @@ import { getToken } from '../auth/session';
 import {
   closedLoadedCount,
   closedPageOf,
+  incrementClosedTotal,
   setClosedTotal,
   shiftClosedTotals,
   withClosedPage,
@@ -249,7 +250,7 @@ export function useBoard(): BoardState {
 
         // Созданная карточка могла попасть в закрытую колонку (форма это
         // разрешает) — тогда её пара прибавляется и в счётчике.
-        setClosedTotals((prev) => shiftClosedTotals(prev, draft.kind, draft.columnId, draft.columnId));
+        setClosedTotals((prev) => incrementClosedTotal(prev, draft.kind, draft.columnId));
 
         return null;
       } catch (error) {

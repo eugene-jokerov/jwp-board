@@ -3,6 +3,7 @@
 namespace App\Modules\User\Domain;
 
 use Database\Factories\UserFactory;
+use DateTimeInterface;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Laravel\Sanctum\NewAccessToken;
 
 /**
  * Пользователь — корневая сущность модуля User.
@@ -24,7 +26,30 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable implements FilamentUser, HasName
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable {
+        createToken as private createSanctumToken;
+    }
+
+    /**
+     * Выдать персональный токен с ограниченным сроком жизни.
+     *
+     * Sanctum по умолчанию создаёт токен без `expires_at`, а срок жизни
+     * (`config('sanctum.expiration')`) учитывается только при проверке:
+     * просроченный токен отвергается на `created_at + срок`. Метод ставит
+     * `expires_at` явно, чтобы срок жизни был виден и в панели, и в базе.
+     *
+     * @param  array<int, string>  $abilities
+     */
+    public function createToken(string $name, array $abilities = ['*'], ?DateTimeInterface $expiresAt = null): NewAccessToken
+    {
+        $expiration = config('sanctum.expiration');
+
+        // Срок не задан явно — берём срок из конфигурации (для мобильного
+        // клиента это год). null в конфиге означает «бессрочный токен».
+        $expiresAt ??= is_numeric($expiration) ? now()->addMinutes((int) $expiration) : null;
+
+        return $this->createSanctumToken($name, $abilities, $expiresAt);
+    }
 
     /**
      * Массово заполняемые атрибуты.

@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\UserMeta;
+use App\Modules\User\Infrastructure\Http\Requests\UpdateUserSettingsRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -163,6 +164,41 @@ final class UserSettingsTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['settings.board.collapsed_levels']);
+    }
+
+    public function test_update_rejects_value_longer_than_column_in_bytes(): void
+    {
+        $user = User::factory()->create();
+
+        // Кириллица в UTF-8 — два байта на символ: значение вдвое короче предела
+        // в символах уже не влезает в колонку meta_value (TEXT = 65535 байт).
+        $value = json_encode(str_repeat('я', 40000), JSON_UNESCAPED_UNICODE);
+
+        self::assertIsString($value);
+        self::assertLessThan(UpdateUserSettingsRequest::MAX_VALUE_BYTES, mb_strlen($value));
+        self::assertGreaterThan(UpdateUserSettingsRequest::MAX_VALUE_BYTES, strlen($value));
+
+        $this->actingAsUser($user)
+            ->putJson(self::ENDPOINT, [
+                'settings' => ['board.collapsed_levels' => $value],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['settings.board.collapsed_levels']);
+
+        self::assertSame(0, UserMeta::query()->where('user_id', $user->id)->count());
+    }
+
+    public function test_update_accepts_value_within_column_limit(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->putJson(self::ENDPOINT, [
+                'settings' => ['board.collapsed_levels' => json_encode(['strategic' => true])],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('user_meta', ['user_id' => $user->id, 'meta_key' => 'board.collapsed_levels']);
     }
 
     public function test_update_requires_non_empty_settings_payload(): void

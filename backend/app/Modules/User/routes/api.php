@@ -18,8 +18,11 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function (): void {
     // Регистрация доступна без аутентификации: возвращает Bearer-токен.
     // throttle:auth — лимитер из AppServiceProvider (защита от массовых регистраций).
+    // throttle:auth-register — отдельное окно: общие 10 попыток в минуту на входе
+    // делят с регистрацией и другие адреса, и после нескольких неудачных входов
+    // соседний пользователь не смог бы зарегистрироваться.
     Route::post('user/register', RegisterController::class)
-        ->middleware('throttle:auth')
+        ->middleware('throttle:auth-register')
         ->name('api.v1.user.register');
 
     // Пользовательские настройки (свёрнутые уровни и колонки доски).
