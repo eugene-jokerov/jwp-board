@@ -1,5 +1,5 @@
 /**
- * Свимлайн уровня: заголовок (цветная точка, название, счётчик) и колонки.
+ * Свимлайн уровня: заголовок (цветная точка, название) и колонки.
  *
  * На телефоне — вертикальный аккордеон колонок, заголовок сверху.
  * На широком экране заголовок выносится в левую колонку уровня
@@ -23,8 +23,6 @@ import { COLUMNS, type Card, type CardKind, type ClosedTotals, type ColumnId } f
 interface SwimlaneHeaderProps {
   title: string;
   color: string | null;
-  /** Общее число карточек в свимлайне. */
-  count: number;
   /** Подпись кнопки создания подсказывает тип карточки, например «+ Задача». */
   addLabel: string;
   canAdd: boolean;
@@ -41,20 +39,12 @@ interface SwimlaneHeaderProps {
  * Заголовок свимлайна для широкой раскладки: слева от сетки колонок.
  *
  * В одну строку название обрезалось (панель шириной 160 px), поэтому блок
- * разложен вертикально: название с цветной точкой сверху, счётчик и «+» — под ним.
+ * разложен вертикально: название с цветной точкой сверху, «+» — под ним.
  * «+» создаёт карточку в колонке, которую передал `BoardLevel`. У служебного
  * свимлайна «без родителя» родитель не предопределён: форма открывается с его
  * выбором и с опцией «без родителя».
  */
-export function SwimlaneHeader({
-  title,
-  color,
-  count,
-  addLabel,
-  canAdd,
-  canAddInLane,
-  onAddCard,
-}: SwimlaneHeaderProps) {
+export function SwimlaneHeader({ title, color, addLabel, canAdd, canAddInLane, onAddCard }: SwimlaneHeaderProps) {
   const addDisabled = !canAdd || !canAddInLane;
 
   return (
@@ -67,9 +57,7 @@ export function SwimlaneHeader({
         </Text>
       </View>
 
-      <View className="flex-row items-center gap-2">
-        <Text className="flex-1 text-[11px] text-subtle">{count}</Text>
-
+      <View className="flex-row items-center justify-end gap-2">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${addLabel}: ${title}`}
@@ -173,8 +161,6 @@ export function Swimlane({
         <Text className="flex-1 text-sm font-semibold text-app" numberOfLines={1}>
           {title}
         </Text>
-
-        <Text className="text-[11px] text-subtle">{cards.length}</Text>
       </View>
 
       <View className="gap-2">

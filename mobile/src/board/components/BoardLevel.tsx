@@ -897,7 +897,6 @@ export function BoardLevel({
                         <SwimlaneHeader
                           title={lane.title}
                           color={lane.color}
-                          count={lane.cards.length}
                           addLabel="Добавить карточку"
                           canAdd={canCreate}
                           canAddInLane={canAddInLane(lane)}
