@@ -22,7 +22,7 @@
  * пустыми и перезаписываться, пока пользователь уже начал в них печатать.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -32,6 +32,8 @@ import {
   ScrollView,
   Text,
   View,
+  type LayoutChangeEvent,
+  type ScrollViewInstance,
 } from 'react-native';
 
 import { fetchTask } from '../../api/client';
@@ -182,8 +184,19 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
    */
   const [priority, setPriority] = useState<CardPriority | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | null>(null);
-  // Ошибки сохранения и удаления (например, запрет сервера) показываем здесь же.
+  /**
+   * Ошибка сохранения (например, запрет сервера). Показывается над полями:
+   * правка любого поля её сбрасывает — причина отказа чаще всего в самих данных.
+   */
   const [formError, setFormError] = useState<string | null>(null);
+  /**
+   * Ошибка удаления — отдельно от `formError`: причина отказа (409 — есть
+   * дочерние карточки) от полей формы не зависит, поэтому правка названия или
+   * статуса не должна её гасить. Показывается у самой кнопки удаления в конце
+   * прокручиваемого тела, а `deleteSectionRef` вместе с `scrollToDeleteSection`
+   * прокручивает форму к этому блоку, чтобы сообщение не осталось за экраном.
+   */
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Удаление подтверждается в самой модалке: на web системные диалоги не работают.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -193,6 +206,39 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   const [loadError, setLoadError] = useState<string | null>(null);
   /** Счётчик повторов: изменение значения перезапускает эффект загрузки. */
   const [loadAttempt, setLoadAttempt] = useState(0);
+  /** Тело формы: нужно, чтобы прокрутить его к блоку удаления. */
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  /** Смещение блока удаления от начала прокручиваемого тела (`onLayout`). */
+  const deleteSectionOffset = useRef<number | null>(null);
+
+  /**
+   * Запомнить, где в теле формы начинается блок удаления.
+   *
+   * Блок лежит в конце прокрутки, а причина отказа сервера появляется под
+   * кнопкой удаления — без прокрутки она осталась бы за нижней границей экрана,
+   * и отказ выглядел бы как «ничего не произошло».
+   */
+  const handleDeleteSectionLayout = (event: LayoutChangeEvent) => {
+    deleteSectionOffset.current = event.nativeEvent.layout.y;
+  };
+
+  /**
+   * Прокрутить тело к блоку удаления.
+   *
+   * Если `onLayout` ещё не отчитался (модалку только открыли), прокручиваем
+   * в конец: удаление — последний блок формы, так что цель та же.
+   */
+  const scrollToDeleteSection = () => {
+    const offset = deleteSectionOffset.current;
+
+    if (offset === null) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+
+      return;
+    }
+
+    scrollRef.current?.scrollTo({ y: offset, animated: true });
+  };
 
   /**
    * Загрузить карточку целиком ради описания.
@@ -265,15 +311,41 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     }
   };
 
+  /**
+   * Удалить карточку.
+   *
+   * Ошибку показываем у самой кнопки удаления (`deleteError`), а не над полями:
+   * пользователь нажимает «Удалить» внизу формы, и сообщение сервера должно
+   * появиться там же. `finally` возвращает кнопки в рабочее состояние, даже
+   * если действие упадёт исключением: иначе форма осталась бы навсегда
+   * заблокированной (`saving`).
+   */
   const remove = async () => {
     setSaving(true);
-    const error = await onDelete(card);
-    setSaving(false);
+    setDeleteError(null);
 
-    if (error !== null) {
-      setFormError(error);
-      setConfirmingDelete(false);
+    try {
+      const error = await onDelete(card);
+
+      if (error !== null) {
+        setDeleteError(error);
+        // Подтверждение прячем: причина отказа видна под кнопкой удаления,
+        // а повторное действие начинается заново.
+        setConfirmingDelete(false);
+        // Сообщение длиннее кнопки и может оказаться за нижней границей экрана —
+        // прокручиваем форму к блоку удаления. Колбэк — после перерисовки,
+        // чтобы высота блока уже учитывала баннер.
+        requestAnimationFrame(scrollToDeleteSection);
+      }
+    } finally {
+      setSaving(false);
     }
+  };
+
+  /** Открыть подтверждение удаления: прошлая причина отказа уже не актуальна. */
+  const askDeleteConfirmation = () => {
+    setDeleteError(null);
+    setConfirmingDelete(true);
   };
 
   const titleEmpty = title.trim() === '';
@@ -309,7 +381,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
             {loading || loadError !== null ? (
               // Лоадер и ошибку загрузки прокручивать незачем, но они живут в той же
               // области тела: футер с «Отмена/Сохранить» показывается только для формы.
-              <ScrollView className="min-h-0 flex-1" contentContainerClassName="gap-4 px-0.5 pb-4">
+              <ScrollView ref={scrollRef} className="min-h-0 flex-1" contentContainerClassName="gap-4 px-0.5 pb-4">
                 {loading ? (
                   // Описание приходит отдельным запросом: форму показываем целиком и
                   // сразу готовой к правке, а не с пустым полем, которое вот-вот
@@ -482,44 +554,57 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     />
                   </View>
 
-                  {confirmingDelete ? (
-                    <View className="gap-2 rounded-xl border border-border bg-surface p-3">
-                      <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
+                  {/* Удаление живёт в конце прокручиваемого тела, как и раньше.
+                      Чтобы причина отказа (409 — есть дочерние карточки) не
+                      терялась, её текст показывается здесь же — у самой кнопки,
+                      и тело прокручивается к этому блоку (см. `remove`). */}
+                  <View className="gap-2" onLayout={handleDeleteSectionLayout}>
+                    {confirmingDelete ? (
+                      <View className="gap-2 rounded-xl border border-border bg-surface p-3">
+                        <Text className="text-sm font-medium text-app">Удалить карточку «{card.title}»?</Text>
 
-                      <View className="flex-row gap-2">
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => setConfirmingDelete(false)}
-                          className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
-                        >
-                          <Text className="text-sm font-semibold text-app">Оставить</Text>
-                        </Pressable>
+                        <View className="flex-row gap-2">
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => setConfirmingDelete(false)}
+                            className="h-10 flex-1 items-center justify-center rounded-xl bg-card active:opacity-80"
+                          >
+                            <Text className="text-sm font-semibold text-app">Оставить</Text>
+                          </Pressable>
 
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityState={{ disabled: saving }}
-                          disabled={saving}
-                          onPress={() => void remove()}
-                          className={[
-                            'h-10 flex-1 items-center justify-center rounded-xl bg-err-fg active:opacity-90',
-                            saving ? 'opacity-60' : '',
-                          ].join(' ')}
-                        >
-                          <Text className="text-sm font-semibold text-white">Удалить</Text>
-                        </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityState={{ disabled: saving, busy: saving }}
+                            disabled={saving}
+                            onPress={() => void remove()}
+                            className={[
+                              'h-10 flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-err-fg active:opacity-90',
+                              saving ? 'opacity-60' : '',
+                            ].join(' ')}
+                          >
+                            {/* Запрос идёт до 15 секунд (API_TIMEOUT_MS): спиннер
+                                показывает, что нажатие принято, и удерживает от
+                                повторного клика. */}
+                            {saving ? <ActivityIndicator size="small" color="#fff" /> : null}
+
+                            <Text className="text-sm font-semibold text-white">{saving ? 'Удаляем…' : 'Удалить'}</Text>
+                          </Pressable>
+                        </View>
                       </View>
-                    </View>
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: saving }}
-                      disabled={saving}
-                      onPress={() => setConfirmingDelete(true)}
-                      className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
-                    >
-                      <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
-                    </Pressable>
-                  )}
+                    ) : (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: saving }}
+                        disabled={saving}
+                        onPress={askDeleteConfirmation}
+                        className="h-10 items-center justify-center rounded-xl border border-border active:bg-surface"
+                      >
+                        <Text className="text-sm font-semibold text-err-fg">Удалить карточку</Text>
+                      </Pressable>
+                    )}
+
+                    {deleteError !== null ? <FormAlert message={deleteError} /> : null}
+                  </View>
                 </ScrollView>
 
                 <View className="flex-row gap-2">
