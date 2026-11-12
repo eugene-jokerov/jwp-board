@@ -19,6 +19,11 @@
  * отказ (403 с текстом в `errors.account`) приходит тостом, как любой другой
  * отказ сохранения или удаления. Доступные действия клиент не гасит заранее:
  * попап выглядит одинаково у всех пользователей.
+ *
+ * Ошибки сервера, адресованные полю (`errors.title`, `errors.color`), стоят под
+ * этим полем: название — как у текстового поля, цвет — рамкой вокруг палитры.
+ * Служебные ключи (`direction` — лимит направлений, `account` — режим «только
+ * чтение») относятся к действию целиком и остаются тостом.
  */
 
 import { useState } from 'react';
@@ -30,6 +35,7 @@ import { TextField } from '../../components/TextField';
 import { TOAST_MODAL_STYLE } from '../../notifications/NotificationHost';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DIRECTION_COLORS, directionColorHex, firstFreeDirectionColor } from '../directionColors';
+import { clearFieldError, type DirectionField, type FieldErrors, type FormErrorResult } from '../store';
 import type { Direction } from '../types';
 
 /** Цвет служебных иконок строки направления. */
@@ -44,12 +50,12 @@ interface DirectionsModalProps {
    * создания: новое направление сервер не примет (422).
    */
   limit: number | null;
-  /** Добавить направление; текст ошибки или null при успехе. */
-  onAdd: (title: string, color: string) => Promise<string | null>;
-  /** Изменить название и цвет; текст ошибки или null при успехе. */
-  onUpdate: (id: number, title: string, color: string) => Promise<string | null>;
+  /** Добавить направление; разобранная ошибка сервера или null при успехе. */
+  onAdd: (title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
+  /** Изменить название и цвет; разобранная ошибка сервера или null при успехе. */
+  onUpdate: (id: number, title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
   /** Удалить направление: правило проверено экраном до вызова. */
-  onDelete: (id: number) => Promise<string | null>;
+  onDelete: (id: number) => Promise<FormErrorResult<DirectionField> | null>;
   /** Причина, по которой направление удалить нельзя; null — можно. */
   deleteReason: (direction: Direction) => string | null;
   onClose: () => void;
@@ -59,6 +65,8 @@ interface ColorPickerProps {
   value: string;
   /** Цвета, занятые другими направлениями: повторно выбрать их нельзя. */
   usedColors: readonly string[];
+  /** Сервер отклонил цвет: сетка обводится рамкой ошибки, текст — под ней. */
+  invalid?: boolean;
   onChange: (color: string) => void;
 }
 
@@ -68,10 +76,14 @@ interface ColorPickerProps {
  * Цвет уникален у каждого направления — иначе свимлайны и полоски карточек
  * не различить. Занятый другим направлением кружок недоступен: он гасится,
  * не нажимается и озвучивается как «уже используется».
+ *
+ * `invalid` повторяет подсветку ошибочного `TextField`: у сетки нет рамки,
+ * поэтому она появляется только при отказе сервера и держится, пока цвет не
+ * поправили.
  */
-function ColorPicker({ value, usedColors, onChange }: ColorPickerProps) {
+function ColorPicker({ value, usedColors, invalid = false, onChange }: ColorPickerProps) {
   return (
-    <View className="flex-row flex-wrap gap-2">
+    <View className={['flex-row flex-wrap gap-2', invalid ? 'rounded-xl border border-err-fg p-2' : ''].join(' ')}>
       {DIRECTION_COLORS.map((color) => {
         const selected = color.key === value;
         const used = !selected && usedColors.includes(color.key);
@@ -110,8 +122,8 @@ interface DirectionRowProps {
   usedColors: readonly string[];
   /** Причина запрета удаления; null — можно удалять. */
   deleteReason: string | null;
-  onSave: (title: string, color: string) => Promise<string | null>;
-  onDelete: () => Promise<string | null>;
+  onSave: (title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
+  onDelete: () => Promise<FormErrorResult<DirectionField> | null>;
 }
 
 /**
@@ -123,6 +135,11 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
   const [title, setTitle] = useState(direction.title);
   const [color, setColor] = useState(direction.color);
   const [titleError, setTitleError] = useState<string | null>(null);
+  /**
+   * Ошибки сервера по полям строки (`title`, `color`): стоят под полем,
+   * как проверки самой формы. Правка поля снимает его ошибку.
+   */
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<DirectionField>>({});
   /**
    * Ошибки строки (сохранение и удаление) показываются тостом — единым стилем
    * со всеми ошибками доски: сообщение не зависит от режима строки и остаётся
@@ -141,6 +158,7 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
     setTitle(direction.title);
     setColor(direction.color);
     setTitleError(null);
+    setFieldErrors({});
     clearFormError();
     setMode('edit');
   };
@@ -154,11 +172,16 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
     }
 
     setSaving(true);
-    const error = await onSave(trimmed, color);
+    const result = await onSave(trimmed, color);
     setSaving(false);
 
-    if (error !== null) {
-      showFormError(error);
+    if (result !== null) {
+      setFieldErrors(result.fields ?? {});
+
+      if (result.fields === null) {
+        showFormError(result.message);
+      }
+
       return;
     }
 
@@ -167,11 +190,11 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
   const remove = async () => {
     setSaving(true);
-    const error = await onDelete();
+    const result = await onDelete();
     setSaving(false);
 
-    if (error !== null) {
-      showFormError(error);
+    if (result !== null) {
+      showFormError(result.message);
     }
 
     setMode('view');
@@ -186,9 +209,10 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
           onChangeText={(value) => {
             setTitle(value);
             setTitleError(null);
+            setFieldErrors((prev) => clearFieldError(prev, 'title'));
             clearFormError();
           }}
-          error={titleError}
+          error={titleError ?? fieldErrors.title}
           placeholder="Например: Продукт"
           autoFocus
         />
@@ -199,11 +223,17 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
           <ColorPicker
             value={color}
             usedColors={usedColors}
+            invalid={fieldErrors.color !== undefined}
             onChange={(value) => {
               setColor(value);
+              setFieldErrors((prev) => clearFieldError(prev, 'color'));
               clearFormError();
             }}
           />
+
+          {/* Отказ сервера по цвету (например, цвет уже занят) — под палитрой,
+              как ошибка текстового поля под ним самим. */}
+          {fieldErrors.color === undefined ? null : <Text className="text-xs text-err-fg">{fieldErrors.color}</Text>}
 
           {color === direction.color ? null : (
             <Text className="text-[11px] text-muted">Карточки направления перекрасятся вместе с ним.</Text>
@@ -316,7 +346,7 @@ function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }:
 
 interface DirectionCreatorProps {
   usedColors: readonly string[];
-  onCreate: (title: string, color: string) => Promise<string | null>;
+  onCreate: (title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
   /** Свернуть форму (после успешного добавления или по кнопке «Отмена»). */
   onClose: () => void;
 }
@@ -332,6 +362,8 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
   const [title, setTitle] = useState('');
   const [color, setColor] = useState(() => firstFreeDirectionColor(usedColors));
   const [titleError, setTitleError] = useState<string | null>(null);
+  /** Ошибки сервера по полям формы (`title`, `color`) — под самими полями. */
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<DirectionField>>({});
   /** Ошибка создания показывается тостом — так же, как остальные ошибки доски. */
   const { show: showFormError, clear: clearFormError } = useFormErrorToast({
     formKey: 'direction-create',
@@ -350,16 +382,22 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
     }
 
     setSaving(true);
-    const error = await onCreate(trimmed, color);
+    const result = await onCreate(trimmed, color);
     setSaving(false);
 
-    if (error !== null) {
-      showFormError(error);
+    if (result !== null) {
+      setFieldErrors(result.fields ?? {});
+
+      if (result.fields === null) {
+        showFormError(result.message);
+      }
+
       return;
     }
 
     setTitle('');
     setTitleError(null);
+    setFieldErrors({});
     clearFormError();
     // Закрываем форму: при следующем открытии она сама возьмёт первый свободный цвет.
     onClose();
@@ -375,9 +413,10 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
         onChangeText={(value) => {
           setTitle(value);
           setTitleError(null);
+          setFieldErrors((prev) => clearFieldError(prev, 'title'));
           clearFormError();
         }}
-        error={titleError}
+        error={titleError ?? fieldErrors.title}
         placeholder="Например: Продукт"
       />
 
@@ -387,11 +426,15 @@ function DirectionCreator({ usedColors, onCreate, onClose }: DirectionCreatorPro
         <ColorPicker
           value={color}
           usedColors={usedColors}
+          invalid={fieldErrors.color !== undefined}
           onChange={(value) => {
             setColor(value);
+            setFieldErrors((prev) => clearFieldError(prev, 'color'));
             clearFormError();
           }}
         />
+
+        {fieldErrors.color === undefined ? null : <Text className="text-xs text-err-fg">{fieldErrors.color}</Text>}
       </View>
 
       <View className="flex-row gap-2">

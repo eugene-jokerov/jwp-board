@@ -1302,6 +1302,70 @@ final class TasksTest extends TestCase
     }
 
     /**
+     * Контракт для клиента: 422 раскладывает причину по ключам полей.
+     *
+     * Форма карточки показывает ошибку сервера под самим полем (`errors.title`,
+     * `errors.slug` и т. д.), поэтому ответ обязан называть поля теми же ключами,
+     * что и тело запроса, — и не подменять их служебными.
+     */
+    public function test_validation_errors_are_addressed_to_fields(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'task',
+                'column' => 'backlog',
+                'title' => str_repeat('Я', 256),
+                'slug' => str_repeat('a', 17),
+                'deadline' => '31.12.2026',
+                'priority' => 'urgent',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'slug', 'deadline', 'priority'])
+            ->assertJsonMissingValidationErrors(['hierarchy', 'account', 'direction', 'type', 'column']);
+    }
+
+    /**
+     * PATCH проверяется так же: каждая ошибка стоит под своим полем формы.
+     */
+    public function test_update_validation_errors_are_addressed_to_fields(): void
+    {
+        $user = User::factory()->create();
+        $task = Task::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$task->id, [
+                'title' => str_repeat('Я', 256),
+                'deadline' => '2026-02-30',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'deadline'])
+            ->assertJsonMissingValidationErrors(['column', 'priority', 'slug', 'description']);
+    }
+
+    /**
+     * Нарушение правила иерархии — не ошибка поля: у неё свой ключ (`hierarchy`),
+     * поэтому клиент оставляет такой отказ тостом.
+     */
+    public function test_hierarchy_error_has_its_own_key(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [
+                'type' => 'project',
+                'column' => 'backlog',
+                'title' => 'Проект с направлением',
+                'direction_id' => $direction->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['hierarchy'])
+            ->assertJsonMissingValidationErrors(['title', 'direction_id']);
+    }
+
+    /**
      * Титул из пробелов проходит правило `max`, но не value object:
      * ответ должен остаться 422, а не превратиться в 500.
      */

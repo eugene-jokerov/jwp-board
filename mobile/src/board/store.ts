@@ -57,18 +57,119 @@ import {
   type Direction,
 } from './types';
 
-/** Текст ошибки для интерфейса: сообщение сервера, иначе — запасное. */
-export function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) {
-    const fieldError = error.payload.errors ? Object.values(error.payload.errors)[0]?.[0] : undefined;
+/**
+ * Поля форм: ключи, по которым сервер адресует ошибку конкретному полю.
+ *
+ * Всё, чего здесь нет (например, `hierarchy`, `direction`, `account`), полю не
+ * принадлежит: это отказ по правилам доски или по правам, и его место — тост.
+ * Список решают сами формы — сервер отдаёт ключи ровно так же, как называются
+ * поля в телах запросов (см. StoreTaskRequest / StoreDirectionRequest).
+ */
+export const CARD_FIELDS = [
+  'title',
+  'slug',
+  'description',
+  'deadline',
+  'priority',
+  'idea',
+  'column',
+  'type',
+  'direction_id',
+  'initiative_id',
+  'project_id',
+] as const;
 
-    return fieldError ?? error.payload.message ?? fallback;
-  }
+/** Поля формы направления. */
+export const DIRECTION_FIELDS = ['title', 'color'] as const;
 
-  return fallback;
+/** Ошибки сервера, адресованные полям формы: ключ ответа API → текст. */
+export type FieldErrors<Field extends string = string> = Partial<Record<Field, string>>;
+
+/**
+ * Разобранная ошибка запроса: что показать тостом и что — под полями.
+ *
+ * `fields` — только ошибки полей из переданного списка, по первой строке на
+ * поле; null, если их нет (тогда форма показывает `message` тостом).
+ */
+export interface FormErrorResult<Field extends string = string> {
+  /** Текст для тоста: первая ошибка ответа либо запасной текст. */
+  message: string;
+  /** Ошибки по полям формы; null — полевых ошибок нет. */
+  fields: FieldErrors<Field> | null;
 }
 
-/** Действия над карточками; каждая возвращает текст ошибки сервера или null. */
+/**
+ * Снять ошибку поля при правке: остальные ошибки ответа остаются на месте.
+ *
+ * Формы правят состояние так — `setFieldErrors((prev) => clearFieldError(prev, 'title'))`:
+ * сервер сообщил о нескольких полях сразу, и правка одного не отменяет остальные.
+ */
+export function clearFieldError<Field extends string>(errors: FieldErrors<Field>, field: Field): FieldErrors<Field> {
+  if (errors[field] === undefined) {
+    return errors;
+  }
+
+  const next: FieldErrors<Field> = { ...errors };
+
+  delete next[field];
+
+  return next;
+}
+
+/**
+ * Ответ API в понятном интерфейсу виде.
+ *
+ * Сервер отвечает на 422 разложенными по ключам ошибками: ошибка поля живёт
+ * рядом с полем и показывается под ним (`TextField.error`), а служебные ключи
+ * (`hierarchy` — правило иерархии, `direction` — лимит направлений, `account` —
+ * режим «только чтение») относятся к действию целиком и уходят тостом.
+ * `fields` перечисляет ключи, которые форма умеет показать под полем; всё
+ * остальное попадает в `message`.
+ */
+export function errorMessage<Field extends string = string>(
+  error: unknown,
+  fallback: string,
+  fields?: readonly Field[],
+): FormErrorResult<Field> {
+  if (!(error instanceof ApiError)) {
+    return { message: fallback, fields: null };
+  }
+
+  const payload = error.payload.errors;
+  const fieldErrors: FieldErrors<Field> = {};
+  let hasFieldError = false;
+
+  if (payload !== undefined && fields !== undefined) {
+    for (const field of fields) {
+      const text = payload[field]?.[0];
+
+      if (text !== undefined) {
+        fieldErrors[field] = text;
+        hasFieldError = true;
+      }
+    }
+  }
+
+  // Тост без полевой ошибки: первая строка ответа говорит о причине точнее
+  // общего «message», который у 422 — стандартный «The given data was invalid».
+  const firstError = payload ? Object.values(payload)[0]?.[0] : undefined;
+
+  return {
+    message: firstError ?? error.payload.message ?? fallback,
+    fields: hasFieldError ? fieldErrors : null,
+  };
+}
+
+/**
+ * Поле карточки, которому сервер может адресовать ошибку (см. CARD_FIELDS).
+ * Форма показывает такие ошибки под полем, а не тостом.
+ */
+export type CardField = (typeof CARD_FIELDS)[number];
+
+/** Поле формы направления (см. DIRECTION_FIELDS). */
+export type DirectionField = (typeof DIRECTION_FIELDS)[number];
+
+/** Действия над карточками; каждая возвращает разобранную ошибку сервера или null. */
 interface CardActions {
   /**
    * Создать карточку; `deadline` — дата в формате API (`YYYY-MM-DD`) или null,
@@ -85,7 +186,7 @@ interface CardActions {
     deadline: string | null,
     idea: boolean,
     priority: CardPriority,
-  ) => Promise<string | null>;
+  ) => Promise<FormErrorResult<CardField> | null>;
   /**
    * Сохранить карточку; `description` — null, если описание стёрли, а незагруженное
    * описание не отправляется. `deadline` — дата в формате API, null или
@@ -103,16 +204,16 @@ interface CardActions {
     deadline: string | null | undefined,
     idea: boolean | undefined,
     priority: CardPriority | undefined,
-  ) => Promise<string | null>;
-  moveCard: (card: Card, column: ColumnId) => Promise<string | null>;
-  removeCard: (card: Card) => Promise<string | null>;
+  ) => Promise<FormErrorResult<CardField> | null>;
+  moveCard: (card: Card, column: ColumnId) => Promise<FormErrorResult<CardField> | null>;
+  removeCard: (card: Card) => Promise<FormErrorResult<CardField> | null>;
 }
 
-/** Действия над направлениями; каждая возвращает текст ошибки сервера или null. */
+/** Действия над направлениями; каждая возвращает разобранную ошибку сервера или null. */
 interface DirectionActions {
-  addDirection: (title: string, color: string) => Promise<string | null>;
-  editDirection: (id: number, title: string, color: string) => Promise<string | null>;
-  removeDirection: (id: number) => Promise<string | null>;
+  addDirection: (title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
+  editDirection: (id: number, title: string, color: string) => Promise<FormErrorResult<DirectionField> | null>;
+  removeDirection: (id: number) => Promise<FormErrorResult<DirectionField> | null>;
 }
 
 /** Догрузка закрытых колонок страницами («Показать ещё»). */
@@ -199,7 +300,7 @@ export function useBoard(): BoardState {
       setClosedPages({});
       setLoadError(null);
     } catch (error) {
-      setLoadError(errorMessage(error, 'Не удалось загрузить доску. Проверьте соединение с сервером.'));
+      setLoadError(errorMessage(error, 'Не удалось загрузить доску. Проверьте соединение с сервером.').message);
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +356,7 @@ export function useBoard(): BoardState {
         return null;
       } catch (error) {
         // 422 — некорректная иерархия (например, родитель перестал быть в работе).
-        return errorMessage(error, 'Не удалось создать карточку.');
+        return errorMessage(error, 'Не удалось создать карточку.', CARD_FIELDS);
       }
     },
     [applyCard],
@@ -312,7 +413,7 @@ export function useBoard(): BoardState {
         return null;
       } catch (error) {
         // 409 — смену статуса блокируют дочерние карточки в работе.
-        return errorMessage(error, 'Не удалось сохранить карточку.');
+        return errorMessage(error, 'Не удалось сохранить карточку.', CARD_FIELDS);
       }
     },
     [applyCard],
@@ -327,7 +428,7 @@ export function useBoard(): BoardState {
         return null;
       } catch (error) {
         // 409 — карточку нельзя перевести, пока у неё есть дети в работе.
-        return errorMessage(error, 'Не удалось переместить карточку.');
+        return errorMessage(error, 'Не удалось переместить карточку.', CARD_FIELDS);
       }
     },
     [applyCard],
@@ -343,7 +444,7 @@ export function useBoard(): BoardState {
       return null;
     } catch (error) {
       // 409 — у карточки есть дочерние карточки.
-      return errorMessage(error, 'Не удалось удалить карточку.');
+      return errorMessage(error, 'Не удалось удалить карточку.', CARD_FIELDS);
     }
   }, []);
 
@@ -402,7 +503,7 @@ export function useBoard(): BoardState {
 
         return null;
       } catch (error) {
-        const message = errorMessage(error, 'Не удалось загрузить карточки.');
+        const message = errorMessage(error, 'Не удалось загрузить карточки.').message;
         setClosedPages((prev) =>
           withClosedPage(prev, column, kind, { loading: false, error: message, fullPage: false }),
         );
@@ -422,7 +523,7 @@ export function useBoard(): BoardState {
       return null;
     } catch (error) {
       // 422 — занятый цвет или недопустимое название.
-      return errorMessage(error, 'Не удалось добавить направление.');
+      return errorMessage(error, 'Не удалось добавить направление.', DIRECTION_FIELDS);
     }
   }, []);
 
@@ -438,7 +539,7 @@ export function useBoard(): BoardState {
 
         return null;
       } catch (error) {
-        return errorMessage(error, 'Не удалось сохранить направление.');
+        return errorMessage(error, 'Не удалось сохранить направление.', DIRECTION_FIELDS);
       }
     },
     [reload],
@@ -452,7 +553,7 @@ export function useBoard(): BoardState {
       return null;
     } catch (error) {
       // 409 — в направлении есть карточки.
-      return errorMessage(error, 'Не удалось удалить направление.');
+      return errorMessage(error, 'Не удалось удалить направление.', DIRECTION_FIELDS);
     }
   }, []);
 

@@ -63,6 +63,65 @@ final class DirectionsTest extends TestCase
             ->assertJsonValidationErrors(['color']);
     }
 
+    /**
+     * Контракт для клиента: 422 раскладывает причину по ключам полей.
+     *
+     * Форма направления показывает ошибку сервера под самим полем (`errors.title`
+     * у названия, `errors.color` у палитры), а не общим сообщением, поэтому
+     * ответ обязан называть поля теми же ключами, что и тело запроса.
+     */
+    public function test_validation_errors_are_addressed_to_fields(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title', 'color']);
+
+        // По ключу на поле — строки, а не общий текст под другим ключом.
+        $this->assertSame(
+            ['title', 'color'],
+            array_keys($response->json('errors')),
+        );
+    }
+
+    /**
+     * Слишком длинное название — ошибка поля `title`, а не общая: форма
+     * подсвечивает само поле.
+     */
+    public function test_long_title_is_addressed_to_title_field(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAsUser($user)
+            ->postJson(self::ENDPOINT, ['title' => str_repeat('Я', 256), 'color' => 'c1'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title'])
+            ->assertJsonMissingValidationErrors(['color']);
+    }
+
+    /**
+     * PATCH проверяется так же: обе ошибки адресованы своим полям.
+     */
+    public function test_update_validation_errors_are_addressed_to_fields(): void
+    {
+        $user = User::factory()->create();
+        $direction = Direction::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$direction->id, ['title' => str_repeat('Я', 256)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['title'])
+            ->assertJsonMissingValidationErrors(['color']);
+
+        $this->actingAsUser($user)
+            ->patchJson(self::ENDPOINT.'/'.$direction->id, ['color' => 'c0'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['color'])
+            ->assertJsonMissingValidationErrors(['title']);
+    }
+
     public function test_index_returns_only_own_directions(): void
     {
         $user = User::factory()->create();

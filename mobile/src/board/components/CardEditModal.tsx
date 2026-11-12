@@ -25,6 +25,11 @@
  * и его отказ (`403` с текстом в `errors.account`) приходит тостом, как любой
  * другой отказ сохранения или удаления. Клиент ничего не гасит заранее —
  * доска должна выглядеть и вести себя одинаково у всех пользователей.
+ *
+ * Ошибки сервера, адресованные полю (`errors.title`, `errors.deadline` и т. п.),
+ * не уходят в тост: поле подсвечивается, а текст стоит под ним — так же, как
+ * проверки самой формы. Служебные ключи (`hierarchy`, `account`) относятся к
+ * действию целиком и остаются тостом (см. `errorMessage` в board/store.ts).
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -48,6 +53,7 @@ import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
+import { clearFieldError, type CardField, type FieldErrors, type FormErrorResult } from '../store';
 import { toCardDescription, toCardSlug } from '../mappers';
 import {
   COLUMNS,
@@ -68,7 +74,8 @@ interface CardEditModalProps {
   /** Причина, по которой сменить статус нельзя; null — смена разрешена. */
   lockedReason: string | null;
   /**
-   * Сохранить изменения; возвращает текст ошибки, который показываем в модалке.
+   * Сохранить изменения; возвращает разобранную ошибку сервера — форма
+   * показывает ошибки полей под самими полями, служебные отказы тостом.
    * `description` — null, если описание ещё не загружено: поле тогда не отправляется.
    * `slug` — кодовое название: null очищает метку, undefined — не отправлять
    * (ещё не загружено).
@@ -85,9 +92,9 @@ interface CardEditModalProps {
     deadline: string | null | undefined,
     idea: boolean | undefined,
     priority: CardPriority | undefined,
-  ) => Promise<string | null>;
-  /** Удалить карточку; возвращает текст ошибки сервера (409 — есть дочерние карточки). */
-  onDelete: (card: Card) => Promise<string | null>;
+  ) => Promise<FormErrorResult<CardField> | null>;
+  /** Удалить карточку; возвращает разобранную ошибку (409 — есть дочерние карточки). */
+  onDelete: (card: Card) => Promise<FormErrorResult<CardField> | null>;
   onClose: () => void;
 }
 
@@ -126,8 +133,8 @@ interface CardEditFormProps {
     deadline: string | null | undefined,
     idea: boolean | undefined,
     priority: CardPriority | undefined,
-  ) => Promise<string | null>;
-  onDelete: (card: Card) => Promise<string | null>;
+  ) => Promise<FormErrorResult<CardField> | null>;
+  onDelete: (card: Card) => Promise<FormErrorResult<CardField> | null>;
   onClose: () => void;
 }
 
@@ -188,6 +195,11 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
    */
   const [priority, setPriority] = useState<CardPriority | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | null>(null);
+  /**
+   * Ошибки сервера, адресованные полям (см. `errorMessage`): стоят под своими
+   * полями, как проверки самой формы. Правка поля снимает его ошибку.
+   */
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CardField>>({});
   /**
    * Ошибка сохранения (например, запрет сервера) показывается тостом — единым
    * стилем со всеми ошибками доски. Правка любого поля её снимает: причина
@@ -297,11 +309,20 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     const nextIdea = ideaSelectable ? idea : undefined;
 
     setSaving(true);
-    const error = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline, nextIdea, priority);
+    const result = await onSave(card, trimmed, nextSlug, nextDescription, columnId, deadline, nextIdea, priority);
     setSaving(false);
 
-    if (error !== null) {
-      showSaveError(error);
+    if (result === null) {
+      return;
+    }
+
+    // Ошибки полей — под полями; служебные отказы (запрет переноса, сеть, права)
+    // тостом. Перед показом сбрасываем прошлый набор: иначе старая подсветка
+    // осталась бы на полях, о которых сервер теперь молчит.
+    setFieldErrors(result.fields ?? {});
+
+    if (result.fields === null) {
+      showSaveError(result.message);
     }
   };
 
@@ -319,10 +340,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
     clearDeleteError();
 
     try {
-      const error = await onDelete(card);
+      const result = await onDelete(card);
 
-      if (error !== null) {
-        showDeleteError(error);
+      if (result !== null) {
+        showDeleteError(result.message);
         // Подтверждение прячем: причина отказа уже показана, а повторное
         // действие начинается заново.
         setConfirmingDelete(false);
@@ -428,9 +449,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     onChangeText={(value) => {
                       setTitle(value);
                       setTitleError(null);
+                      setFieldErrors((prev) => clearFieldError(prev, 'title'));
                       clearSaveError();
                     }}
-                    error={titleError}
+                    error={titleError ?? fieldErrors.title}
                     placeholder="Например: Запуск новой ветки"
                   />
 
@@ -439,8 +461,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     value={slug ?? ''}
                     onChangeText={(value) => {
                       setSlug(value);
+                      setFieldErrors((prev) => clearFieldError(prev, 'slug'));
                       clearSaveError();
                     }}
+                    error={fieldErrors.slug}
                     placeholder="Например: LAUNCH"
                     maxLength={SLUG_MAX_LENGTH}
                     autoCapitalize="none"
@@ -456,8 +480,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     value={description ?? ''}
                     onChangeText={(value) => {
                       setDescription(value);
+                      setFieldErrors((prev) => clearFieldError(prev, 'description'));
                       clearSaveError();
                     }}
+                    error={fieldErrors.description}
                     placeholder="Что нужно сделать и зачем (необязательно)"
                     multiline
                     numberOfLines={4}
@@ -469,8 +495,10 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                     value={deadline ?? null}
                     onChange={(value) => {
                       setDeadline(value);
+                      setFieldErrors((prev) => clearFieldError(prev, 'deadline'));
                       clearSaveError();
                     }}
+                    error={fieldErrors.deadline}
                     placeholder="Без срока"
                     onOpenChange={setDatePickerOpen}
                   />
@@ -488,9 +516,14 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                       value={priority ?? DEFAULT_CARD_PRIORITY}
                       onChange={(value) => {
                         setPriority(value);
+                        setFieldErrors((prev) => clearFieldError(prev, 'priority'));
                         clearSaveError();
                       }}
                     />
+
+                    {fieldErrors.priority === undefined ? null : (
+                      <Text className="text-xs text-err-fg">{fieldErrors.priority}</Text>
+                    )}
                   </View>
 
                   {ideaSelectable ? (
@@ -504,6 +537,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                           locked={saving}
                           onPress={() => {
                             setIdea(true);
+                            setFieldErrors((prev) => clearFieldError(prev, 'idea'));
                             clearSaveError();
                           }}
                         />
@@ -514,10 +548,15 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                           locked={saving}
                           onPress={() => {
                             setIdea(false);
+                            setFieldErrors((prev) => clearFieldError(prev, 'idea'));
                             clearSaveError();
                           }}
                         />
                       </View>
+
+                      {fieldErrors.idea === undefined ? null : (
+                        <Text className="text-xs text-err-fg">{fieldErrors.idea}</Text>
+                      )}
                     </View>
                   ) : null}
 
@@ -535,6 +574,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                           locked={saving || !card.allowedTransitions.includes(option.id)}
                           onPress={() => {
                             setColumnId(option.id);
+                            setFieldErrors((prev) => clearFieldError(prev, 'column'));
                             clearSaveError();
                           }}
                         />
@@ -545,6 +585,12 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                         разрешённым переходам, поэтому показывается подписью под
                         блоком статусов, а не тостом: это постоянная блокировка. */}
                     {lockedReason === null ? null : <Text className="text-xs text-err-fg">{lockedReason}</Text>}
+
+                    {/* Отказ сервера по полю `column` (например, `enum`): стоит там
+                        же, где и причина блокировки статусов. */}
+                    {fieldErrors.column === undefined ? null : (
+                      <Text className="text-xs text-err-fg">{fieldErrors.column}</Text>
+                    )}
                   </View>
 
                   <View className="flex-row items-center gap-2">

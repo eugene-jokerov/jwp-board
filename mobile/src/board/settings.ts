@@ -151,7 +151,7 @@ export function useBoardSettings(): BoardSettingsState {
       // видит прежнюю. Ключ один, поэтому серия переключений не плодит плашки.
       // Локальное состояние при этом остаётся прежним: доска не «разворачивается»
       // на глазах у пользователя.
-      notifyError(errorMessage(error, 'Раскладка доски не сохранилась.'), {
+      notifyError(errorMessage(error, 'Раскладка доски не сохранилась.').message, {
         title: 'Не удалось сохранить раскладку',
         key: 'board-settings',
       });

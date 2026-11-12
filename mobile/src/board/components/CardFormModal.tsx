@@ -16,6 +16,10 @@
  *
  * Приоритет выбирается всегда — низкий, средний или высокий, по умолчанию
  * средний: он не зависит ни от колонки, ни от уровня карточки.
+ *
+ * Ошибки сервера, адресованные полю (`errors.title`, `errors.slug` и т. п.),
+ * показываются под самим полем, а не тостом; служебные отказы (иерархия, лимит,
+ * права, сеть) остаются тостом (см. `errorMessage` в board/store.ts).
  */
 
 import { useState } from 'react';
@@ -28,6 +32,7 @@ import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
+import { clearFieldError, type CardField, type FieldErrors, type FormErrorResult } from '../store';
 import type { CardKind, CardPriority, ColumnId, ParentOptionModel } from '../types';
 import {
   DEFAULT_CARD_PRIORITY,
@@ -69,7 +74,9 @@ export interface CardDraft {
 interface CardFormModalProps {
   draft: CardDraft | null;
   /**
-   * Создать карточку; текст ошибки сервера или null при успехе.
+   * Создать карточку; разобранная ошибка сервера или null при успехе.
+   * Ошибки полей (`fields`) форма показывает под самими полями, остальное
+   * (`hierarchy`, `account` и т. п.) — тостом.
    * `slug` — кодовое название или null (поле не заполнено).
    * `deadline` — дата в формате API (`YYYY-MM-DD`) или null.
    * `idea` — степень проработки: true — идея; вне беклога всегда false.
@@ -84,7 +91,7 @@ interface CardFormModalProps {
     deadline: string | null,
     idea: boolean,
     priority: CardPriority,
-  ) => Promise<string | null>;
+  ) => Promise<FormErrorResult<CardField> | null>;
   onClose: () => void;
 }
 
@@ -202,6 +209,12 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   /** Родитель не выбран: подсказка под списком, пока выбор не сделан. */
   const [parentError, setParentError] = useState<string | null>(null);
   /**
+   * Ошибки сервера, адресованные полям (см. `errorMessage`): они стоят под
+   * своими полями, как и проверки самой формы, а не улетают тостом. Правка
+   * поля снимает его ошибку.
+   */
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CardField>>({});
+  /**
    * Ошибка сервера (валидация иерархии, лимит, нет прав) показывается тостом —
    * единым стилем со всеми ошибками доски. Тост «липкий» и снимается, как только
    * поле поправили или форму закрыли.
@@ -243,6 +256,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setParentId(null);
     setTitleError(null);
     setParentError(null);
+    setFieldErrors({});
     clearFormError();
     setSaving(false);
     onClose();
@@ -282,7 +296,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     }
 
     setSaving(true);
-    const error = await onCreate(
+    const result = await onCreate(
       draft,
       titleValue,
       slugValue === '' ? null : slugValue,
@@ -294,8 +308,17 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     );
     setSaving(false);
 
-    if (error !== null) {
-      showFormError(error);
+    if (result !== null) {
+      // Ошибки полей — под полями; служебные отказы (иерархия, лимит, права,
+      // сеть) тостом, как и раньше.
+      if (result.fields !== null) {
+        setFieldErrors(result.fields);
+      }
+
+      if (result.fields === null) {
+        showFormError(result.message);
+      }
+
       return;
     }
 
@@ -340,9 +363,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 onChangeText={(value) => {
                   setTitle(value);
                   setTitleError(null);
+                  setFieldErrors((prev) => clearFieldError(prev, 'title'));
                   clearFormError();
                 }}
-                error={titleError}
+                error={titleError ?? fieldErrors.title}
                 placeholder="Например: Запуск новой ветки"
                 autoFocus
               />
@@ -352,8 +376,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={slug}
                 onChangeText={(value) => {
                   setSlug(value);
+                  setFieldErrors((prev) => clearFieldError(prev, 'slug'));
                   clearFormError();
                 }}
+                error={fieldErrors.slug}
                 placeholder="Например: LAUNCH"
                 maxLength={SLUG_MAX_LENGTH}
                 autoCapitalize="none"
@@ -371,8 +397,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={description}
                 onChangeText={(value) => {
                   setDescription(value);
+                  setFieldErrors((prev) => clearFieldError(prev, 'description'));
                   clearFormError();
                 }}
+                error={fieldErrors.description}
                 placeholder="Что нужно сделать и зачем (необязательно)"
                 multiline
                 numberOfLines={4}
@@ -384,8 +412,10 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                 value={deadline}
                 onChange={(value) => {
                   setDeadline(value);
+                  setFieldErrors((prev) => clearFieldError(prev, 'deadline'));
                   clearFormError();
                 }}
+                error={fieldErrors.deadline}
                 placeholder="Без срока"
               />
 
@@ -402,9 +432,16 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                   value={priority}
                   onChange={(value) => {
                     setPriority(value);
+                    setFieldErrors((prev) => clearFieldError(prev, 'priority'));
                     clearFormError();
                   }}
                 />
+
+                {/* Ошибка сервера по этому полю: у переключателя нет своей
+                    строки ошибки, поэтому подпись повторяет её вид у TextField. */}
+                {fieldErrors.priority === undefined ? null : (
+                  <Text className="text-xs text-err-fg">{fieldErrors.priority}</Text>
+                )}
               </View>
 
               {stageSelectable ? (
@@ -417,6 +454,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                     selected={idea}
                     onPress={() => {
                       setIdea(true);
+                      setFieldErrors((prev) => clearFieldError(prev, 'idea'));
                       clearFormError();
                     }}
                   />
@@ -427,9 +465,14 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                     selected={!idea}
                     onPress={() => {
                       setIdea(false);
+                      setFieldErrors((prev) => clearFieldError(prev, 'idea'));
                       clearFormError();
                     }}
                   />
+
+                  {fieldErrors.idea === undefined ? null : (
+                    <Text className="text-xs text-err-fg">{fieldErrors.idea}</Text>
+                  )}
                 </View>
               ) : null}
 
