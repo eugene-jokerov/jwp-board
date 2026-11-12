@@ -23,7 +23,6 @@ import { CircleCheck, Pencil, Trash2 } from 'lucide-react-native';
 
 import { TextField } from '../../components/TextField';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
-import { useUnavailableReasonToast } from '../../notifications/useUnavailableReasonToast';
 import { DIRECTION_COLORS, directionColorHex, firstFreeDirectionColor } from '../directionColors';
 import type { Direction } from '../types';
 
@@ -137,13 +136,6 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
   });
   // Пока идёт запрос, кнопки строки заблокированы: повторный клик не нужен.
   const [saving, setSaving] = useState(false);
-
-  /**
-   * Причину недоступности удаления показывает тост, а не мелкий серый текст под
-   * строкой: это блокировка, она должна читаться как предупреждение. Тост
-   * снимается, как только направление снова можно удалить.
-   */
-  useUnavailableReasonToast(deleteReason, `direction-delete-${direction.id}`, 'Удаление недоступно');
 
   const titleEmpty = title.trim() === '';
 
@@ -289,6 +281,11 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
           </>
         )}
       </View>
+
+      {/* Причина запрета удаления считается по карточкам направления, без запроса
+          к серверу, поэтому показывается подписью под строкой: кнопка удаления
+          погашена, а объяснение стоит рядом с ней. */}
+      {deleteReason === null ? null : <Text className="text-[11px] text-subtle">{deleteReason}</Text>}
 
       {mode === 'confirmDelete' ? (
         <View className="gap-2 rounded-lg bg-err-bg p-2.5">

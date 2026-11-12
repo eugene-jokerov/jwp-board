@@ -39,7 +39,6 @@ import { getToken } from '../../auth/session';
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
-import { useUnavailableReasonToast } from '../../notifications/useUnavailableReasonToast';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
 import { toDeadlineDate } from '../deadline';
@@ -343,14 +342,6 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
    */
   const ideaSelectable = card.column === 'backlog';
 
-  /**
-   * Причину заблокированных статусов показывает тост — единым стилем со всеми
-   * ошибками доски. Экран считает её по разрешённым переходам сервера, поэтому
-   * берем `lockedReason` из пропсов, а не собираем свой текст. Тост снимается,
-   * когда блокировка уходит или попап закрывают.
-   */
-  useUnavailableReasonToast(lockedReason, `card-status-${card.id}`, 'Статус недоступен');
-
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       {/* Форма длинная (описание, дедлайн, статусы, удаление) и на низком экране
@@ -540,6 +531,11 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                         />
                       ))}
                     </View>
+
+                    {/* Причина заблокированных статусов считается на клиенте по
+                        разрешённым переходам, поэтому показывается подписью под
+                        блоком статусов, а не тостом: это постоянная блокировка. */}
+                    {lockedReason === null ? null : <Text className="text-xs text-err-fg">{lockedReason}</Text>}
                   </View>
 
                   <View className="flex-row items-center gap-2">
@@ -551,10 +547,10 @@ function CardEditForm({ card, lockedReason, readOnly, onSave, onDelete, onClose 
                     />
                   </View>
 
-                  {/* Удаление живёт в конце прокручиваемого тела, как и раньше.
-                      Чтобы причина отказа (409 — есть дочерние карточки) не
-                      терялась, её текст показывается здесь же — у самой кнопки,
-                      и тело прокручивается к этому блоку (см. `remove`).
+                  {/* Удаление живёт в конце прокручиваемого тела. Причину отказа
+                      сервера (409 — есть дочерние карточки) показывает тост: он
+                      всплывает поверх попапа, поэтому сообщение видно, даже если
+                      кнопка удаления внизу формы (см. `remove`).
                       В режиме «только чтение» блока нет: удаление запрещено. */}
                   {readOnly ? (
                     <Text className="text-xs text-muted">

@@ -18,12 +18,11 @@
  * средний: он не зависит ни от колонки, ни от уровня карточки.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
-import { useNotifications } from '../../notifications/NotificationContext';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
@@ -199,14 +198,8 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   const [priority, setPriority] = useState<CardPriority>(() => draft?.priority ?? DEFAULT_CARD_PRIORITY);
   const [parentId, setParentId] = useState<number | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
-  /**
-   * Отправлять без родителя нажали, но родителя нет: причина считается на
-   * рендере (`parentChoiceMissing`), а не хранится в состоянии — иначе её
-   * пришлось бы сбрасывать при каждом выборе.
-   */
-  const [parentTouched, setParentTouched] = useState(false);
-  /** Ключ тоста «родитель обязателен, но не выбран». */
-  const parentMissingKey = 'card-create-parent-missing';
+  /** Родитель не выбран: подсказка под списком, пока выбор не сделан. */
+  const [parentError, setParentError] = useState<string | null>(null);
   /**
    * Ошибка сервера (валидация иерархии, лимит, нет прав) показывается тостом —
    * единым стилем со всеми ошибками доски. Тост «липкий» и снимается, как только
@@ -216,7 +209,6 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     formKey: 'card-create',
     title: 'Не удалось создать карточку',
   });
-  const { notifyError, dismissKey } = useNotifications();
   const [saving, setSaving] = useState(false);
 
   const parentOptions = draft?.parentOptions ?? null;
@@ -226,41 +218,15 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
 
   /**
    * Почему родителя выбрать нельзя: список пуст, а без родителя такую карточку
-   * сервер не создаст. Это блокировка, поэтому показывается сразу.
+   * сервер не создаст. Это блокировка без запроса к серверу, поэтому показывается
+   * сразу — подсказкой под списком.
    */
-  const parentBlockedReason =
+  const parentEmptyReason =
     parentRequired && parentOptions !== null && parentOptions.length === 0
       ? (parentEmptyHint(draft?.kind ?? 'initiative') ?? 'Выбрать нечего.')
       : null;
 
-  /**
-   * Причина показа тоста о невыбранном родителе.
-   *
-   * `parentBlockedReason` виден сразу — выбирать нечего, поэтому ждать нажатия
-   * кнопки незачем. «Родитель не выбран» показывается только после попытки
-   * сохранить: до этого выбор просто ещё не сделан.
-   */
-  const parentChoiceMissing =
-    parentBlockedReason ??
-    (parentTouched && parentRequired && selectedParent === null ? parentErrorText(draft?.kind ?? 'initiative') : null);
-
-  /**
-   * Показывать/снимать тост о родителе.
-   *
-   * Хук стоит до раннего возврата `draft === null`: порядок хуков не должен
-   * зависеть от пропсов.
-   */
-  useEffect(() => {
-    if (parentChoiceMissing === null) {
-      dismissKey(parentMissingKey);
-
-      return;
-    }
-
-    notifyError(parentChoiceMissing, { title: 'Родитель не выбран', duration: 'sticky', key: parentMissingKey });
-  }, [parentChoiceMissing, notifyError, dismissKey, parentMissingKey]);
-
-  // Состояние формы сбрасываем при закрытии, а не эффектом при открытии.
+  // Причина сбрасывается при закрытии, а не эффектом при открытии.
   const close = () => {
     setTitle('');
     setSlug('');
@@ -275,7 +241,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     setPriority(draft?.priority ?? DEFAULT_CARD_PRIORITY);
     setParentId(null);
     setTitleError(null);
-    setParentTouched(false);
+    setParentError(null);
     clearFormError();
     setSaving(false);
     onClose();
@@ -307,8 +273,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
     }
 
     if (parentInvalid) {
-      // Причину покажет тост: она вычислена на рендере и уже на экране.
-      setParentTouched(true);
+      setParentError(parentErrorText(draft.kind));
     }
 
     if (titleValue === '' || parentInvalid) {
@@ -477,6 +442,7 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                         selected={parentId === null}
                         onPress={() => {
                           setParentId(null);
+                          setParentError(null);
                         }}
                       />
                     ) : null}
@@ -489,13 +455,18 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
                         selected={parentId === option.id}
                         onPress={() => {
                           setParentId(option.id);
+                          setParentError(null);
                         }}
                       />
                     ))}
                   </ScrollView>
 
-                  {/* Причина, по которой выбрать родителя нельзя, всплывает
-                      тостом (см. `parentBlockReason` выше). */}
+                  {/* Блокировка без запроса к серверу: выбирать нечего — подсказка
+                      видна сразу. «Родитель не выбран» появляется после попытки
+                      сохранить: до этого выбор просто ещё не сделан. */}
+                  {parentEmptyReason === null ? null : <Text className="text-xs text-err-fg">{parentEmptyReason}</Text>}
+
+                  {parentError === null ? null : <Text className="text-xs text-err-fg">{parentError}</Text>}
                 </View>
               ) : null}
 

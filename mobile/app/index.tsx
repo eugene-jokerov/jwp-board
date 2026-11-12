@@ -9,7 +9,16 @@
 
 import { useNavigation } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type LevelCreateHintModel, type SwimlaneModel } from '../src/board/components/BoardLevel';
@@ -42,6 +51,7 @@ import {
   type Direction,
   type LevelId,
 } from '../src/board/types';
+import { FormAlert } from '../src/components/FormAlert';
 import { MainMenu } from '../src/components/MainMenu';
 import { ReadOnlyBanner } from '../src/components/ReadOnlyBanner';
 import { useNotifications } from '../src/notifications/NotificationContext';
@@ -56,13 +66,10 @@ const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
  * Пояснение при попытке изменить данные в режиме «только чтение».
  *
  * Плашка над доской объясняет режим, но действие всё равно может «попасться
- * под руку» (кнопка переноса, карточка). Текст короткий: он показывается
- * всплывающим уведомлением.
+ * под руку» (кнопка переноса, карточка). Текст короткий: он показывается в
+ * строке-уведомлении над доской.
  */
 const READ_ONLY_ACTION_MESSAGE = 'Режим только для чтения: изменения недоступны.';
-
-/** Заголовок уведомлений об отказе в режиме «только чтение». */
-const READ_ONLY_NOTICE_TITLE = 'Только для чтения';
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -262,6 +269,8 @@ export default function HomeScreen() {
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
   const [editedCardId, setEditedCardId] = useState<number | null>(null);
+  /** Подсказка над доской: отказ режима «только чтение» или запрет переноса. */
+  const [notice, setNotice] = useState<string | null>(null);
   /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
   /** true — открыт попап настроек направлений. */
@@ -270,12 +279,14 @@ export default function HomeScreen() {
   const [mainMenuOpen, setMainMenuOpen] = useState(false);
 
   /**
-   * Разовые сообщения доски (запрет переноса, ошибки догрузки, отказ режима
-   * «только чтение») показываются всплывающими уведомлениями поверх экрана:
-   * баннер в теле доски на телефоне уезжал вместе с прокруткой, а системный
-   * Alert на web не работает вовсе.
+   * Разовые сообщения доски, которые не зависят от ответа сервера (отказ в
+   * режиме «только чтение», запрет переноса по правилам иерархии), показываются
+   * строкой над доской: они объясняют действие пользователя и остаются на
+   * экране, пока он не сделает что-то осмысленное. Всплывающие уведомления
+   * (`src/notifications`) оставлены только для ответов сервера — ошибок
+   * запросов, которые иначе не на что «повесить».
    */
-  const { notifyError, notifyWarning } = useNotifications();
+  const { notifyError } = useNotifications();
 
   // Гамбургер главного меню — в правом углу шапки стека. Настройки шапки
   // задаются экраном (см. app/_layout.tsx), само меню — модалка MainMenu.
@@ -315,7 +326,7 @@ export default function HomeScreen() {
     // В режиме «только чтение» колонку сменить нельзя: сервер ответит 403,
     // поэтому объясняем отказ сразу, не отправляя запрос.
     if (isReadonly) {
-      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
+      setNotice(READ_ONLY_ACTION_MESSAGE);
 
       return;
     }
@@ -327,6 +338,7 @@ export default function HomeScreen() {
     }
 
     if (action.blockReason === null) {
+      setNotice(null);
       // Перевод в следующую колонку — PATCH /tasks/{id}; при 409 сервер объясняет запрет.
       void board.moveCard(card, action.target).then((error) => {
         if (error !== null) {
@@ -337,7 +349,13 @@ export default function HomeScreen() {
       return;
     }
 
-    notifyError(action.blockReason, { title: 'Перенос запрещён' });
+    // Причина посчитана по иерархии карточек, без запроса: её видно и над доской,
+    // и в системном диалоге на native (на web Alert не работает).
+    setNotice(action.blockReason);
+
+    if (Platform.OS !== 'web') {
+      Alert.alert('Перенос запрещён', action.blockReason);
+    }
   };
 
   /**
@@ -359,7 +377,7 @@ export default function HomeScreen() {
   const openLaneForm = (level: BoardLevelModel, parentId: number | null, column: ColumnId) => {
     // Read-only: форма всё равно не сохранится (403), поэтому сразу объясняем запрет.
     if (isReadonly) {
-      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
+      setNotice(READ_ONLY_ACTION_MESSAGE);
 
       return;
     }
@@ -370,7 +388,7 @@ export default function HomeScreen() {
   /** Форма из шапки уровня: родителя выбирают вручную, карточка — в беклог. */
   const openLevelForm = (level: BoardLevelModel) => {
     if (isReadonly) {
-      notifyWarning(READ_ONLY_ACTION_MESSAGE, { title: READ_ONLY_NOTICE_TITLE });
+      setNotice(READ_ONLY_ACTION_MESSAGE);
 
       return;
     }
@@ -402,6 +420,7 @@ export default function HomeScreen() {
 
     if (error === null) {
       setForm(null);
+      setNotice(null);
     }
 
     return error;
@@ -426,6 +445,7 @@ export default function HomeScreen() {
 
     if (error === null) {
       setEditedCardId(null);
+      setNotice(null);
     }
 
     return error;
@@ -437,6 +457,7 @@ export default function HomeScreen() {
 
     if (error === null) {
       setEditedCardId(null);
+      setNotice(null);
     }
 
     return error;
@@ -459,10 +480,12 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-surface">
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-3 py-3">
-        {/* Режим «только чтение» — статус, поэтому он остаётся плашкой над доской.
-            Разовые ошибки действий всплывают тостами (src/notifications): баннер в
-            прокручиваемом теле доски уезжал с экрана. */}
+        {/* Режим «только чтение» — статус, поэтому он остаётся плашкой над доской. */}
         {isReadonly ? <ReadOnlyBanner /> : null}
+
+        {/* Отказ в режиме «только чтение» и запрет переноса не зависят от сервера,
+            поэтому показываются здесь же — строкой над доской, а не тостом. */}
+        {notice ? <FormAlert message={notice} /> : null}
 
         {/* Доска не загрузилась — это состояние экрана, а не разовое сообщение,
             поэтому в теле доски остаётся блок с кнопкой «Повторить» в том же
