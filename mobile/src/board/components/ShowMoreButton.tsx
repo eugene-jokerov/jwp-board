@@ -10,9 +10,11 @@
  * сервера, а не проверка на клиенте. Кнопка остаётся на месте — повторный клик
  * по ней и есть повтор запроса.
  *
- * `pointer-events-auto` обязателен: в широкой раскладке кнопка живёт внутри
- * слоя закрытых колонок, а он прозрачен для кликов (`pointer-events-none`,
- * см. CLOSED_COLUMN_SLOT в BoardLevel.tsx). На native свойство не используется.
+ * Прозрачность для кликов задаётся пропом `pointerEvents`, а не классом
+ * `pointer-events-auto`: на web NativeWind передаёт `className` в
+ * react-native-web как `style`, а тот игнорирует CSS `pointer-events` в
+ * inline-стиле. Без пропа кнопка оставалась видимой, но не нажималась, потому
+ * что слой закрытых колонок на web отключает нажатия потомкам.
  */
 
 import { ActivityIndicator, Pressable, Text } from 'react-native';
@@ -31,7 +33,8 @@ export function ShowMoreButton({ onPress, loading }: ShowMoreButtonProps) {
       accessibilityState={{ disabled: loading, busy: loading }}
       disabled={loading}
       onPress={onPress}
-      className="pointer-events-auto flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-subtle px-3 py-2 active:bg-card"
+      pointerEvents="auto"
+      className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-subtle px-3 py-2 active:bg-card"
     >
       {loading ? <ActivityIndicator size="small" color="#6b7280" /> : null}
 

@@ -9,8 +9,15 @@
  * нативный слой, нет проблемы перекрытия другими модалками и обрезки `ScrollView`;
  * на web react-native-web рендерит её как `position: fixed`, то есть плашка не
  * уезжает при прокрутке страницы. Затемнения у модалки нет (`transparent`), и
- * кликам она не мешает: подложка прозрачна для нажатий (`pointer-events-none`),
- * а плашка включает их обратно (`pointer-events-auto`).
+ * кликам она не мешает: подложка прозрачна для нажатий (`pointerEvents="box-none"`),
+ * а плашка включает их обратно (`pointerEvents="auto"`).
+ *
+ * Почему `pointerEvents` — проп, а не класс `pointer-events-none/auto`: на web
+ * NativeWind 4 передаёт `className` в react-native-web как `style`, а тот
+ * игнорирует CSS-свойство `pointer-events` в inline-стиле (он умеет только проп
+ * `pointerEvents`, который компилируется в CSS-класс с `!important`). Класс
+ * молча не работал: подложка модалки забирала клики у доски, а плашки не
+ * реагировали ни на нажатие, ни на крестик.
  *
  * Позиция зависит от ширины экрана:
  *  - узкий экран (телефон) — полоса сверху во всю ширину: справа места нет;
@@ -28,6 +35,30 @@ import { useNotifications, type AppNotification, type NotificationKind } from '.
 
 /** Ниже этой ширины уведомление растягивается по всей ширине сверху (телефон). */
 const COMPACT_MAX_WIDTH = 640;
+
+/**
+ * На сколько контейнер модалки опускается в стек наложения под тостами.
+ *
+ * На native модалка — отдельное нативное окно, и открытый позже попап всегда
+ * оказывается выше тостов, сколько бы `z-index` мы ни задали: порядок задаёт
+ * нативный слой, а не стиль. Поэтому тост живёт внутри модалки на одну ступень
+ * выше (`TOAST_LAYER` ниже): открывшаяся позже модалка ставит в стек свой
+ * контейнер, тост поднимает свой — и содержимое попапа остаётся под плашкой.
+ */
+const TOAST_LAYER = 1000;
+
+/**
+ * Стиль контейнера модалки, внутри которой может висеть тост.
+ *
+ * Модалки (карточка, направления, меню) передают его в `style` своего `Modal`.
+ * На native иначе тост оказывается под только что открытым попапом: собственный
+ * контейнер модалки перекрывает тот, где живут тосты. На web модалки и так
+ * позиционированы, и порядок решает порядок монтирования — там стиль пустой.
+ *
+ * `zIndex`, а не класс: `Modal` не разбирает `className`, а на web
+ * react-native-web игнорирует CSS-свойства, пришедшие внутри `style`.
+ */
+export const TOAST_MODAL_STYLE = Platform.OS === 'web' ? undefined : { zIndex: TOAST_LAYER };
 
 /** Отступ плашки от краёв экрана на широкой раскладке. */
 const SCREEN_MARGIN = 12;
@@ -115,13 +146,16 @@ function NotificationToast({ notification, onDismiss }: { notification: AppNotif
         opacity: progress,
         transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
       }}
-      className="pointer-events-auto"
+      // Клики снаружи плашки не перехватываем (`box-none`): у обёртки нет
+      // заливки, и она не должна «съедать» нажатия мимо тоста.
+      pointerEvents="box-none"
     >
       {/* Клик по плашке закрывает её: это быстрее, чем целиться в крестик. */}
       <Pressable
         accessibilityRole="alert"
         accessibilityLabel={notification.title ?? notification.message}
         onPress={onDismiss}
+        pointerEvents="auto"
         className={['flex-row items-start gap-2.5 rounded-xl border px-3.5 py-3', style.container].join(' ')}
       >
         <Icon size={18} color={style.iconColor} />
@@ -139,6 +173,7 @@ function NotificationToast({ notification, onDismiss }: { notification: AppNotif
           accessibilityLabel="Закрыть уведомление"
           onPress={onDismiss}
           hitSlop={8}
+          pointerEvents="auto"
           className="-my-1 -mr-1 h-6 w-6 items-center justify-center rounded-lg active:bg-black/5"
         >
           <X size={14} color={style.iconColor} />
@@ -152,7 +187,7 @@ function NotificationToast({ notification, onDismiss }: { notification: AppNotif
  * Хост уведомлений: прозрачная модалка без затемнения (её видимость зависит от
  * длины очереди).
  *
- * Подложка не перехватывает нажатия (`pointer-events-none`) — пользователь
+ * Подложка не перехватывает нажатия (`pointerEvents="box-none"`) — пользователь
  * продолжает работать с доской, пока на экране висит сообщение; кликабельны
  * только сами плашки.
  */
@@ -165,12 +200,26 @@ export function NotificationHost() {
   const top = insets.top + HEADER_RESERVE;
 
   return (
-    <Modal visible={notifications.length > 0} transparent animationType="none" statusBarTranslucent>
-      <View className="pointer-events-none flex-1" style={{ paddingTop: top, paddingHorizontal: SCREEN_MARGIN }}>
-        <View className={compact ? 'gap-2' : 'items-end gap-2'}>
+    <Modal
+      visible={notifications.length > 0}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      // Тост должен лежать поверх открытых попапов: на native их модалки идут
+      // отдельными окнами, поэтому наш контейнер поднимается на ступень выше,
+      // а сами модалки опускают свой (TOAST_MODAL_STYLE).
+      style={TOAST_MODAL_STYLE}
+    >
+      {/*
+        `box-none` пропом, а не классом `pointer-events-none`: без него модалка
+        на web перекрывает доску целиком и забирает все клики (см. шапку файла).
+      */}
+      <View pointerEvents="box-none" className="flex-1" style={{ paddingTop: top, paddingHorizontal: SCREEN_MARGIN }}>
+        <View pointerEvents="box-none" className={compact ? 'gap-2' : 'items-end gap-2'}>
           {notifications.map((notification) => (
             <View
               key={notification.id}
+              pointerEvents="box-none"
               style={compact ? undefined : { width: WIDE_TOAST_WIDTH, maxWidth: '100%' }}
               className={compact ? 'w-full' : undefined}
             >

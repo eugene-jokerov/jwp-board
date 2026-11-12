@@ -13,8 +13,8 @@
  * тостом-предупреждением одинаково на native и на web.
  *
  * Клик по названию карточки открывает форму редактирования. Кликабельность
- * включена явно (`pointer-events-auto`): карточки закрытых колонок лежат в слое
- * с `pointer-events-none`, см. комментарий у корневого `View`.
+ * включена явно (`pointerEvents="auto"`): карточки закрытых колонок лежат в слое
+ * с `box-none`, см. комментарий у корневого `View`.
  * Признак «без проекта» — отсутствие родителя, а не отсутствие цвета:
  * у такой карточки цвет служебный (нейтральный c0).
  *
@@ -243,15 +243,18 @@ export function BoardCard({
   const showPriorityBadge = !closedColumn;
 
   return (
-    // `pointer-events-auto` возвращает клики самой карточке. Карточки закрытых
+    // `pointerEvents="auto"` возвращает клики самой карточке. Карточки закрытых
     // колонок («Готово», «Отмена») лежат в позиционном слое, помеченном
-    // `pointer-events-none` (см. CLOSED_COLUMN_SLOT в BoardLevel.tsx), а это
-    // свойство наследуемое: без явного `auto` плитка была видна, но не ловила
-    // наведение и клик на web. Пустые места слота при этом остаются прозрачными
-    // для кликов. На native свойство не используется — там поведение прежнее.
+    // `box-none` (см. CLOSED_COLUMN_SLOT в BoardLevel.tsx): на web
+    // react-native-web распространяет отключение нажатий на потомков, поэтому
+    // без явного `auto` плитка была видна, но не ловила наведение и клик.
+    // Пустые места слота при этом остаются прозрачными для кликов. Проп, а не
+    // класс `pointer-events-auto`: на web класс попадает в `style`, где CSS
+    // `pointer-events` игнорируется (см. `notifications/NotificationHost`).
     <View
+      pointerEvents="auto"
       className={[
-        'pointer-events-auto flex-row overflow-hidden rounded border',
+        'flex-row overflow-hidden rounded border',
         overdue ? 'border-err-fg/30 bg-card-overdue' : 'border-card-line bg-card',
       ].join(' ')}
     >

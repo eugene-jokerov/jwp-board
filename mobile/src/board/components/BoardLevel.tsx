@@ -208,12 +208,15 @@ const LANE_COLUMN_CELL = 'gap-2 p-2';
  * не знает о колонках, которые остались в рядах свимлайнов, из-за чего списки
  * съезжали влево на первые колонки. Поэтому каждая колонка получает место
  * абсолютно (`left`/`width` из `closedColumnBox`), а список внутри прозрачен
- * для кликов: `pointer-events-none` не должен перекрывать ряды свимлайнов под
- * слоем. Клики возвращает себе только сама плитка карточки — она помечена
- * `pointer-events-auto` в `BoardCard`, а пустые места слота остаются
- * прозрачными.
+ * для кликов: нажатия не должны перекрывать ряды свимлайнов под слоем. Клики
+ * возвращает себе только сама плитка карточки — она помечена `pointerEvents="auto"`
+ * в `BoardCard`, а пустые места слота остаются прозрачными.
+ *
+ * Прозрачность задаётся пропом `pointerEvents`, а не классом `pointer-events-none`:
+ * на web NativeWind передаёт `className` в react-native-web как `style`, где CSS
+ * `pointer-events` игнорируется (см. объяснение в `notifications/NotificationHost`).
  */
-const CLOSED_COLUMN_SLOT = 'pointer-events-none absolute top-0';
+const CLOSED_COLUMN_SLOT = 'absolute top-0';
 
 /**
  * Слой списков закрытых колонок.
@@ -226,10 +229,10 @@ const CLOSED_COLUMN_SLOT = 'pointer-events-none absolute top-0';
  * у шапки колонок (`COLUMN_HEADER_ROW`), поэтому закрытые колонки не перекрывают
  * свёрнутые колонки подложки, которые поднимают себя сами.
  *
- * Клики по-прежнему не перехватываются: слой прозрачен (`pointer-events-none`),
- * а кликабельна только плитка карточки (`pointer-events-auto` в `BoardCard`).
+ * Клики по-прежнему не перехватываются: слой прозрачен (`pointerEvents="box-none"`),
+ * а кликабельна только плитка карточки (`pointerEvents="auto"` в `BoardCard`).
  */
-const CLOSED_COLUMNS_LAYER = 'pointer-events-none absolute inset-0 z-10';
+const CLOSED_COLUMNS_LAYER = 'absolute inset-0 z-10';
 
 /**
  * Места развёрнутых закрытых колонок в слое списков: левый край и ширина.
@@ -295,7 +298,10 @@ const COLUMN_BACKDROP = 'rounded-lg border border-card-line bg-card';
 function CollapsedColumn({ label, onExpand }: { label: string; onExpand: () => void }) {
   return (
     <View
-      className="pointer-events-auto shrink-0 self-stretch overflow-hidden rounded-lg border border-card-line bg-card"
+      // Полоса лежит в слое подложки, прозрачном для кликов (`box-none`):
+      // без `auto` кнопка «развернуть» на web не получала нажатий.
+      pointerEvents="auto"
+      className="shrink-0 self-stretch overflow-hidden rounded-lg border border-card-line bg-card"
       style={{ width: COLLAPSED_COLUMN_WIDTH, minHeight: COLUMN_MIN_HEIGHT }}
     >
       <Pressable
@@ -775,13 +781,15 @@ export function BoardLevel({
               >
                 {/* Слой подложки: развёрнутая колонка — одна плитка на всю высоту,
                     свёрнутая — одна полоса на всю высоту (см. CollapsedColumn).
-                    `pointer-events-none` — слой декоративный и не должен
+                    `pointerEvents="box-none"` — слой декоративный и не должен
                     перехватывать клики по карточкам; свёрнутая полоса возвращает
-                    себе клики через `pointer-events-auto`.
+                    себе клики через `pointerEvents="auto"`.
+                    Проп, а не класс `pointer-events-none`: на web класс попадает
+                    в `style`, где react-native-web игнорирует `pointer-events`.
                     Свёрнутая колонка живёт здесь, а не в рядах свимлайнов: она
                     одна на всю доску, с названием по центру высоты, а в ряду
                     остаётся только распорка её ширины. */}
-                <View className="pointer-events-none absolute inset-x-0 bottom-0 top-0 flex-row gap-2">
+                <View pointerEvents="box-none" className="absolute inset-x-0 bottom-0 top-0 flex-row gap-2">
                   <View className={laneTitleWidth} />
 
                   {COLUMNS.map((column) =>
@@ -809,7 +817,7 @@ export function BoardLevel({
                     оставшихся в рядах свимлайнов, и списки съезжали влево,
                     накрывая первые колонки. Ширина слота фиксирована, поэтому
                     карточки не могут вытолкнуть его отступы наружу. */}
-                <View className={CLOSED_COLUMNS_LAYER}>
+                <View pointerEvents="box-none" className={CLOSED_COLUMNS_LAYER}>
                   {COLUMN_IDS.map((columnId) => {
                     const box = closedColumnBoxes[columnId];
 
@@ -828,6 +836,9 @@ export function BoardLevel({
                     return (
                       <View
                         key={columnId}
+                        // Слот прозрачен для кликов мимо карточек: ряды свимлайнов
+                        // лежат под слоем и должны получать нажатия сами.
+                        pointerEvents="box-none"
                         className={CLOSED_COLUMN_SLOT}
                         style={{ left: box.left, width: box.width, overflow: 'hidden' }}
                       >

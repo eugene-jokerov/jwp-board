@@ -20,6 +20,8 @@
 import { useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
+import { TOAST_MODAL_STYLE } from '../notifications/NotificationHost';
+
 /**
  * Действие меню.
  *
@@ -93,7 +95,9 @@ export function MainMenu({ visible, email, items, onClose }: MainMenuProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+    // `style` — чтобы тосты не оказались под меню (см. TOAST_MODAL_STYLE
+    // в notifications/NotificationHost).
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close} style={TOAST_MODAL_STYLE}>
       {/* Затемнение — отдельный слой, а не обёртка вокруг меню: на web Pressable
           рендерится в <button>, и вложенные кнопки недопустимы. */}
       <View className="flex-1 items-center justify-center px-4">

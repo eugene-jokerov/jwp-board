@@ -27,6 +27,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { CircleCheck, Pencil, Trash2 } from 'lucide-react-native';
 
 import { TextField } from '../../components/TextField';
+import { TOAST_MODAL_STYLE } from '../../notifications/NotificationHost';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DIRECTION_COLORS, directionColorHex, firstFreeDirectionColor } from '../directionColors';
 import type { Direction } from '../types';
@@ -453,7 +454,9 @@ export function DirectionsModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeAll}>
+    // `style` — чтобы тосты не оказались под попапом (см. TOAST_MODAL_STYLE
+    // в notifications/NotificationHost).
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeAll} style={TOAST_MODAL_STYLE}>
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <View className="w-full max-w-lg gap-4 rounded-2xl bg-card p-5">
           <View className="gap-1">

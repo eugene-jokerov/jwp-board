@@ -23,6 +23,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, Vie
 
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
+import { TOAST_MODAL_STYLE } from '../../notifications/NotificationHost';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { UNPARENTED_CARD_COLOR, directionColorHex } from '../directionColors';
@@ -302,7 +303,9 @@ export function CardFormModal({ draft, onCreate, onClose }: CardFormModalProps) 
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={close}>
+    // `style` — чтобы тосты не оказались под попапом (см. TOAST_MODAL_STYLE
+    // в notifications/NotificationHost).
+    <Modal visible transparent animationType="fade" onRequestClose={close} style={TOAST_MODAL_STYLE}>
       {/* Форма длинная и на низком экране не помещается целиком, поэтому карточка
           ограничена высотой экрана: шапка и кнопки закреплены, прокручивается
           только тело. KeyboardAvoidingView поднимает форму над клавиатурой на iOS.

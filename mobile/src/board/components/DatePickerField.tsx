@@ -11,10 +11,11 @@
  * записывает результат в поле.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { CalendarIcon } from './BoardIcons';
+import { TOAST_MODAL_STYLE } from '../../notifications/NotificationHost';
 import { dateToDeadlineDate, deadlineDateToDate, formatDeadlineDate, todayDeadlineDate } from '../deadline';
 
 interface DatePickerFieldProps {
@@ -24,6 +25,13 @@ interface DatePickerFieldProps {
   onChange: (value: string | null) => void;
   error?: string | null;
   placeholder?: string;
+  /**
+   * Календарь открылся или закрылся.
+   *
+   * Нужен форме, внутри которой живёт поле: календарь — вложенная модалка, и
+   * пока он на экране, форма помечается неактивной (см. `CardEditModal`).
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Подписи месяцев в именительном падеже — их использует шапка календаря. */
@@ -161,10 +169,24 @@ export function DeadlineCalendar({ selected, onSelect }: CalendarProps) {
   );
 }
 
-export function DatePickerField({ label, value, onChange, error, placeholder }: DatePickerFieldProps) {
+export function DatePickerField({ label, value, onChange, error, placeholder, onOpenChange }: DatePickerFieldProps) {
   /** Черновик выбора: null — в календаре ничего не выбрано (как и в поле). */
   const [draft, setDraft] = useState<string | null>(value);
   const [open, setOpen] = useState(false);
+
+  // Форма должна знать, что поверх неё открылся календарь: пока он на экране,
+  // она помечается неактивной (см. `CardEditModal`). Сообщаем и после
+  // закрытия, в том числе когда поле размонтировали вместе с открытым
+  // календарём — иначе форма осталась бы скрытой от фокуса.
+  useEffect(() => {
+    onOpenChange?.(open);
+
+    return () => {
+      if (open) {
+        onOpenChange?.(false);
+      }
+    };
+  }, [open, onOpenChange]);
 
   const openPicker = () => {
     setDraft(value);
@@ -198,7 +220,15 @@ export function DatePickerField({ label, value, onChange, error, placeholder }: 
 
       {error ? <Text className="text-xs text-err-fg">{error}</Text> : null}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      {/* `style` — чтобы тосты не оказались под календарём (см.
+          TOAST_MODAL_STYLE в notifications/NotificationHost). */}
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+        style={TOAST_MODAL_STYLE}
+      >
         {/* Календарь высокий (6 недель + кнопки): на низком экране календарь
             прокручивается, а кнопки «Очистить/Отмена/Готово» остаются видны. */}
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

@@ -43,6 +43,7 @@ import { fetchTask } from '../../api/client';
 import { getToken } from '../../auth/session';
 import { SegmentedSwitch } from '../../components/SegmentedSwitch';
 import { TextField } from '../../components/TextField';
+import { TOAST_MODAL_STYLE } from '../../notifications/NotificationHost';
 import { useFormErrorToast } from '../../notifications/useFormErrorToast';
 import { DatePickerField } from './DatePickerField';
 import { directionColorHex } from '../directionColors';
@@ -223,6 +224,13 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   /** Счётчик повторов: изменение значения перезапускает эффект загрузки. */
   const [loadAttempt, setLoadAttempt] = useState(0);
   /**
+   * Открыт ли календарь дедлайна.
+   *
+   * Календарь — вложенная модалка: пока он на экране, форма помечается
+   * неактивной (`aria-hidden`), чтобы фокус таба не уходил в перекрытые поля.
+   */
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  /**
    * Загрузить карточку целиком ради описания.
    *
    * Вызывается эффектом при монтировании и кнопкой «Повторить». Состояние
@@ -339,7 +347,9 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
   const ideaSelectable = card.column === 'backlog';
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    // `style` — чтобы тосты не оказались под попапом (см. TOAST_MODAL_STYLE
+    // в notifications/NotificationHost).
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} style={TOAST_MODAL_STYLE}>
       {/* Форма длинная (описание, дедлайн, статусы, удаление) и на низком экране
           не помещается целиком, поэтому карточка ограничена высотой экрана:
           шапка и кнопки закреплены, прокручивается только тело.
@@ -350,7 +360,13 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
           чуть шире рамки, пропадала бы по краям. Поэтому же у прокручиваемого
           тела есть горизонтальные отступы: обводке нужно место внутри клипа. */}
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
+        {/*
+          Пока открыт календарь, форма помечена неактивной: на native это
+          отдельное окно поверх неё, а на web react-native-web рисует модалку
+          внутри текущего слоя. Без `aria-hidden` фокус таба уезжал бы в поля
+          под календарём — как в диалоге, который перекрыт другим диалогом.
+        */}
+        <View aria-hidden={datePickerOpen} className="flex-1 items-center justify-center bg-black/40 px-4 py-4">
           <View
             className="max-h-[85vh] w-full max-w-md rounded-2xl bg-card p-4"
             style={{ borderRadius: 16, overflow: 'visible' }}
@@ -456,6 +472,7 @@ function CardEditForm({ card, lockedReason, onSave, onDelete, onClose }: CardEdi
                       clearSaveError();
                     }}
                     placeholder="Без срока"
+                    onOpenChange={setDatePickerOpen}
                   />
 
                   {/* Приоритет правится у карточки в любой колонке: он не
