@@ -14,6 +14,11 @@
  *
  * Перекраску карточек направления выполняет экран — здесь правятся только
  * сами направления.
+ *
+ * Режим «только чтение» попап не различает: ограничение держит сервер, и его
+ * отказ (403 с текстом в `errors.account`) приходит тостом, как любой другой
+ * отказ сохранения или удаления. Доступные действия клиент не гасит заранее:
+ * попап выглядит одинаково у всех пользователей.
  */
 
 import { useState } from 'react';
@@ -44,12 +49,6 @@ interface DirectionsModalProps {
   onUpdate: (id: number, title: string, color: string) => Promise<string | null>;
   /** Удалить направление: правило проверено экраном до вызова. */
   onDelete: (id: number) => Promise<string | null>;
-  /**
-   * Режим «только чтение»: список направлений виден, но создать, переименовать
-   * или удалить направление нельзя. Сервер в этом режиме отвечает 403, поэтому
-   * действия не показываются вовсе, а не гасятся.
-   */
-  readOnly?: boolean;
   /** Причина, по которой направление удалить нельзя; null — можно. */
   deleteReason: (direction: Direction) => string | null;
   onClose: () => void;
@@ -110,8 +109,6 @@ interface DirectionRowProps {
   usedColors: readonly string[];
   /** Причина запрета удаления; null — можно удалять. */
   deleteReason: string | null;
-  /** true — строка только для просмотра (режим «только чтение»). */
-  readOnly?: boolean;
   onSave: (title: string, color: string) => Promise<string | null>;
   onDelete: () => Promise<string | null>;
 }
@@ -120,7 +117,7 @@ interface DirectionRowProps {
  * Строка направления с тремя режимами: просмотр, редактирование и
  * подтверждение удаления. Режим живёт в самой строке.
  */
-function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, onSave, onDelete }: DirectionRowProps) {
+function DirectionRow({ direction, usedColors, deleteReason, onSave, onDelete }: DirectionRowProps) {
   const [mode, setMode] = useState<'view' | 'edit' | 'confirmDelete'>('view');
   const [title, setTitle] = useState(direction.title);
   const [color, setColor] = useState(direction.color);
@@ -250,36 +247,33 @@ function DirectionRow({ direction, usedColors, deleteReason, readOnly = false, o
           {direction.title}
         </Text>
 
-        {/* В режиме «только чтение» действия не показываются: сервер отклонит
-            запись, и кнопка обещала бы невозможное. */}
-        {readOnly ? null : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Изменить направление «${direction.title}»`}
-              onPress={startEdit}
-              hitSlop={6}
-              className="h-7 w-7 items-center justify-center rounded-lg active:bg-surface"
-            >
-              <Pencil size={14} color={ROW_ICON_COLOR} />
-            </Pressable>
+        {/* Действия строки всегда видны: ограничение прав держит сервер, и его
+            отказ приходит тостом — так же, как отказ удаления непустого
+            направления. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Изменить направление «${direction.title}»`}
+          onPress={startEdit}
+          hitSlop={6}
+          className="h-7 w-7 items-center justify-center rounded-lg active:bg-surface"
+        >
+          <Pencil size={14} color={ROW_ICON_COLOR} />
+        </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Удалить направление «${direction.title}»`}
-              accessibilityState={{ disabled: deleteReason !== null }}
-              disabled={deleteReason !== null}
-              onPress={() => setMode('confirmDelete')}
-              hitSlop={6}
-              className={[
-                'h-7 w-7 items-center justify-center rounded-lg active:bg-err-bg',
-                deleteReason === null ? '' : 'opacity-40',
-              ].join(' ')}
-            >
-              <Trash2 size={14} color={ROW_ICON_COLOR} />
-            </Pressable>
-          </>
-        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Удалить направление «${direction.title}»`}
+          accessibilityState={{ disabled: deleteReason !== null }}
+          disabled={deleteReason !== null}
+          onPress={() => setMode('confirmDelete')}
+          hitSlop={6}
+          className={[
+            'h-7 w-7 items-center justify-center rounded-lg active:bg-err-bg',
+            deleteReason === null ? '' : 'opacity-40',
+          ].join(' ')}
+        >
+          <Trash2 size={14} color={ROW_ICON_COLOR} />
+        </Pressable>
       </View>
 
       {/* Причина запрета удаления считается по карточкам направления, без запроса
@@ -429,7 +423,6 @@ export function DirectionsModal({
   visible,
   directions,
   limit,
-  readOnly = false,
   onAdd,
   onUpdate,
   onDelete,
@@ -475,17 +468,16 @@ export function DirectionsModal({
             </View>
 
             <Text className="text-xs text-muted">
-              Направление — родитель инициатив стратегического уровня.{' '}
-              {readOnly ? 'Режим только для чтения: изменения недоступны.' : 'Удалить можно только пустое направление.'}
+              Направление — родитель инициатив стратегического уровня. Удалить можно только пустое направление.
             </Text>
           </View>
 
           {/* Создание — над списком: кнопка раскрывается формой на своём же месте,
               а сам список остаётся ниже и не прыгает по высоте. При достигнутом
               лимите кнопка погашена: сервер ответил бы 422, поэтому сразу
-              объясняем причину, а не ждём ошибки. В режиме «только чтение»
-              кнопки нет вовсе: сервер отклонил бы создание (403). */}
-          {readOnly ? null : creating ? (
+              объясняем причину, а не ждём ошибки. Ограничение прав кнопка не
+              учитывает: отказ сервера (403) придёт тостом из формы. */}
+          {creating ? (
             <DirectionCreator
               usedColors={directions.map((item) => item.color)}
               onCreate={onAdd}
@@ -518,9 +510,7 @@ export function DirectionsModal({
 
           <ScrollView className="max-h-[60vh]" contentContainerClassName="gap-1.5">
             {directions.length === 0 && !creating ? (
-              <Text className="text-sm text-muted">
-                {readOnly ? 'Направлений пока нет.' : 'Направлений пока нет — добавьте первое.'}
-              </Text>
+              <Text className="text-sm text-muted">Направлений пока нет — добавьте первое.</Text>
             ) : null}
 
             {directions.length > 0
@@ -530,7 +520,6 @@ export function DirectionsModal({
                     direction={direction}
                     usedColors={directions.filter((item) => item.id !== direction.id).map((item) => item.color)}
                     deleteReason={deleteReason(direction)}
-                    readOnly={readOnly}
                     onSave={(title, color) => onUpdate(direction.id, title, color)}
                     onDelete={() => onDelete(direction.id)}
                   />

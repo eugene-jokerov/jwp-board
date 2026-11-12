@@ -5,6 +5,12 @@
  * карточки, направления и переходы между колонками сервер отдаёт готовыми.
  * Уровни сворачиваются в строку, колонки фиксированные. На телефоне колонки
  * внутри свимлайна раскладываются вертикально как аккордеон.
+ *
+ * Режим «только чтение» экран не моделирует: доска выглядит и ведёт себя как
+ * обычная, любые действия отправляются на сервер, а запрет на запись приходит
+ * его ответом (403 с текстом в `errors.account`) — тостом или внутри формы.
+ * Единственное отличие — плашка `ReadOnlyBanner` над доской, которая сообщает
+ * о режиме.
  */
 
 import { useNavigation } from 'expo-router';
@@ -61,15 +67,6 @@ const COMPACT_MAX_WIDTH = 900;
 
 /** Колонка, в которую попадает карточка, созданная из шапки уровня: всегда «Беклог». */
 const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
-
-/**
- * Пояснение при попытке изменить данные в режиме «только чтение».
- *
- * Плашка над доской объясняет режим, но действие всё равно может «попасться
- * под руку» (кнопка переноса, карточка). Текст короткий: он показывается в
- * строке-уведомлении над доской.
- */
-const READ_ONLY_ACTION_MESSAGE = 'Режим только для чтения: изменения недоступны.';
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -269,7 +266,7 @@ export default function HomeScreen() {
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
   const [editedCardId, setEditedCardId] = useState<number | null>(null);
-  /** Подсказка над доской: отказ режима «только чтение» или запрет переноса. */
+  /** Подсказка над доской: запрет переноса по правилам иерархии карточек. */
   const [notice, setNotice] = useState<string | null>(null);
   /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
@@ -279,12 +276,11 @@ export default function HomeScreen() {
   const [mainMenuOpen, setMainMenuOpen] = useState(false);
 
   /**
-   * Разовые сообщения доски, которые не зависят от ответа сервера (отказ в
-   * режиме «только чтение», запрет переноса по правилам иерархии), показываются
-   * строкой над доской: они объясняют действие пользователя и остаются на
-   * экране, пока он не сделает что-то осмысленное. Всплывающие уведомления
-   * (`src/notifications`) оставлены только для ответов сервера — ошибок
-   * запросов, которые иначе не на что «повесить».
+   * Разовые сообщения доски, которые не зависят от ответа сервера (запрет
+   * переноса по правилам иерархии), показываются строкой над доской: они
+   * объясняют действие пользователя и остаются на экране, пока он не сделает
+   * что-то осмысленное. Всплывающие уведомления (`src/notifications`) оставлены
+   * для ответов сервера — например, для отказа записи в режиме «только чтение».
    */
   const { notifyError } = useNotifications();
 
@@ -323,14 +319,6 @@ export default function HomeScreen() {
 
   /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
   const handleCardAction = (card: Card) => {
-    // В режиме «только чтение» колонку сменить нельзя: сервер ответит 403,
-    // поэтому объясняем отказ сразу, не отправляя запрос.
-    if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
-
-      return;
-    }
-
     const action = cardAction(card);
 
     if (action === null) {
@@ -375,24 +363,11 @@ export default function HomeScreen() {
 
   /** Форма из свимлайна: родитель предопределён. */
   const openLaneForm = (level: BoardLevelModel, parentId: number | null, column: ColumnId) => {
-    // Read-only: форма всё равно не сохранится (403), поэтому сразу объясняем запрет.
-    if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
-
-      return;
-    }
-
     setForm({ level: level.id, kind: LEVEL_CARD_KIND[level.id], parentId, column });
   };
 
   /** Форма из шапки уровня: родителя выбирают вручную, карточка — в беклог. */
   const openLevelForm = (level: BoardLevelModel) => {
-    if (isReadonly) {
-      setNotice(READ_ONLY_ACTION_MESSAGE);
-
-      return;
-    }
-
     setForm({
       level: level.id,
       kind: LEVEL_CARD_KIND[level.id],
@@ -480,11 +455,12 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-surface">
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-3 py-3">
-        {/* Режим «только чтение» — статус, поэтому он остаётся плашкой над доской. */}
+        {/* Режим «только чтение» — информационная плашка, единственный элемент,
+            отличающий доску от обычной. */}
         {isReadonly ? <ReadOnlyBanner /> : null}
 
-        {/* Отказ в режиме «только чтение» и запрет переноса не зависят от сервера,
-            поэтому показываются здесь же — строкой над доской, а не тостом. */}
+        {/* Запрет переноса по иерархии считается на клиенте, без ответа сервера,
+            поэтому показывается здесь же — строкой над доской, а не тостом. */}
         {notice ? <FormAlert message={notice} /> : null}
 
         {/* Доска не загрузилась — это состояние экрана, а не разовое сообщение,
@@ -534,9 +510,10 @@ export default function HomeScreen() {
           const levelCards = cards.filter((card) => card.kind === LEVEL_CARD_KIND[level.id]);
           // Кнопку блокирует только стратегический уровень: инициативе родитель
           // (направление) обязателен, а проекту и задаче родитель не нужен —
-          // они создаются и «без инициативы» / «без проекта». В режиме «только
-          // чтение» создание недоступно на всех уровнях: сервер отклонит запрос.
-          const canCreate = !isReadonly && (level.id !== 'strategic' || directions.length > 0);
+          // они создаются и «без инициативы» / «без проекта». Ограничение прав
+          // кнопка не учитывает: доска одинакова для всех, а отказ записи
+          // приходит от сервера внутри формы.
+          const canCreate = level.id !== 'strategic' || directions.length > 0;
 
           return (
             <BoardLevel
@@ -563,18 +540,7 @@ export default function HomeScreen() {
               onCreateInLevel={() => openLevelForm(level)}
               createLabel={LEVEL_CREATE_LABEL[level.id]}
               canCreate={canCreate}
-              createHint={
-                canCreate
-                  ? null
-                  : isReadonly
-                    ? {
-                        before: 'Режим только для чтения: ',
-                        link: null,
-                        after: 'создание недоступно',
-                        onPressLink: () => undefined,
-                      }
-                    : createHintOf(level.id, () => setDirectionsOpen(true))
-              }
+              createHint={canCreate ? null : createHintOf(level.id, () => setDirectionsOpen(true))}
               onOpenSettings={() => setSettingsLevel(level.id)}
             />
           );
@@ -590,7 +556,6 @@ export default function HomeScreen() {
       <MainMenu
         visible={mainMenuOpen}
         email={session?.user?.email ?? '—'}
-        readOnly={isReadonly}
         items={[
           { label: 'Выйти', confirm: true, confirmQuestion: 'Выйти из аккаунта?', onPress: () => void handleSignOut() },
         ]}
@@ -622,7 +587,6 @@ export default function HomeScreen() {
         visible={directionsOpen}
         directions={directions}
         limit={board.directionLimit}
-        readOnly={isReadonly}
         onAdd={board.addDirection}
         onUpdate={board.editDirection}
         onDelete={board.removeDirection}
@@ -635,7 +599,6 @@ export default function HomeScreen() {
       <CardEditModal
         card={editedCard}
         lockedReason={editedCardLockedReason}
-        readOnly={isReadonly}
         onSave={saveCard}
         onDelete={removeCard}
         onClose={() => setEditedCardId(null)}

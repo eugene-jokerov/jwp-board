@@ -11,15 +11,18 @@
  *  - при монтировании читаем `GET /user/settings` и раскладываем значения по ключам;
  *  - переключатель обновляет состояние сразу (оптимистично) и ставит ключ в очередь;
  *  - очередь уходит одним `PUT` с дебаунсом: серия кликов не превращается в серию запросов;
- *  - ошибка сохранения не ломает интерфейс: состояние остаётся переключённым,
- *    а следующее изменение снова попробует сохранить настройку.
+ *  - отказ сервера (в режиме «только чтение» — 403) показывается тостом, а локальное
+ *    состояние остаётся переключённым: раскладка живёт до конца сессии, а
+ *    пользователь знает, что она не сохранилась.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchUserSettings, updateUserSettings } from '../api/client';
 import type { UserSettingsInput } from '../api/types';
-import { getSession, getToken } from '../auth/session';
+import { getToken } from '../auth/session';
+import { useNotifications } from '../notifications/NotificationContext';
+import { errorMessage } from './store';
 import type { ColumnId, LevelId } from './types';
 
 /** Ключ настройки «свёрнутые уровни»: `{ strategic: true }`. */
@@ -114,6 +117,8 @@ export function useBoardSettings(): BoardSettingsState {
   const [collapsedLevels, setCollapsedLevels] = useState<CollapsedLevels>({});
   const [collapsedColumns, setCollapsedColumns] = useState<CollapsedColumnsByLevel>({});
   const [isLoading, setIsLoading] = useState(true);
+  /** Отказ сервера на сохранение настроек показывается тостом: это ответ сервера. */
+  const { notifyError } = useNotifications();
 
   /**
    * Очередь изменённых настроек: ключ → значение.
@@ -138,24 +143,20 @@ export function useBoardSettings(): BoardSettingsState {
       return;
     }
 
-    // Режим «только чтение» закрывает и запись настроек (403): очередь просто
-    // отбрасываем, а свернутые уровни остаются локальными до конца сессии.
-    // `user` может быть неполным (старая сохранённая сессия) — тогда считаем
-    // пользователя обычным: сервер всё равно отклонит запись.
-    if (getSession()?.user?.readonly === true) {
-      return;
-    }
-
     try {
       await updateUserSettings(getToken(), payload);
     } catch (error) {
-      // Тихий отказ: настройка интерфейса — не то, ради чего стоит показывать
-      // ошибку над доской. Сценарии карточек работают независимо от неё.
-      if (__DEV__) {
-        console.warn('Не удалось сохранить настройки доски', error);
-      }
+      // Отказ сервера (в режиме «только чтение» — 403) показываем тостом: иначе
+      // пользователь думает, что раскладка сохранилась, а после перезагрузки
+      // видит прежнюю. Ключ один, поэтому серия переключений не плодит плашки.
+      // Локальное состояние при этом остаётся прежним: доска не «разворачивается»
+      // на глазах у пользователя.
+      notifyError(errorMessage(error, 'Раскладка доски не сохранилась.'), {
+        title: 'Не удалось сохранить раскладку',
+        key: 'board-settings',
+      });
     }
-  }, []);
+  }, [notifyError]);
 
   /** Поставить сохранение с дебаунсом: серия кликов уйдёт одним запросом. */
   const scheduleSave = useCallback(() => {
