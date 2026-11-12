@@ -11,20 +11,17 @@
  * его ответом (403 с текстом в `errors.account`) — тостом или внутри формы.
  * Единственное отличие — плашка `ReadOnlyBanner` над доской, которая сообщает
  * о режиме.
+ *
+ * Сообщения о переносах карточек показываются тостами (`src/notifications`):
+ * так их видно и в прокрученной доске, и одинаково на native и на web. Причина
+ * недоступной кнопки («Взять в работу», «Завершить задачу») считается на
+ * клиенте по `allowed_transitions`, поэтому выводится предупреждением, а ответы
+ * сервера — ошибкой (`useUnavailableReasonToast` и `notifyError`).
  */
 
 import { useNavigation } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { useAuth } from '../src/auth/AuthContext';
 import { BoardLevel, type LevelCreateHintModel, type SwimlaneModel } from '../src/board/components/BoardLevel';
@@ -57,16 +54,24 @@ import {
   type Direction,
   type LevelId,
 } from '../src/board/types';
-import { FormAlert } from '../src/components/FormAlert';
 import { MainMenu } from '../src/components/MainMenu';
 import { ReadOnlyBanner } from '../src/components/ReadOnlyBanner';
 import { useNotifications } from '../src/notifications/NotificationContext';
+import { useUnavailableReasonToast } from '../src/notifications/useUnavailableReasonToast';
 
 /** Ниже этой ширины доска переключается в одноколоночный режим (телефон). */
 const COMPACT_MAX_WIDTH = 900;
 
 /** Колонка, в которую попадает карточка, созданная из шапки уровня: всегда «Беклог». */
 const LEVEL_CREATE_COLUMN: ColumnId = COLUMNS[0].id;
+
+/**
+ * Ключ тоста с причиной запрета переноса.
+ *
+ * Постоянный: повторный клик по той же заблокированной кнопке обновляет уже
+ * показанную плашку с новым сроком жизни, а не плодит копии.
+ */
+const BOARD_MOVE_BLOCK_KEY = 'board-move-block';
 
 const LEVEL_CREATE_LABEL: Record<LevelId, string> = {
   strategic: '+ Инициатива',
@@ -266,7 +271,7 @@ export default function HomeScreen() {
   const [form, setForm] = useState<FormContext | null>(null);
   /** Карточка, открытая на редактирование; null — попап закрыт. */
   const [editedCardId, setEditedCardId] = useState<number | null>(null);
-  /** Подсказка над доской: запрет переноса по правилам иерархии карточек. */
+  /** Причина запрета переноса по правилам иерархии карточек; null — запрета нет. */
   const [notice, setNotice] = useState<string | null>(null);
   /** Уровень, у которого открыто меню «Настройки уровня»; null — меню закрыто. */
   const [settingsLevel, setSettingsLevel] = useState<LevelId | null>(null);
@@ -276,13 +281,17 @@ export default function HomeScreen() {
   const [mainMenuOpen, setMainMenuOpen] = useState(false);
 
   /**
-   * Разовые сообщения доски, которые не зависят от ответа сервера (запрет
-   * переноса по правилам иерархии), показываются строкой над доской: они
-   * объясняют действие пользователя и остаются на экране, пока он не сделает
-   * что-то осмысленное. Всплывающие уведомления (`src/notifications`) оставлены
-   * для ответов сервера — например, для отказа записи в режиме «только чтение».
+   * Сообщения доски, которые не зависят от ответа сервера, показываются
+   * тостами: ошибка переноса, отказ записи от сервера, причина недоступной
+   * кнопки на карточке. Строка в теле доски для них не годится — прокрученная
+   * доска уводила её за верхнюю границу экрана.
    */
-  const { notifyError } = useNotifications();
+  const { notifyError, notifyWarning } = useNotifications();
+
+  // Запрет переноса по иерархии считается на клиенте, без запроса к серверу:
+  // висит тостом-предупреждением (`warning`), а не ошибкой — это отклонённое
+  // действие пользователя, сервер здесь ни при чём.
+  useUnavailableReasonToast(notice, BOARD_MOVE_BLOCK_KEY, 'Перенос запрещён');
 
   // Гамбургер главного меню — в правом углу шапки стека. Настройки шапки
   // задаются экраном (см. app/_layout.tsx), само меню — модалка MainMenu.
@@ -317,34 +326,45 @@ export default function HomeScreen() {
    */
   const breadcrumbsOf = useCallback((card: Card) => cardBreadcrumbs(card, cards), [cards]);
 
-  /** Действие над колонками: выполняем, если правило разрешает, иначе показываем причину. */
-  const handleCardAction = (card: Card) => {
-    const action = cardAction(card);
+  /**
+   * Действие над колонками: выполняем, если правило разрешает, иначе показываем
+   * причину тостом.
+   *
+   * Функция мемоизирована: она передаётся во все плитки доски, а новая ссылка на
+   * каждом рендере ломала бы их перерисовку без причины.
+   */
+  const handleCardAction = useCallback(
+    (card: Card) => {
+      const action = cardAction(card);
 
-    if (action === null) {
-      return;
-    }
+      if (action === null) {
+        return;
+      }
 
-    if (action.blockReason === null) {
-      setNotice(null);
-      // Перевод в следующую колонку — PATCH /tasks/{id}; при 409 сервер объясняет запрет.
-      void board.moveCard(card, action.target).then((error) => {
-        if (error !== null) {
-          notifyError(error, { title: 'Не удалось перенести карточку' });
-        }
-      });
+      if (action.blockReason === null) {
+        // Прежний запрет снят — причина больше не актуальна.
+        setNotice(null);
+        // Перевод в следующую колонку — PATCH /tasks/{id}; при 409 сервер объясняет запрет.
+        void board.moveCard(card, action.target).then((error) => {
+          if (error !== null) {
+            notifyError(error, { title: 'Не удалось перенести карточку' });
+          }
+        });
 
-      return;
-    }
+        return;
+      }
 
-    // Причина посчитана по иерархии карточек, без запроса: её видно и над доской,
-    // и в системном диалоге на native (на web Alert не работает).
-    setNotice(action.blockReason);
+      // Причина посчитана по иерархии карточек, без запроса: сервер разрешил
+      // только текущую колонку. Показываем её тостом — в прокрученной доске
+      // строка над уровнем оставалась за границей экрана.
+      setNotice(action.blockReason);
 
-    if (Platform.OS !== 'web') {
-      Alert.alert('Перенос запрещён', action.blockReason);
-    }
-  };
+      // Повторный клик по той же кнопке: `notice` не меняется, поэтому эффект
+      // хелпера сам не сработает, а тост к этому времени мог уже закрыться.
+      notifyWarning(action.blockReason, { title: 'Перенос запрещён', key: BOARD_MOVE_BLOCK_KEY });
+    },
+    [board, notifyError, notifyWarning],
+  );
 
   /**
    * «Показать ещё» в закрытой колонке: следующая страница пары «уровень + колонка».
@@ -458,10 +478,6 @@ export default function HomeScreen() {
         {/* Режим «только чтение» — информационная плашка, единственный элемент,
             отличающий доску от обычной. */}
         {isReadonly ? <ReadOnlyBanner /> : null}
-
-        {/* Запрет переноса по иерархии считается на клиенте, без ответа сервера,
-            поэтому показывается здесь же — строкой над доской, а не тостом. */}
-        {notice ? <FormAlert message={notice} /> : null}
 
         {/* Доска не загрузилась — это состояние экрана, а не разовое сообщение,
             поэтому в теле доски остаётся блок с кнопкой «Повторить» в том же

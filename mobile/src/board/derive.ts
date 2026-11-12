@@ -260,8 +260,8 @@ function actionLabel(target: ColumnId): string {
  *
  * В «Готово» и «Отмене» действий нет. Если следующий шаг запрещён
  * (`allowedTransitions` содержит только текущую колонку), иконка остаётся
- * и нажатие объясняет причину: на web Alert не работает, поэтому решение
- * «где показать текст» принимает экран.
+ * и нажатие объясняет причину: экран показывает её тостом-предупреждением
+ * (`useUnavailableReasonToast`), потому что запрос на сервер не уходит.
  */
 export function cardAction(card: Card): CardAction | null {
   const index = columnIndex(card.column);
