@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Api;
 
-use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -36,7 +38,7 @@ final class TasksTest extends TestCase
 
     public function test_strategic_card_requires_direction(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -50,8 +52,8 @@ final class TasksTest extends TestCase
 
     public function test_strategic_card_is_created_with_direction(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id, 'color' => 'c5']);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id, 'color' => 'c5']);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -71,9 +73,9 @@ final class TasksTest extends TestCase
 
     public function test_tactical_card_inherits_direction_from_initiative(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -90,7 +92,7 @@ final class TasksTest extends TestCase
 
     public function test_tactical_card_without_initiative_has_no_direction(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -105,8 +107,8 @@ final class TasksTest extends TestCase
 
     public function test_direction_cannot_be_passed_for_tactical_card(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -121,10 +123,10 @@ final class TasksTest extends TestCase
 
     public function test_operational_card_inherits_chain_from_project(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -141,7 +143,7 @@ final class TasksTest extends TestCase
 
     public function test_operational_card_without_project(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -157,8 +159,8 @@ final class TasksTest extends TestCase
 
     public function test_user_can_change_title_and_description(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id, 'title' => 'Старое']);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'title' => 'Старое']);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => 'Новое', 'description' => 'Детали'])
@@ -172,10 +174,10 @@ final class TasksTest extends TestCase
      */
     public function test_show_returns_full_card_with_description(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id, 'color' => 'c7']);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create([
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id, 'color' => 'c7']);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create([
             'user_id' => $user->id,
             'title' => 'Проект',
             'description' => 'Детали проекта',
@@ -218,8 +220,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_does_not_return_description(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->create([
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->create([
             'user_id' => $user->id,
             'title' => 'Задача',
             'description' => 'Длинное описание',
@@ -236,7 +238,7 @@ final class TasksTest extends TestCase
 
     public function test_description_is_limited_to_2000_characters(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -251,7 +253,7 @@ final class TasksTest extends TestCase
 
     public function test_deadline_is_stored_and_returned_as_date(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -269,7 +271,7 @@ final class TasksTest extends TestCase
 
     public function test_deadline_is_optional(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -283,8 +285,8 @@ final class TasksTest extends TestCase
 
     public function test_deadline_can_be_changed_and_cleared(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['deadline' => '2027-01-15'])
@@ -301,8 +303,8 @@ final class TasksTest extends TestCase
 
     public function test_patch_without_deadline_keeps_it(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
             'user_id' => $user->id,
         ]);
 
@@ -314,7 +316,7 @@ final class TasksTest extends TestCase
 
     public function test_invalid_deadline_is_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -332,7 +334,7 @@ final class TasksTest extends TestCase
      */
     public function test_nonexistent_deadline_date_is_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -350,8 +352,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_returns_deadline(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->withDeadline(Carbon::parse('2027-03-05 00:00:00'))->create([
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->withDeadline(Carbon::parse('2027-03-05 00:00:00'))->create([
             'user_id' => $user->id,
             'title' => 'Задача со сроком',
         ]);
@@ -365,7 +367,7 @@ final class TasksTest extends TestCase
 
     public function test_slug_is_stored_and_returned(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -383,7 +385,7 @@ final class TasksTest extends TestCase
 
     public function test_slug_is_optional(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -400,7 +402,7 @@ final class TasksTest extends TestCase
      */
     public function test_slug_is_limited_to_16_characters(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -429,7 +431,7 @@ final class TasksTest extends TestCase
      */
     public function test_slug_length_counts_characters_not_bytes(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -458,7 +460,7 @@ final class TasksTest extends TestCase
      */
     public function test_slug_duplicates_are_allowed(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         foreach (['Первая', 'Вторая'] as $title) {
             $this->actingAsUser($user)
@@ -477,8 +479,8 @@ final class TasksTest extends TestCase
 
     public function test_slug_can_be_changed_and_cleared(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['slug' => 'NEW'])
@@ -496,8 +498,8 @@ final class TasksTest extends TestCase
 
     public function test_patch_without_slug_keeps_it(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id, 'slug' => 'KEEP']);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'slug' => 'KEEP']);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['title' => 'Новое название'])
@@ -511,8 +513,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_returns_slug(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->create(['user_id' => $user->id, 'slug' => 'BOARD']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->create(['user_id' => $user->id, 'slug' => 'BOARD']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)
@@ -527,7 +529,7 @@ final class TasksTest extends TestCase
      */
     public function test_idea_flag_is_stored_on_create(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -558,7 +560,7 @@ final class TasksTest extends TestCase
      */
     public function test_idea_flag_is_ignored_outside_backlog_on_create(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         foreach (['in_progress', 'complete', 'canceled'] as $column) {
             $this->actingAsUser($user)
@@ -575,7 +577,7 @@ final class TasksTest extends TestCase
 
     public function test_idea_flag_must_be_boolean(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -590,8 +592,8 @@ final class TasksTest extends TestCase
 
     public function test_idea_flag_can_be_changed(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['idea' => true])
@@ -612,8 +614,8 @@ final class TasksTest extends TestCase
      */
     public function test_idea_flag_survives_column_change(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->idea()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->idea()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'in_progress'])
@@ -633,8 +635,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_returns_idea_flag(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)
@@ -649,10 +651,10 @@ final class TasksTest extends TestCase
      */
     public function test_backlog_lists_ready_cards_before_ideas(): void
     {
-        $user = User::factory()->create();
-        $ready = Task::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
-        $idea = Task::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
-        $readyLater = Task::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $user = EloquentUserModel::factory()->create();
+        $ready = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $idea = EloquentTaskModel::factory()->idea()->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $readyLater = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'column' => 'backlog']);
 
         $expected = [(int) $ready->id, (int) $readyLater->id, (int) $idea->id];
 
@@ -673,10 +675,10 @@ final class TasksTest extends TestCase
 
     public function test_delete_is_forbidden_when_card_has_children(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->deleteJson(self::ENDPOINT.'/'.$initiative->id)
@@ -687,8 +689,8 @@ final class TasksTest extends TestCase
 
     public function test_card_without_children_can_be_deleted(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->deleteJson(self::ENDPOINT.'/'.$task->id)
@@ -699,8 +701,8 @@ final class TasksTest extends TestCase
 
     public function test_foreign_card_is_not_found(): void
     {
-        $user = User::factory()->create();
-        $foreign = Task::factory()->create(['user_id' => User::factory()->create()->id]);
+        $user = EloquentUserModel::factory()->create();
+        $foreign = EloquentTaskModel::factory()->create(['user_id' => EloquentUserModel::factory()->create()->id]);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'/'.$foreign->id)
@@ -713,11 +715,11 @@ final class TasksTest extends TestCase
 
     public function test_index_filters_by_type_and_parent(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
-        Task::factory()->task($project)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->task($project)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?type=project')
@@ -738,7 +740,7 @@ final class TasksTest extends TestCase
      */
     public function test_index_rejects_unknown_filter_values(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?type=iniciatives')
@@ -758,10 +760,10 @@ final class TasksTest extends TestCase
 
     public function test_index_without_filters_returns_all_open_cards(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)
@@ -777,11 +779,11 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_caps_closed_columns_per_level(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'complete']);
-        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
-        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'backlog']);
-        Task::factory()->count(4)->create(['user_id' => $user->id, 'column' => 'in_progress']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        EloquentTaskModel::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'backlog']);
+        EloquentTaskModel::factory()->count(4)->create(['user_id' => $user->id, 'column' => 'in_progress']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)
@@ -807,23 +809,23 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_limits_each_level_and_column_pair(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        $project = Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
+        $project = EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
 
-        Task::factory()->count(2)->initiative($direction)->inColumn(CardColumn::Complete)->create([
+        EloquentTaskModel::factory()->count(2)->initiative($direction)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(2)->project($initiative)->inColumn(CardColumn::Complete)->create([
+        EloquentTaskModel::factory()->count(2)->project($initiative)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
         // Задачи того же проекта: третий уровень в той же колонке.
-        Task::factory()->count(3)->task($project)->inColumn(CardColumn::Complete)->create([
+        EloquentTaskModel::factory()->count(3)->task($project)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
 
@@ -858,21 +860,21 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_keeps_ten_cards_per_level_and_column_pair(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        $project = Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
+        $project = EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
 
         // Карточки создаём поштучно: у итераторной фабрики count(N) может
         // отдать N-1 запись, и тест лимита проверял бы не то, что задумано.
         for ($i = 0; $i < 11; $i++) {
-            Task::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
-            Task::factory()->project($initiative)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
-            Task::factory()->task($project)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+            EloquentTaskModel::factory()->initiative($direction)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+            EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
+            EloquentTaskModel::factory()->task($project)->inColumn(CardColumn::Complete)->create(['user_id' => $user->id]);
         }
 
         /** @var list<array{column: string, type: string}> $data */
@@ -909,23 +911,23 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_caps_closed_columns_by_level_type(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
-        Task::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Complete)->create([
+        EloquentTaskModel::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Canceled)->create([
+        EloquentTaskModel::factory()->count(25)->initiative($direction)->inColumn(CardColumn::Canceled)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(3)->initiative($direction)->inColumn(CardColumn::Backlog)->create([
+        EloquentTaskModel::factory()->count(3)->initiative($direction)->inColumn(CardColumn::Backlog)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(4)->initiative($direction)->inColumn(CardColumn::InProgress)->create([
+        EloquentTaskModel::factory()->count(4)->initiative($direction)->inColumn(CardColumn::InProgress)->create([
             'user_id' => $user->id,
         ]);
         // Чужой уровень: его карточки не должны ни попасть в ответ, ни исказить счётчики.
-        Task::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?type=initiative')
@@ -960,8 +962,8 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_returns_newest_closed_cards(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         /** @var list<array{id: int, column: string}> $data */
         $data = $this->actingAsUser($user)
@@ -991,13 +993,13 @@ final class TasksTest extends TestCase
      */
     public function test_closed_column_page_is_scoped_by_level(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        Task::factory()->count(14)->project($initiative)->inColumn(CardColumn::Complete)->create([
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->count(14)->project($initiative)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(13)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(13)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?type=project&column=complete&limit=10&offset=0&order=desc')
@@ -1017,8 +1019,8 @@ final class TasksTest extends TestCase
      */
     public function test_next_page_of_closed_column_continues_after_initial_load(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(25)->create(['user_id' => $user->id, 'column' => 'canceled']);
 
         /** @var list<array{id: int}> $first */
         $first = $this->actingAsUser($user)
@@ -1046,13 +1048,13 @@ final class TasksTest extends TestCase
      */
     public function test_initial_load_applies_to_parent_filter(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        Task::factory()->count(15)->project($initiative)->inColumn(CardColumn::Complete)->create([
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->count(15)->project($initiative)->inColumn(CardColumn::Complete)->create([
             'user_id' => $user->id,
         ]);
-        Task::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(12)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?initiative_id='.$initiative->id)
@@ -1073,8 +1075,8 @@ final class TasksTest extends TestCase
      */
     public function test_explicit_column_without_limit_returns_whole_column(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=complete')
@@ -1089,8 +1091,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_page_returns_newest_cards_with_total(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=0&order=desc')
@@ -1110,8 +1112,8 @@ final class TasksTest extends TestCase
 
     public function test_index_last_page_has_no_more_cards(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=10&order=desc')
@@ -1128,9 +1130,9 @@ final class TasksTest extends TestCase
      */
     public function test_page_also_returns_column_totals(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
-        Task::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(15)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=complete&limit=10&offset=0&order=desc')
@@ -1157,9 +1159,9 @@ final class TasksTest extends TestCase
      */
     public function test_index_page_does_not_mix_columns(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'complete']);
-        Task::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'complete']);
+        EloquentTaskModel::factory()->count(2)->create(['user_id' => $user->id, 'column' => 'canceled']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=canceled&limit=10&offset=0&order=desc')
@@ -1174,8 +1176,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_page_keeps_ascending_order_by_default(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'canceled']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->count(3)->create(['user_id' => $user->id, 'column' => 'canceled']);
 
         $response = $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=canceled&limit=2')
@@ -1197,7 +1199,7 @@ final class TasksTest extends TestCase
      */
     public function test_index_rejects_invalid_page_parameters(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?column=complete&limit=0')
@@ -1227,7 +1229,7 @@ final class TasksTest extends TestCase
      */
     public function test_index_rejects_page_without_column(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT.'?limit=10')
@@ -1246,11 +1248,11 @@ final class TasksTest extends TestCase
      */
     public function test_card_with_children_cannot_be_unlinked_from_initiative(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
-        Task::factory()->task($project)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->task($project)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$project->id, ['initiative_id' => null])
@@ -1266,12 +1268,12 @@ final class TasksTest extends TestCase
 
     public function test_card_with_children_cannot_be_unlinked_from_project(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
-        $task = Task::factory()->task($project)->create(['user_id' => $user->id]);
-        Task::factory()->task($task)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $task = EloquentTaskModel::factory()->task($project)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->task($task)->create(['user_id' => $user->id]);
 
         // Задача стала родителем: у неё есть своя задача, хотя по типу она
         // операционная. Дети ищутся по ссылке project_id, поэтому запрет
@@ -1286,10 +1288,10 @@ final class TasksTest extends TestCase
 
     public function test_card_without_children_can_be_unlinked_from_initiative(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
 
         // Проект остаётся без инициативы и, значит, без направления:
         // клиент передаёт явный null в direction_id вместе с отвязкой.
@@ -1310,7 +1312,7 @@ final class TasksTest extends TestCase
      */
     public function test_validation_errors_are_addressed_to_fields(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -1331,8 +1333,8 @@ final class TasksTest extends TestCase
      */
     public function test_update_validation_errors_are_addressed_to_fields(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, [
@@ -1350,8 +1352,8 @@ final class TasksTest extends TestCase
      */
     public function test_hierarchy_error_has_its_own_key(): void
     {
-        $user = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -1371,8 +1373,8 @@ final class TasksTest extends TestCase
      */
     public function test_blank_title_is_rejected_on_create_and_update(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, ['type' => 'task', 'column' => 'backlog', 'title' => '   '])
@@ -1390,7 +1392,7 @@ final class TasksTest extends TestCase
      */
     public function test_priority_is_stored_on_create(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -1425,7 +1427,7 @@ final class TasksTest extends TestCase
      */
     public function test_priority_is_kept_outside_backlog_on_create(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -1440,8 +1442,8 @@ final class TasksTest extends TestCase
 
     public function test_priority_must_be_known_value(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->postJson(self::ENDPOINT, [
@@ -1461,8 +1463,8 @@ final class TasksTest extends TestCase
 
     public function test_priority_can_be_changed(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['priority' => 'high'])
@@ -1485,8 +1487,8 @@ final class TasksTest extends TestCase
      */
     public function test_priority_survives_column_change(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->priority(CardPriority::High)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->priority(CardPriority::High)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'in_progress'])
@@ -1506,8 +1508,8 @@ final class TasksTest extends TestCase
      */
     public function test_index_returns_priority(): void
     {
-        $user = User::factory()->create();
-        Task::factory()->priority(CardPriority::Low)->create(['user_id' => $user->id, 'column' => 'backlog']);
+        $user = EloquentUserModel::factory()->create();
+        EloquentTaskModel::factory()->priority(CardPriority::Low)->create(['user_id' => $user->id, 'column' => 'backlog']);
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)

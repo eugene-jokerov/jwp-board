@@ -10,7 +10,7 @@ use App\Filament\Resources\Directions\RelationManagers\TasksRelationManager;
 use App\Filament\Resources\Directions\Schemas\DirectionForm;
 use App\Filament\Resources\Directions\Schemas\DirectionInfolist;
 use App\Filament\Resources\Directions\Tables\DirectionsTable;
-use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -27,7 +27,7 @@ use UnitEnum;
  */
 class DirectionResource extends Resource
 {
-    protected static ?string $model = Direction::class;
+    protected static ?string $model = EloquentDirectionModel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFlag;
 

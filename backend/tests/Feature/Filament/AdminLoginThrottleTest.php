@@ -3,7 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Auth\Login;
-use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Features\SupportTesting\Testable;
@@ -48,8 +48,8 @@ final class AdminLoginThrottleTest extends TestCase
 
     public function test_failed_attempts_are_counted_per_email(): void
     {
-        $user = User::factory()->admin()->create(['password' => self::PASSWORD]);
-        $other = User::factory()->admin()->create(['password' => self::PASSWORD]);
+        $user = EloquentUserModel::factory()->admin()->create(['password' => self::PASSWORD]);
+        $other = EloquentUserModel::factory()->admin()->create(['password' => self::PASSWORD]);
 
         $this->assertFailedLogin($user->email, 'wrong-password');
         $this->assertFailedLogin($user->email, 'wrong-password');
@@ -61,7 +61,7 @@ final class AdminLoginThrottleTest extends TestCase
 
     public function test_locked_email_is_rejected_even_with_valid_password(): void
     {
-        $user = User::factory()->admin()->create(['password' => self::PASSWORD]);
+        $user = EloquentUserModel::factory()->admin()->create(['password' => self::PASSWORD]);
 
         foreach (range(1, self::MAX_ATTEMPTS) as $attempt) {
             $this->assertFailedLogin($user->email, 'wrong-password');
@@ -84,7 +84,7 @@ final class AdminLoginThrottleTest extends TestCase
 
     public function test_lockout_expires_after_the_window(): void
     {
-        $user = User::factory()->admin()->create(['password' => self::PASSWORD]);
+        $user = EloquentUserModel::factory()->admin()->create(['password' => self::PASSWORD]);
 
         foreach (range(1, self::MAX_ATTEMPTS) as $attempt) {
             $this->assertFailedLogin($user->email, 'wrong-password');
@@ -100,7 +100,7 @@ final class AdminLoginThrottleTest extends TestCase
 
     public function test_successful_login_resets_failed_attempts(): void
     {
-        $user = User::factory()->admin()->create(['password' => self::PASSWORD]);
+        $user = EloquentUserModel::factory()->admin()->create(['password' => self::PASSWORD]);
 
         $this->assertFailedLogin($user->email, 'wrong-password');
         $this->assertFailedLogin($user->email, 'wrong-password');

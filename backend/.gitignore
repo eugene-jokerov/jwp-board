@@ -32,4 +32,10 @@
 _ide_helper.php
 # локальные переопределения анализаторов/окружения
 /phpstan.neon
+# Кэш и отчёты анализаторов: вывод анализа, не исходник.
+/.deptrac.cache
+/deptrac-report.xml
+/report.json
+/phpunit.cache
+/storage/framework/cache/deptrac.cache
 /.env.mysql-test

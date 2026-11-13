@@ -33,7 +33,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * бейджем в плитке. Значение короткое и нужно для отрисовки списка, поэтому
  * есть и в кратком представлении.
  *
- * @property-read TaskResult $resource
+ * Поля читаются из Application\Results\TaskResult — прикладного значения
+ * карточки: адаптер ресурса не тянет доменную модель и её атрибуты.
+ *
+ * @mixin TaskResult
  */
 final class TaskSummaryResource extends JsonResource
 {
@@ -43,24 +46,24 @@ final class TaskSummaryResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->resource->id,
-            'type' => $this->resource->type->value,
-            'column' => $this->resource->column->value,
-            'priority' => $this->resource->priority->value,
-            'idea' => $this->resource->idea,
-            'title' => $this->resource->title,
-            'slug' => $this->resource->slug,
-            'deadline' => $this->resource->deadline,
-            'direction_id' => $this->resource->directionId,
-            'initiative_id' => $this->resource->initiativeId,
-            'project_id' => $this->resource->projectId,
-            'color' => $this->resource->directionColor?->key(),
+            'id' => $this->id,
+            'type' => $this->type->value,
+            'column' => $this->column->value,
+            'priority' => $this->priority->value,
+            'idea' => $this->idea,
+            'title' => $this->title,
+            'slug' => $this->slug,
+            'deadline' => $this->deadline,
+            'direction_id' => $this->directionId,
+            'initiative_id' => $this->initiativeId,
+            'project_id' => $this->projectId,
+            'color' => $this->directionColor?->key(),
             'allowed_transitions' => array_map(
                 static fn (CardColumn $column): string => $column->value,
-                $this->resource->allowedTransitions,
+                $this->allowedTransitions,
             ),
-            'created_at' => $this->resource->createdAt,
-            'updated_at' => $this->resource->updatedAt,
+            'created_at' => $this->createdAt,
+            'updated_at' => $this->updatedAt,
         ];
     }
 }

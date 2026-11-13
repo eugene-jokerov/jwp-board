@@ -2,13 +2,13 @@
 
 namespace App\Modules\Task\Infrastructure\Persistence;
 
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\Contracts\TaskRepository;
 use App\Modules\Task\Domain\Exceptions\TaskNotFound;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Eloquent-реализация порта TaskRepository.
@@ -21,7 +21,7 @@ final class EloquentTaskRepository implements TaskRepository
 {
     public function findForUser(int $userId, int $id): Task
     {
-        $task = Task::query()
+        $task = EloquentTaskModel::query()
             ->where('user_id', $userId)
             ->whereKey($id)
             ->first();
@@ -169,7 +169,7 @@ final class EloquentTaskRepository implements TaskRepository
 
     public function findParent(int $userId, int $id, CardType $type): ?Task
     {
-        return Task::query()
+        return EloquentTaskModel::query()
             ->where('user_id', $userId)
             ->where('type', $type->value)
             ->whereKey($id)
@@ -178,7 +178,7 @@ final class EloquentTaskRepository implements TaskRepository
 
     public function create(int $userId, array $attributes): Task
     {
-        return Task::query()->create([
+        return EloquentTaskModel::query()->create([
             'user_id' => $userId,
             'direction_id' => $attributes['direction_id'],
             'initiative_id' => $attributes['initiative_id'],
@@ -224,7 +224,7 @@ final class EloquentTaskRepository implements TaskRepository
 
         // Тип в условии обязателен: у задач проекта денормализован initiative_id,
         // и без него в «проекты инициативы» попали бы и задачи.
-        $projectIds = Task::query()
+        $projectIds = EloquentTaskModel::query()
             ->where('user_id', $userId)
             ->where('type', CardType::Project->value)
             ->where('initiative_id', $rootId)
@@ -233,14 +233,14 @@ final class EloquentTaskRepository implements TaskRepository
             ->all();
 
         // Задачи поддерева: дети проектов и (если корень сам проект) его дети.
-        $childIds = Task::query()
+        $childIds = EloquentTaskModel::query()
             ->where('user_id', $userId)
             ->whereIn('project_id', [...$projectIds, $rootId])
             ->pluck('id')
             ->map(static fn (mixed $id): int => (int) $id)
             ->all();
 
-        Task::query()
+        EloquentTaskModel::query()
             ->where('user_id', $userId)
             ->whereIn('id', [$rootId, ...$projectIds, ...$childIds])
             ->delete();
@@ -248,9 +248,11 @@ final class EloquentTaskRepository implements TaskRepository
 
     public function directionExists(int $userId, int $directionId): bool
     {
-        return Direction::query()
+        // Направление лежит в таблице своего модуля: адаптер проверяет его
+        // наличие по таблице, не загружая модель чужого хранилища.
+        return DB::table('directions')
             ->where('user_id', $userId)
-            ->whereKey($directionId)
+            ->where('id', $directionId)
             ->exists();
     }
 
@@ -269,7 +271,7 @@ final class EloquentTaskRepository implements TaskRepository
      * элементы `ORDER BY` одинаково понимают оба движка (проверено на SQLite
      * и MySQL 8.4).
      *
-     * @param  Builder<Task>  $query
+     * @param  Builder<EloquentTaskModel>  $query
      */
     private function orderByBacklogStage(Builder $query): void
     {
@@ -327,7 +329,7 @@ final class EloquentTaskRepository implements TaskRepository
         // порядке колонок и уровней, внутри — свежие сверху. Сортировку задаём
         // на объединении: ветки по отдельности уже упорядочены, но UNION ALL
         // порядок не гарантирует.
-        return Task::query()
+        return EloquentTaskModel::query()
             ->fromSub($union, 'tasks')
             ->orderBy('column')
             ->orderBy('type')
@@ -369,11 +371,11 @@ final class EloquentTaskRepository implements TaskRepository
      * между «что отдаём» и «сколько всего есть».
      *
      * @param  array<string, mixed>  $filters
-     * @return Builder<Task>
+     * @return Builder<EloquentTaskModel>
      */
     private function filteredQuery(int $userId, array $filters): Builder
     {
-        $query = Task::query()->where('user_id', $userId);
+        $query = EloquentTaskModel::query()->where('user_id', $userId);
 
         $type = $filters['type'] ?? null;
 
@@ -402,14 +404,14 @@ final class EloquentTaskRepository implements TaskRepository
     /**
      * Дети карточки: у инициативы проекты, у проекта задачи, у задачи никого.
      *
-     * @return Builder<Task>
+     * @return Builder<EloquentTaskModel>
      */
     private function childrenQuery(Task $task): Builder
     {
         return match ($task->type) {
-            CardType::Initiative => Task::query()->where('initiative_id', $task->id),
-            CardType::Project => Task::query()->where('project_id', $task->id),
-            CardType::Task => Task::query()->whereRaw('1 = 0'),
+            CardType::Initiative => EloquentTaskModel::query()->where('initiative_id', $task->id),
+            CardType::Project => EloquentTaskModel::query()->where('project_id', $task->id),
+            CardType::Task => EloquentTaskModel::query()->whereRaw('1 = 0'),
         };
     }
 
@@ -422,7 +424,7 @@ final class EloquentTaskRepository implements TaskRepository
      */
     private function countByParent(string $parentField, array $parentIds, array &$counts): void
     {
-        $rows = Task::query()
+        $rows = EloquentTaskModel::query()
             ->selectRaw($parentField.' as parent_id, count(*) as aggregate')
             ->whereIn($parentField, $parentIds)
             ->where('column', CardColumn::InProgress->value)

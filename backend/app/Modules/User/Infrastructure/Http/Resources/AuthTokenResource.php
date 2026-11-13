@@ -2,6 +2,7 @@
 
 namespace App\Modules\User\Infrastructure\Http\Resources;
 
+use App\Http\Resources\UserResource;
 use App\Modules\User\Domain\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -38,7 +39,7 @@ final class AuthTokenResource extends JsonResource
         return [
             'token' => $this->plainTextToken,
             'token_type' => self::TOKEN_TYPE,
-            'user' => new UserResource($this->resource),
+            'user' => (new UserResource($this->resource))->resolve($request),
         ];
     }
 }

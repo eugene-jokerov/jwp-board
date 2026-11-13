@@ -14,8 +14,11 @@ use App\Filament\Resources\Tasks\Pages\ListTasks;
 use App\Filament\Resources\Tasks\Pages\ViewTask;
 use App\Filament\Resources\Tasks\TaskResource;
 use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -33,7 +36,7 @@ final class AdminResourcesTest extends TestCase
 
     private function actingAsAdmin(): User
     {
-        $admin = User::factory()->admin()->create();
+        $admin = EloquentUserModel::factory()->admin()->create();
 
         $this->actingAs($admin, 'web');
 
@@ -47,10 +50,10 @@ final class AdminResourcesTest extends TestCase
      */
     private function taskWithParents(User $owner): array
     {
-        $direction = Direction::factory()->create(['user_id' => $owner->id]);
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $owner->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $owner->id]);
-        $task = Task::factory()->task($project)->create(['user_id' => $owner->id]);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $owner->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $owner->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $owner->id]);
+        $task = EloquentTaskModel::factory()->task($project)->create(['user_id' => $owner->id]);
 
         return [
             'initiative' => $initiative,
@@ -63,7 +66,7 @@ final class AdminResourcesTest extends TestCase
     public function test_directions_list_renders(): void
     {
         $admin = $this->actingAsAdmin();
-        Direction::factory()->create(['user_id' => $admin->id, 'title' => 'Здоровье']);
+        EloquentDirectionModel::factory()->create(['user_id' => $admin->id, 'title' => 'Здоровье']);
 
         Livewire::test(ListDirections::class)
             ->assertSuccessful()
@@ -80,7 +83,7 @@ final class AdminResourcesTest extends TestCase
     public function test_direction_edit_page_renders(): void
     {
         $admin = $this->actingAsAdmin();
-        $direction = Direction::factory()->create(['user_id' => $admin->id, 'title' => 'Работа']);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $admin->id, 'title' => 'Работа']);
 
         Livewire::test(EditDirection::class, ['record' => $direction->id])
             ->assertSuccessful()
@@ -90,7 +93,7 @@ final class AdminResourcesTest extends TestCase
     public function test_tasks_list_renders(): void
     {
         $admin = $this->actingAsAdmin();
-        Task::factory()->create(['user_id' => $admin->id, 'title' => 'Проверить доску']);
+        EloquentTaskModel::factory()->create(['user_id' => $admin->id, 'title' => 'Проверить доску']);
 
         Livewire::test(ListTasks::class)
             ->assertSuccessful()
@@ -167,7 +170,7 @@ final class AdminResourcesTest extends TestCase
     public function test_task_edit_page_renders(): void
     {
         $admin = $this->actingAsAdmin();
-        $task = Task::factory()->create(['user_id' => $admin->id, 'title' => 'Задача в админке']);
+        $task = EloquentTaskModel::factory()->create(['user_id' => $admin->id, 'title' => 'Задача в админке']);
 
         Livewire::test(EditTask::class, ['record' => $task->id])
             ->assertSuccessful()

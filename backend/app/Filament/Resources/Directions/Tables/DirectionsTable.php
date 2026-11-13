@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\Directions\Tables;
 
 use App\Filament\Resources\Directions\Support\DirectionColorOptions;
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\Exceptions\DirectionHasCards;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -71,7 +71,7 @@ class DirectionsTable
                 ]),
             ])
             ->checkIfRecordIsSelectableUsing(
-                fn (Direction $record): bool => ! $record->tasks()->exists(),
+                fn (EloquentDirectionModel $record): bool => ! $record->tasks()->exists(),
             );
     }
 

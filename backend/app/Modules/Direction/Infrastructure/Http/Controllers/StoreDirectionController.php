@@ -7,7 +7,6 @@ use App\Modules\Direction\Application\Commands\CreateDirection\CreateDirectionCo
 use App\Modules\Direction\Application\Results\DirectionResult;
 use App\Modules\Direction\Infrastructure\Http\Requests\StoreDirectionRequest;
 use App\Modules\Direction\Infrastructure\Http\Resources\DirectionResource;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -26,12 +25,10 @@ final class StoreDirectionController extends Controller
      */
     public function __invoke(StoreDirectionRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
 
         /** @var DirectionResult $result */
         $result = $this->bus->dispatch(
-            CreateDirectionCommand::fromArray((int) $user->getKey(), $request->toCommandPayload()),
+            CreateDirectionCommand::fromArray((int) $request->user()->getKey(), $request->toCommandPayload()),
         );
 
         return (new DirectionResource($result))

@@ -7,7 +7,6 @@ use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
 use App\Modules\Task\Application\Results\TaskResult;
 use App\Modules\Task\Infrastructure\Http\Requests\StoreTaskRequest;
 use App\Modules\Task\Infrastructure\Http\Resources\TaskResource;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -26,12 +25,9 @@ final class StoreTaskController extends Controller
      */
     public function __invoke(StoreTaskRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-
         /** @var TaskResult $result */
         $result = $this->bus->dispatch(
-            CreateTaskCommand::fromArray((int) $user->getKey(), $request->toCommandPayload()),
+            CreateTaskCommand::fromArray((int) $request->user()->getKey(), $request->toCommandPayload()),
         );
 
         return (new TaskResource($result))

@@ -3,8 +3,8 @@
 namespace App\Filament\Resources\Directions\Schemas;
 
 use App\Filament\Resources\Directions\Support\DirectionColorOptions;
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Schema;
 
@@ -29,7 +29,7 @@ class DirectionInfolist
                     ->formatStateUsing(fn (DirectionColor $state): ?string => DirectionColorOptions::label($state)),
                 TextEntry::make('tasks_count')
                     ->label('Карточек')
-                    ->state(fn (Direction $record): int => $record->tasks()->count()),
+                    ->state(fn (EloquentDirectionModel $record): int => $record->tasks()->count()),
                 TextEntry::make('created_at')
                     ->label('Создано')
                     ->dateTime('d.m.Y H:i'),

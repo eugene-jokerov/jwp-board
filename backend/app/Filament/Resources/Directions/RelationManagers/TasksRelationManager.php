@@ -3,10 +3,11 @@
 namespace App\Filament\Resources\Directions\RelationManagers;
 
 use App\Filament\Resources\Tasks\TaskResource;
-use App\Modules\Task\Domain\Task;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use BackedEnum;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -15,6 +16,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Карточки направления на странице направления.
@@ -40,6 +42,18 @@ class TasksRelationManager extends RelationManager
         return is_a($pageClass, ViewRecord::class, true);
     }
 
+    /**
+     * Связь строится кодом панели: модели соседних модулей друг друга
+     * не видят, а панель — входной адаптер, где они встречаются.
+     */
+    public function getRelationship(): HasMany
+    {
+        /** @var EloquentDirectionModel $ownerRecord */
+        $ownerRecord = $this->getOwnerRecord();
+
+        return $ownerRecord->tasks();
+    }
+
     public function isReadOnly(): bool
     {
         return true;
@@ -55,7 +69,7 @@ class TasksRelationManager extends RelationManager
                     ->sortable()
                     // Кликабельный id ведёт на просмотр карточки: из направления
                     // модератор попадает в карточку, не переключаясь в общий список.
-                    ->url(fn (Task $record): string => TaskResource::getUrl('view', ['record' => $record])),
+                    ->url(fn (EloquentTaskModel $record): string => TaskResource::getUrl('view', ['record' => $record])),
                 TextColumn::make('title')
                     ->label('Карточка')
                     ->searchable()

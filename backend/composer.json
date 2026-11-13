@@ -18,6 +18,7 @@
         "laravel/tinker": "^3.0"
     },
     "require-dev": {
+        "deptrac/deptrac": "^4.7",
         "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.13",
         "laravel/pint": "^1.27",
@@ -53,7 +54,8 @@
         "check": [
             "@test",
             "@php ./vendor/bin/pint --test",
-            "@php ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress"
+            "@php ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress",
+            "@php ./vendor/bin/deptrac analyse --no-progress"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

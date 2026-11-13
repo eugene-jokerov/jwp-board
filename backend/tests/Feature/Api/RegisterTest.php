@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -65,7 +66,7 @@ final class RegisterTest extends TestCase
 
     public function test_registration_with_existing_email_returns_validation_error(): void
     {
-        User::factory()->create(['email' => 'taken@jwp-board.local']);
+        EloquentUserModel::factory()->create(['email' => 'taken@jwp-board.local']);
 
         $this->postJson(self::ENDPOINT, [
             'email' => 'TAKEN@jwp-board.local',

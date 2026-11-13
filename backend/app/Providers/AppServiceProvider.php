@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Filament\Support\DirectionCards;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -32,5 +34,10 @@ class AppServiceProvider extends ServiceProvider
         // (или из-за одного адреса за прокси) регистрация отвечала бы 429.
         // Лимит щедрее: регистрация — редкое действие, и она не подбирает пароль.
         RateLimiter::for('auth-register', fn (Request $request): Limit => Limit::perMinute(5)->by((string) $request->ip()));
+
+        // «Карточки направления» в админке: карточки — модуль Task, направление —
+        // модуль Direction, и адаптеры модулей друг друга не видят. Связь строит
+        // входной слой панели, поэтому регистрируется здесь, рядом с ним.
+        Model::resolveRelationUsing('tasks', DirectionCards::relation(...));
     }
 }

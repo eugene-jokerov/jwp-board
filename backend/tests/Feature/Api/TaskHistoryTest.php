@@ -4,8 +4,9 @@ namespace Tests\Feature\Api;
 
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\History\Infrastructure\Persistence\HistoryRecord;
-use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -28,7 +29,7 @@ final class TaskHistoryTest extends TestCase
 
     public function test_creating_card_writes_insert_entry(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson('/api/v1/tasks', ['type' => 'task', 'column' => 'backlog', 'title' => 'Задача'])
@@ -46,8 +47,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_update_writes_one_entry_per_changed_field(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id, 'title' => 'Старое']);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'title' => 'Старое']);
 
         $this->actingAsUser($user)
             ->patchJson('/api/v1/tasks/'.$task->id, ['title' => 'Новое', 'column' => 'complete'])
@@ -74,8 +75,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_description_change_is_logged_without_values(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson('/api/v1/tasks/'.$task->id, ['description' => 'Очень длинный текст'])
@@ -92,8 +93,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_unchanged_fields_are_not_logged(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id, 'title' => 'То же']);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id, 'title' => 'То же']);
 
         $this->actingAsUser($user)
             ->patchJson('/api/v1/tasks/'.$task->id, ['title' => 'То же'])
@@ -104,8 +105,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_unchanged_deadline_is_not_logged(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
             'user_id' => $user->id,
             'title' => 'Старое название',
         ]);
@@ -130,8 +131,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_changed_deadline_is_logged(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->withDeadline(Carbon::parse('2027-02-01 00:00:00'))->create([
             'user_id' => $user->id,
         ]);
 
@@ -150,8 +151,8 @@ final class TaskHistoryTest extends TestCase
 
     public function test_deleting_card_writes_delete_entry(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->deleteJson('/api/v1/tasks/'.$task->id)
@@ -166,7 +167,7 @@ final class TaskHistoryTest extends TestCase
 
     public function test_direction_changes_are_logged(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $response = $this->actingAsUser($user)
             ->postJson('/api/v1/directions', ['title' => 'Здоровье', 'color' => 'c1'])

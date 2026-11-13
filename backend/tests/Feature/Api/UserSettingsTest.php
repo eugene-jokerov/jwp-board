@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\UserMeta;
 use App\Modules\User\Infrastructure\Http\Requests\UpdateUserSettingsRequest;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,7 +41,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_index_returns_empty_list_for_new_user(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->getJson(self::ENDPOINT)
@@ -50,7 +51,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_creates_setting_and_returns_decoded_value(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, [
@@ -70,7 +71,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_replaces_existing_setting_without_duplicates(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         UserMeta::query()->create([
             'user_id' => $user->id,
@@ -95,7 +96,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_stores_several_settings_in_one_request(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, [
@@ -118,8 +119,8 @@ final class UserSettingsTest extends TestCase
 
     public function test_index_returns_only_own_settings(): void
     {
-        $user = User::factory()->create();
-        $other = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
+        $other = EloquentUserModel::factory()->create();
 
         UserMeta::query()->create([
             'user_id' => $user->id,
@@ -144,7 +145,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_rejects_invalid_key(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, [
@@ -156,7 +157,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_rejects_invalid_json_value(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, [
@@ -168,7 +169,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_rejects_value_longer_than_column_in_bytes(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         // Кириллица в UTF-8 — два байта на символ: значение вдвое короче предела
         // в символах уже не влезает в колонку meta_value (TEXT = 65535 байт).
@@ -190,7 +191,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_accepts_value_within_column_limit(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, [
@@ -203,7 +204,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_update_requires_non_empty_settings_payload(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->putJson(self::ENDPOINT, ['settings' => []])
@@ -213,7 +214,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_destroy_removes_setting(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         UserMeta::query()->create([
             'user_id' => $user->id,
@@ -233,7 +234,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_destroy_is_idempotent(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->deleteJson(self::ENDPOINT.'/board.collapsed_levels')
@@ -242,8 +243,8 @@ final class UserSettingsTest extends TestCase
 
     public function test_destroy_does_not_touch_foreign_setting(): void
     {
-        $user = User::factory()->create();
-        $other = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
+        $other = EloquentUserModel::factory()->create();
 
         UserMeta::query()->create([
             'user_id' => $other->id,
@@ -263,7 +264,7 @@ final class UserSettingsTest extends TestCase
 
     public function test_settings_are_deleted_with_user(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         UserMeta::query()->create([
             'user_id' => $user->id,

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Api;
 
-use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -32,9 +34,9 @@ final class TaskColumnTest extends TestCase
      */
     private function initiative(User $user): Task
     {
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
-        return Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        return EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
     }
 
     /**
@@ -42,8 +44,8 @@ final class TaskColumnTest extends TestCase
      */
     public function test_operational_card_can_move_to_any_column(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
 
         foreach ([CardColumn::Backlog, CardColumn::Complete, CardColumn::Canceled] as $column) {
             $this->actingAsUser($user)
@@ -58,10 +60,10 @@ final class TaskColumnTest extends TestCase
      */
     public function test_tactical_card_is_blocked_by_task_in_progress(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $initiative = $this->initiative($user);
-        $project = Task::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
-        $child = Task::factory()->task($project)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
+        $child = EloquentTaskModel::factory()->task($project)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$project->id, ['column' => CardColumn::Complete->value])
@@ -90,11 +92,11 @@ final class TaskColumnTest extends TestCase
      */
     public function test_strategic_card_is_blocked_by_project_in_progress(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $initiative = $this->initiative($user);
         $initiative->update(['column' => CardColumn::InProgress->value]);
 
-        Task::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$initiative->id, ['column' => CardColumn::Backlog->value])
@@ -106,11 +108,11 @@ final class TaskColumnTest extends TestCase
      */
     public function test_children_outside_in_progress_do_not_block(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $initiative = $this->initiative($user);
         $initiative->update(['column' => CardColumn::InProgress->value]);
 
-        Task::factory()->project($initiative)->inColumn(CardColumn::Backlog)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::Backlog)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$initiative->id, ['column' => CardColumn::Complete->value])
@@ -123,11 +125,11 @@ final class TaskColumnTest extends TestCase
      */
     public function test_blocked_column_change_rolls_back_other_fields(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $initiative = $this->initiative($user);
         $initiative->update(['column' => CardColumn::InProgress->value]);
 
-        Task::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
+        EloquentTaskModel::factory()->project($initiative)->inColumn(CardColumn::InProgress)->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$initiative->id, [
@@ -141,8 +143,8 @@ final class TaskColumnTest extends TestCase
 
     public function test_unknown_column_is_rejected(): void
     {
-        $user = User::factory()->create();
-        $task = Task::factory()->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->create();
+        $task = EloquentTaskModel::factory()->create(['user_id' => $user->id]);
 
         $this->actingAsUser($user)
             ->patchJson(self::ENDPOINT.'/'.$task->id, ['column' => 'done'])

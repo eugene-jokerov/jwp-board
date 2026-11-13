@@ -2,23 +2,18 @@
 
 namespace App\Modules\User\Domain;
 
-use Database\Factories\UserFactory;
-use DateTimeInterface;
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Models\Contracts\HasName;
-use Filament\Panel;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Laravel\Sanctum\NewAccessToken;
 
 /**
  * Пользователь — корневая сущность модуля User.
  *
  * Идентификация происходит исключительно по email и паролю: отдельного имени
  * в модели нет. Модель знает про Sanctum, поскольку токены — часть способа
- * аутентификации пользователя, а не отдельной бизнес-логики.
+ * аутентификации пользователя, а не отдельной бизнес-логики. Про админку
+ * (Filament) домен не знает: контракты панели реализует адаптер
+ * Infrastructure\Filament\AdminUser.
  *
  * Доступ в админку (Filament, /admin) даёт флаг is_admin. Флаг намеренно не
  * в $fillable: иначе его можно было бы поднять через регистрацию или API.
@@ -27,33 +22,9 @@ use Laravel\Sanctum\NewAccessToken;
  * видит доску, но не меняет её. Как и is_admin, флаг не массово заполняемый —
  * выдаётся только из админки.
  */
-class User extends Authenticatable implements FilamentUser, HasName
+class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable {
-        createToken as private createSanctumToken;
-    }
-
-    /**
-     * Выдать персональный токен с ограниченным сроком жизни.
-     *
-     * Sanctum по умолчанию создаёт токен без `expires_at`, а срок жизни
-     * (`config('sanctum.expiration')`) учитывается только при проверке:
-     * просроченный токен отвергается на `created_at + срок`. Метод ставит
-     * `expires_at` явно, чтобы срок жизни был виден и в панели, и в базе.
-     *
-     * @param  array<int, string>  $abilities
-     */
-    public function createToken(string $name, array $abilities = ['*'], ?DateTimeInterface $expiresAt = null): NewAccessToken
-    {
-        $expiration = config('sanctum.expiration');
-
-        // Срок не задан явно — берём срок из конфигурации (для мобильного
-        // клиента это год). null в конфиге означает «бессрочный токен».
-        $expiresAt ??= is_numeric($expiration) ? now()->addMinutes((int) $expiration) : null;
-
-        return $this->createSanctumToken($name, $abilities, $expiresAt);
-    }
+    use HasApiTokens, Notifiable;
 
     /**
      * Массово заполняемые атрибуты.
@@ -104,38 +75,14 @@ class User extends Authenticatable implements FilamentUser, HasName
     }
 
     /**
-     * Доступ в админку Filament.
+     * Пользователь — администратор (доступ в админку).
      *
-     * Панель одна (`admin`), поэтому условие общее: только администратор.
-     * Проверка живёт в модели, а не в панели, — решение о доступе принимает
-     * домен пользователя, а не UI-слой.
+     * Панель одна (`admin`), поэтому условие общее. Явное приведение: у строк,
+     * созданных до появления колонки, атрибут может отсутствовать — null здесь
+     * значит «нет».
      */
-    public function canAccessPanel(Panel $panel): bool
+    public function isAdmin(): bool
     {
-        // Явное приведение: у пользователей, созданных до появления флага,
-        // атрибут может отсутствовать в загруженной модели — null здесь значит «нет».
         return (bool) $this->is_admin;
-    }
-
-    /**
-     * Имя пользователя в интерфейсе Filament (топбар, аватар).
-     *
-     * Колонки `name` в таблице нет — единственный идентификатор это email.
-     * Без этого метода панель падает: Filament ожидает строку.
-     */
-    public function getFilamentName(): string
-    {
-        return (string) $this->email;
-    }
-
-    /**
-     * Связанная фабрика.
-     *
-     * Модель живёт в доменном слое модуля (App\Modules\User\Domain), поэтому
-     * автопоиск фабрики по namespace модели не работает — путь задаётся явно.
-     */
-    protected static function newFactory(): UserFactory
-    {
-        return UserFactory::new();
     }
 }

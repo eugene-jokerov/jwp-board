@@ -162,7 +162,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
      */
     public function deleteTree(Task $task): void
     {
-        $projects = Task::query()
+        $projects = EloquentTaskModel::query()
             ->where('user_id', $task->user_id)
             ->where('type', CardType::Project->value)
             ->where('initiative_id', $task->id)
@@ -199,7 +199,7 @@ final readonly class HistoryRecordingTaskRepository implements TaskRepository
      */
     private function children(Task $project): array
     {
-        return Task::query()
+        return EloquentTaskModel::query()
             ->where('user_id', $project->user_id)
             ->where('project_id', $project->id)
             ->get()

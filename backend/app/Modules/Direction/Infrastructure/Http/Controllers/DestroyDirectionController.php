@@ -4,7 +4,6 @@ namespace App\Modules\Direction\Infrastructure\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Direction\Application\Commands\DeleteDirection\DeleteDirectionCommand;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,10 +25,8 @@ final class DestroyDirectionController extends Controller
      */
     public function __invoke(Request $request, int $direction): Response
     {
-        /** @var User $user */
-        $user = $request->user();
 
-        $this->bus->dispatch(new DeleteDirectionCommand((int) $user->getKey(), $direction));
+        $this->bus->dispatch(new DeleteDirectionCommand((int) $request->user()->getKey(), $direction));
 
         return response()->noContent();
     }

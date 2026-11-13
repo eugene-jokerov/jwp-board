@@ -11,6 +11,7 @@ use App\Modules\Direction\Application\Commands\UpdateDirectionForAdmin\UpdateDir
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Direction\Domain\ValueObjects\DirectionTitle;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
 use App\Modules\Task\Application\Commands\CreateTaskForAdmin\CreateTaskForAdminCommand;
 use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommand;
@@ -21,12 +22,14 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Application\Commands\DeleteUserSettings\DeleteUserSettingsCommand;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
 use App\Modules\User\Application\Commands\UpdateUserSettings\UpdateUserSettingsCommand;
 use App\Modules\User\Domain\Exceptions\ReadOnlyMode;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\MetaKey;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -64,9 +67,9 @@ final class ReadOnlyCommandPipesTest extends TestCase
      */
     private function boardOfReadonlyUser(): array
     {
-        $user = User::factory()->readonly()->create();
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $task = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $user = EloquentUserModel::factory()->readonly()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $task = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
 
         return ['user' => $user, 'direction' => $direction, 'task' => $task];
     }
@@ -189,7 +192,7 @@ final class ReadOnlyCommandPipesTest extends TestCase
     {
         Auth::forgetGuards();
 
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         // Владелец передан в команде явно — проверка режима в таком контексте
         // невозможна, поэтому ответственность за неё лежит на вызывающем.
@@ -211,7 +214,7 @@ final class ReadOnlyCommandPipesTest extends TestCase
      */
     public function test_registration_command_is_not_blocked(): void
     {
-        Auth::login(User::factory()->readonly()->create());
+        Auth::login(EloquentUserModel::factory()->readonly()->create());
 
         $this->bus()->dispatch(RegisterUserCommand::fromArray([
             'email' => 'newcomer@example.test',
@@ -232,7 +235,7 @@ final class ReadOnlyCommandPipesTest extends TestCase
         $board = $this->boardOfReadonlyUser();
         $ownerId = (int) $board['user']->id;
 
-        Auth::login(User::factory()->admin()->readonly()->create());
+        Auth::login(EloquentUserModel::factory()->admin()->readonly()->create());
 
         // Создание карточки в доске read-only владельца.
         $this->bus()->dispatch(new CreateTaskForAdminCommand(
@@ -272,9 +275,9 @@ final class ReadOnlyCommandPipesTest extends TestCase
         $board = $this->boardOfReadonlyUser();
         $ownerId = (int) $board['user']->id;
 
-        $project = Task::factory()->project($board['task'])->create(['user_id' => $ownerId]);
+        $project = EloquentTaskModel::factory()->project($board['task'])->create(['user_id' => $ownerId]);
 
-        Auth::login(User::factory()->admin()->create());
+        Auth::login(EloquentUserModel::factory()->admin()->create());
 
         $this->bus()->dispatch(new DeleteTaskForAdminCommand($ownerId, (int) $board['task']->id, cascade: true));
 
@@ -291,7 +294,7 @@ final class ReadOnlyCommandPipesTest extends TestCase
         $board = $this->boardOfReadonlyUser();
         $ownerId = (int) $board['user']->id;
 
-        Auth::login(User::factory()->admin()->create());
+        Auth::login(EloquentUserModel::factory()->admin()->create());
 
         $this->bus()->dispatch(new CreateDirectionForAdminCommand(
             $ownerId,
@@ -326,7 +329,7 @@ final class ReadOnlyCommandPipesTest extends TestCase
      */
     public function test_command_outside_the_map_gets_write_pipes(): void
     {
-        Auth::login(User::factory()->readonly()->create());
+        Auth::login(EloquentUserModel::factory()->readonly()->create());
 
         $this->expectException(ReadOnlyMode::class);
 

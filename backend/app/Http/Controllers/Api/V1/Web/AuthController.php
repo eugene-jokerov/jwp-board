@@ -4,15 +4,16 @@ namespace App\Http\Controllers\Api\V1\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
+use App\Http\Requests\Api\V1\StoreUserRequest;
+use App\Http\Resources\UserResource;
+use App\Modules\User\Application\Commands\LoginUser\LoginUserCommand;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
 use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
+use App\Modules\User\Application\Results\LoginResult;
 use App\Modules\User\Application\Results\RegistrationResult;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\Email;
-use App\Modules\User\Infrastructure\Http\Requests\RegisterRequest;
-use App\Modules\User\Infrastructure\Http\Resources\UserResource;
-use App\Services\AuthService;
-use App\Services\WebSessionService;
+use App\Modules\User\Infrastructure\Session\WebSessionService;
 use App\Shared\Application\Bus\CommandBus;
 use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,6 @@ use Illuminate\Http\Response;
 final class AuthController extends Controller
 {
     public function __construct(
-        private readonly AuthService $auth,
         private readonly CommandBus $commands,
         private readonly QueryBus $queries,
         private readonly WebSessionService $sessions,
@@ -42,26 +42,28 @@ final class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse|UserResource
     {
-        $user = $this->auth->attempt(
+        /** @var LoginResult|null $result */
+        $result = $this->commands->dispatch(new LoginUserCommand(
             Email::fromString($request->string('email')->toString()),
             $request->string('password')->toString(),
-        );
+            'web',
+        ));
 
-        if ($user === null) {
+        if ($result === null) {
             return response()->json([
                 'message' => 'Неверный email или пароль.',
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        $this->sessions->begin($user, $request);
+        $this->sessions->begin($result->user, $request);
 
-        return new UserResource($user);
+        return new UserResource($result->user);
     }
 
     /**
      * Зарегистрировать пользователя и сразу открыть сессию.
      */
-    public function register(RegisterRequest $request): UserResource
+    public function register(StoreUserRequest $request): UserResource
     {
         /** @var RegistrationResult $result */
         $result = $this->commands->dispatch(

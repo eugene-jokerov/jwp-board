@@ -3,11 +3,12 @@
 namespace App\Modules\User\Infrastructure\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\User\Application\Commands\IssueBearerToken\IssueBearerTokenCommand;
 use App\Modules\User\Application\Commands\RegisterUser\RegisterUserCommand;
+use App\Modules\User\Application\Results\IssuedToken;
 use App\Modules\User\Application\Results\RegistrationResult;
 use App\Modules\User\Infrastructure\Http\Requests\RegisterRequest;
 use App\Modules\User\Infrastructure\Http\Resources\AuthTokenResource;
-use App\Services\AuthService;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -24,7 +25,6 @@ final class RegisterController extends Controller
 {
     public function __construct(
         private readonly CommandBus $bus,
-        private readonly AuthService $auth,
     ) {}
 
     /**
@@ -41,8 +41,11 @@ final class RegisterController extends Controller
         // при регистрации, иначе токен помечается как мобильный.
         $deviceName = $request->string('device_name')->toString() ?: 'mobile';
 
+        /** @var IssuedToken $token */
+        $token = $this->bus->dispatch(new IssueBearerTokenCommand($result->user, $deviceName));
+
         return (new AuthTokenResource($result->user))
-            ->withToken($this->auth->issueToken($result->user, $deviceName))
+            ->withToken($token->plainTextToken)
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }

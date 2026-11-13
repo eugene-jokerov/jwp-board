@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Api;
 
-use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Tests\TestCase;
@@ -16,7 +16,7 @@ final class AuthTest extends TestCase
 
     public function test_user_can_login_with_valid_credentials(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
 
         $response = $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -46,7 +46,7 @@ final class AuthTest extends TestCase
 
     public function test_login_is_case_insensitive_for_email(): void
     {
-        $user = User::factory()->create([
+        $user = EloquentUserModel::factory()->create([
             'email' => 'mixed@jwp-board.local',
             'password' => 'secret-password',
         ]);
@@ -59,7 +59,7 @@ final class AuthTest extends TestCase
 
     public function test_login_with_wrong_password_returns_unauthorized(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -81,7 +81,7 @@ final class AuthTest extends TestCase
 
     public function test_authenticated_user_can_fetch_profile_and_logout(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $token = $user->createToken('phpunit')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -105,7 +105,7 @@ final class AuthTest extends TestCase
      */
     public function test_issued_token_expires_in_one_year(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -132,7 +132,7 @@ final class AuthTest extends TestCase
      */
     public function test_expired_token_is_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $token = $user->createToken('phpunit');
         $token->accessToken->forceFill(['expires_at' => now()->subMinute()])->save();
         $plain = $token->plainTextToken;

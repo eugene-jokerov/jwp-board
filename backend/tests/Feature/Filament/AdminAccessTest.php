@@ -3,7 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Filament\Auth\Login;
-use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -47,7 +47,7 @@ final class AdminAccessTest extends TestCase
 
     public function test_regular_user_gets_404_for_panel(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->assertFalse($user->canAccessPanel(Filament::getPanel('admin')));
 
@@ -74,7 +74,7 @@ final class AdminAccessTest extends TestCase
 
     public function test_admin_can_access_panel(): void
     {
-        $user = User::factory()->admin()->create();
+        $user = EloquentUserModel::factory()->admin()->create();
 
         $this->assertTrue($user->canAccessPanel(Filament::getPanel('admin')));
 
@@ -113,7 +113,7 @@ final class AdminAccessTest extends TestCase
 
         $response->assertCreated();
 
-        $user = User::query()->where('email', 'intruder@example.test')->firstOrFail();
+        $user = EloquentUserModel::query()->where('email', 'intruder@example.test')->firstOrFail();
 
         $this->assertFalse($user->is_admin);
         $this->assertFalse($user->canAccessPanel(Filament::getPanel('admin')));

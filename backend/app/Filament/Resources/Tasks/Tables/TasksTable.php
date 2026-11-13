@@ -7,6 +7,7 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
@@ -109,7 +110,7 @@ class TasksTable
      */
     public static function descendantsCount(Task $task): int
     {
-        return Task::query()
+        return EloquentTaskModel::query()
             ->where('initiative_id', $task->id)
             ->orWhere('project_id', $task->id)
             ->count();

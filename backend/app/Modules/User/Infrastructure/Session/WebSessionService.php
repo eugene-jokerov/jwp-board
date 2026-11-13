@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Modules\User\Infrastructure\Session;
 
 use App\Modules\User\Domain\User;
 use Illuminate\Http\Request;

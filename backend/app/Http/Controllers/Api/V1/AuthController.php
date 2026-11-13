@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
+use App\Http\Resources\UserResource;
+use App\Modules\User\Application\Commands\LoginUser\LoginUserCommand;
 use App\Modules\User\Application\Queries\CurrentUser\CurrentUserQuery;
+use App\Modules\User\Application\Results\LoginResult;
 use App\Modules\User\Domain\User;
 use App\Modules\User\Domain\ValueObjects\Email;
 use App\Modules\User\Infrastructure\Http\Resources\AuthTokenResource;
-use App\Modules\User\Infrastructure\Http\Resources\UserResource;
-use App\Services\AuthService;
+use App\Shared\Application\Bus\CommandBus;
 use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,12 +20,14 @@ use Illuminate\Http\Response;
 /**
  * Аутентификация мобильного клиента по токенам Sanctum.
  *
- * Регистрация пользователя живёт в модуле User: POST /api/v1/user/register.
+ * Вход — сценарий шины (LoginUser): проверка учётных данных и выдача токена
+ * живут в модуле User, контроллер только переводит HTTP в команду.
+ * Регистрация пользователя тоже живёт в модуле User: POST /api/v1/user/register.
  */
 final class AuthController extends Controller
 {
     public function __construct(
-        private readonly AuthService $auth,
+        private readonly CommandBus $commands,
         private readonly QueryBus $queries,
     ) {}
 
@@ -32,21 +36,23 @@ final class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = $this->auth->attempt(
+        $deviceName = $request->string('device_name')->toString() ?: 'mobile';
+
+        /** @var LoginResult|null $result */
+        $result = $this->commands->dispatch(new LoginUserCommand(
             Email::fromString($request->string('email')->toString()),
             $request->string('password')->toString(),
-        );
+            $deviceName,
+        ));
 
-        if ($user === null) {
+        if ($result === null) {
             return response()->json([
                 'message' => 'Неверный email или пароль.',
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        $deviceName = $request->string('device_name')->toString() ?: 'mobile';
-
-        return (new AuthTokenResource($user))
-            ->withToken($this->auth->issueToken($user, $deviceName))
+        return (new AuthTokenResource($result->user))
+            ->withToken($result->plainTextToken)
             ->response();
     }
 
@@ -72,7 +78,7 @@ final class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $this->auth->revokeCurrentToken($user);
+        $user->currentAccessToken()?->delete();
 
         return response()->noContent();
     }

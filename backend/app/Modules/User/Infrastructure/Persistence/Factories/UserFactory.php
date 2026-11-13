@@ -1,13 +1,14 @@
 <?php
 
-namespace Database\Factories;
+namespace App\Modules\User\Infrastructure\Persistence\Factories;
 
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * @extends Factory<User>
+ * @extends Factory<EloquentUserModel>
  */
 class UserFactory extends Factory
 {
@@ -17,9 +18,9 @@ class UserFactory extends Factory
      * Модель живёт в доменном слое модуля User, а не в App\Models, поэтому
      * путь задаётся явно.
      *
-     * @var class-string<User>
+     * @var class-string<EloquentUserModel>
      */
-    protected $model = User::class;
+    protected $model = EloquentUserModel::class;
 
     /**
      * Текущий пароль, чтобы не хешировать одно и то же значение в каждом вызове.

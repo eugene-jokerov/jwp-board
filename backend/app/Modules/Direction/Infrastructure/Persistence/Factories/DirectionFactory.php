@@ -1,23 +1,23 @@
 <?php
 
-namespace Database\Factories;
+namespace App\Modules\Direction\Infrastructure\Persistence\Factories;
 
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
-use App\Modules\User\Domain\User;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
+use Database\Factories\FactoryOwners;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * Фабрика направлений для тестов и сидов.
  *
- * @extends Factory<Direction>
+ * @extends Factory<EloquentDirectionModel>
  */
 class DirectionFactory extends Factory
 {
     /**
-     * @var class-string<Direction>
+     * @var class-string<EloquentDirectionModel>
      */
-    protected $model = Direction::class;
+    protected $model = EloquentDirectionModel::class;
 
     /**
      * @return array<string, mixed>
@@ -25,7 +25,7 @@ class DirectionFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => User::factory(),
+            'user_id' => FactoryOwners::user(),
             'title' => 'Направление '.fake()->unique()->numberBetween(1, 1000),
             'color' => fake()->randomElement(DirectionColor::keys()),
         ];

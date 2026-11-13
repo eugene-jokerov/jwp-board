@@ -4,7 +4,6 @@ namespace App\Modules\Task\Infrastructure\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Task\Application\Commands\DeleteTask\DeleteTaskCommand;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,10 +25,8 @@ final class DestroyTaskController extends Controller
      */
     public function __invoke(Request $request, int $task): Response
     {
-        /** @var User $user */
-        $user = $request->user();
 
-        $this->bus->dispatch(new DeleteTaskCommand((int) $user->getKey(), $task));
+        $this->bus->dispatch(new DeleteTaskCommand((int) $request->user()->getKey(), $task));
 
         return response()->noContent();
     }

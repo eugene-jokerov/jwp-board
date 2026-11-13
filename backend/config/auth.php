@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 
 return [
     /*
@@ -22,8 +22,9 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            // Модель пользователя живёт в доменном слое модуля User.
-            'model' => User::class,
+            // Eloquent-адаптер модуля User: он же реализует контракты
+            // админки (FilamentUser), по которым /admin проверяет доступ.
+            'model' => EloquentUserModel::class,
         ],
     ],
 

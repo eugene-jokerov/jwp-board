@@ -7,7 +7,7 @@ use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\Exceptions\DirectionNotFound;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Direction\Domain\ValueObjects\DirectionTitle;
-use App\Modules\Task\Domain\Task;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Eloquent-реализация порта DirectionRepository.
@@ -19,7 +19,7 @@ final class EloquentDirectionRepository implements DirectionRepository
 {
     public function findForUser(int $userId, int $id): Direction
     {
-        $direction = Direction::query()
+        $direction = EloquentDirectionModel::query()
             ->where('user_id', $userId)
             ->whereKey($id)
             ->first();
@@ -33,7 +33,7 @@ final class EloquentDirectionRepository implements DirectionRepository
 
     public function allForUser(int $userId): array
     {
-        return Direction::query()
+        return EloquentDirectionModel::query()
             ->where('user_id', $userId)
             ->orderBy('id')
             ->get()
@@ -42,12 +42,12 @@ final class EloquentDirectionRepository implements DirectionRepository
 
     public function countForUser(int $userId): int
     {
-        return Direction::query()->where('user_id', $userId)->count();
+        return EloquentDirectionModel::query()->where('user_id', $userId)->count();
     }
 
     public function create(int $userId, DirectionTitle $title, DirectionColor $color): Direction
     {
-        return Direction::query()->create([
+        return EloquentDirectionModel::query()->create([
             'user_id' => $userId,
             'title' => $title->value(),
             'color' => $color->key(),
@@ -78,6 +78,8 @@ final class EloquentDirectionRepository implements DirectionRepository
     {
         // Денормализация direction_id на карточках позволяет проверить
         // «направление не пустое» одним запросом к tasks без обхода иерархии.
-        return Task::query()->where('direction_id', $direction->id)->count();
+        // Соседний модуль доступен только через свой Domain; модели его
+        // хранилища сюда не тянутся — считаем строки таблицы по ключу.
+        return DB::table('tasks')->where('direction_id', $direction->id)->count();
     }
 }

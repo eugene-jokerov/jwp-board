@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\History\Infrastructure\Persistence\HistoryRecord;
 use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
 use App\Modules\Task\Application\Commands\CreateTaskForAdmin\CreateTaskForAdminCommand;
@@ -12,7 +12,9 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -41,16 +43,16 @@ final class AdminTaskCommandsTest extends TestCase
      */
     private function initiativeTree(User $user): array
     {
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
 
-        $firstProject = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
-        $secondProject = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $firstProject = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $secondProject = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
 
         $tasks = [
-            Task::factory()->task($firstProject)->create(['user_id' => $user->id]),
-            Task::factory()->task($secondProject)->create(['user_id' => $user->id]),
+            EloquentTaskModel::factory()->task($firstProject)->create(['user_id' => $user->id]),
+            EloquentTaskModel::factory()->task($secondProject)->create(['user_id' => $user->id]),
         ];
 
         return [
@@ -62,7 +64,7 @@ final class AdminTaskCommandsTest extends TestCase
 
     public function test_create_task_for_admin_uses_owner_from_form(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $command = new CreateTaskForAdminCommand($user->id, new CreateTaskCommand(
             type: CardType::Task,
@@ -81,7 +83,7 @@ final class AdminTaskCommandsTest extends TestCase
 
     public function test_delete_without_cascade_is_blocked_for_card_with_children(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $tree = $this->initiativeTree($user);
 
         $this->expectException(TaskHasChildren::class);
@@ -91,7 +93,7 @@ final class AdminTaskCommandsTest extends TestCase
 
     public function test_cascade_delete_removes_whole_subtree(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $tree = $this->initiativeTree($user);
 
         $deleted = $this->bus()->dispatch(new DeleteTaskForAdminCommand(
@@ -113,7 +115,7 @@ final class AdminTaskCommandsTest extends TestCase
 
     public function test_cascade_delete_writes_history_entry_for_each_card(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $tree = $this->initiativeTree($user);
 
         $this->bus()->dispatch(new DeleteTaskForAdminCommand(
@@ -130,11 +132,11 @@ final class AdminTaskCommandsTest extends TestCase
 
     public function test_cascade_delete_does_not_touch_other_users_cards(): void
     {
-        $owner = User::factory()->create();
-        $other = User::factory()->create();
+        $owner = EloquentUserModel::factory()->create();
+        $other = EloquentUserModel::factory()->create();
 
         $tree = $this->initiativeTree($owner);
-        $foreign = Task::factory()->create(['user_id' => $other->id]);
+        $foreign = EloquentTaskModel::factory()->create(['user_id' => $other->id]);
 
         $this->bus()->dispatch(new DeleteTaskForAdminCommand(
             $owner->id,

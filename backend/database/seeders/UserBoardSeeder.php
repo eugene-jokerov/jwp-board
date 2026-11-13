@@ -2,13 +2,13 @@
 
 namespace Database\Seeders;
 
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
-use App\Modules\Task\Domain\Task;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskSlug;
-use App\Modules\User\Domain\User;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -65,7 +65,7 @@ class UserBoardSeeder extends Seeder
     /**
      * Пользователь, для которого собирается доска.
      */
-    private User $user;
+    private EloquentUserModel $user;
 
     /**
      * Сколько инициатив в какой колонке — суммы заданы требованиями.
@@ -382,7 +382,7 @@ class UserBoardSeeder extends Seeder
     {
         $this->removeLegacyUser();
 
-        $this->user = User::query()->updateOrCreate(
+        $this->user = EloquentUserModel::query()->updateOrCreate(
             ['email' => self::EMAIL],
             [
                 'password' => Hash::make(self::PASSWORD),
@@ -394,14 +394,14 @@ class UserBoardSeeder extends Seeder
         // Карточки уходят первыми: у них есть ссылки на направления и друг на друга.
         $userId = (int) $this->user->id;
 
-        Task::query()->where('user_id', $userId)->delete();
-        Direction::query()->where('user_id', $userId)->delete();
+        EloquentTaskModel::query()->where('user_id', $userId)->delete();
+        EloquentDirectionModel::query()->where('user_id', $userId)->delete();
 
         $this->initiativeRows = [];
         $this->projectRows = [];
         $this->taskRows = [];
         // Нумерация продолжает таблицу: id в базе общие для всех пользователей.
-        $this->nextCardId = (int) Task::query()->max('id') + 1;
+        $this->nextCardId = (int) EloquentTaskModel::query()->max('id') + 1;
 
         foreach (self::DIRECTIONS as $index => $direction) {
             $this->seedDirection($index, $direction['title'], $direction['color']);
@@ -415,9 +415,9 @@ class UserBoardSeeder extends Seeder
         $this->assignIdeaFlags();
         $this->assignSlugs();
 
-        $this->insertRows(Task::class, $this->initiativeRows);
-        $this->insertRows(Task::class, $this->projectRows);
-        $this->insertRows(Task::class, $this->taskRows);
+        $this->insertRows(EloquentTaskModel::class, $this->initiativeRows);
+        $this->insertRows(EloquentTaskModel::class, $this->projectRows);
+        $this->insertRows(EloquentTaskModel::class, $this->taskRows);
     }
 
     /**
@@ -500,14 +500,14 @@ class UserBoardSeeder extends Seeder
      */
     private function removeLegacyUser(): void
     {
-        $legacy = User::query()->where('email', self::LEGACY_EMAIL)->first();
+        $legacy = EloquentUserModel::query()->where('email', self::LEGACY_EMAIL)->first();
 
         if ($legacy === null) {
             return;
         }
 
-        Task::query()->where('user_id', $legacy->id)->delete();
-        Direction::query()->where('user_id', $legacy->id)->delete();
+        EloquentTaskModel::query()->where('user_id', $legacy->id)->delete();
+        EloquentDirectionModel::query()->where('user_id', $legacy->id)->delete();
         $legacy->delete();
     }
 
@@ -522,7 +522,7 @@ class UserBoardSeeder extends Seeder
     {
         $createdAt = Carbon::now()->subDays(400 - $index * 12);
 
-        $direction = Direction::query()->create([
+        $direction = EloquentDirectionModel::query()->create([
             'user_id' => $this->user->id,
             'title' => $title,
             'color' => $color->value,
@@ -685,7 +685,7 @@ class UserBoardSeeder extends Seeder
      * У работающей инициативы обязательно есть проекты в работе: иначе карточка
      * «в работе» без движения, что для демо-доски выглядит неестественно.
      */
-    private function seedInitiative(Direction $direction, CardColumn $column, string $title, Carbon $directionCreatedAt): void
+    private function seedInitiative(EloquentDirectionModel $direction, CardColumn $column, string $title, Carbon $directionCreatedAt): void
     {
         $createdAt = $this->between($directionCreatedAt, Carbon::now()->subDays(30));
         $updatedAt = $this->updatedAt($createdAt, $column);
@@ -717,7 +717,7 @@ class UserBoardSeeder extends Seeder
      * Тактический и операционный уровни заполняются по плану проекта: колонка
      * проекта определяет, какие карточки под ним вообще уместны.
      */
-    private function seedProject(Direction $direction, int $initiativeId, Carbon $initiativeUpdatedAt, string $title, CardColumn $column): void
+    private function seedProject(EloquentDirectionModel $direction, int $initiativeId, Carbon $initiativeUpdatedAt, string $title, CardColumn $column): void
     {
         $createdAt = $this->after($initiativeUpdatedAt, Carbon::now()->subDays(7));
         $updatedAt = $this->updatedAt($createdAt, $column);
@@ -914,7 +914,7 @@ class UserBoardSeeder extends Seeder
      * Пачки по 200 строк: одна вставка на тысячу карточек упёрлась бы в лимиты
      * размера запроса, а построчный insert был бы слишком медленным.
      *
-     * @param  class-string<Direction|Task>  $model
+     * @param  class-string<EloquentDirectionModel|EloquentTaskModel>  $model
      * @param  list<array<string, mixed>>  $rows
      */
     private function insertRows(string $model, array $rows): void
@@ -923,7 +923,7 @@ class UserBoardSeeder extends Seeder
             return;
         }
 
-        /** @var Direction|Task $instance */
+        /** @var EloquentDirectionModel|EloquentTaskModel $instance */
         $instance = new $model;
         $table = $instance->getTable();
 

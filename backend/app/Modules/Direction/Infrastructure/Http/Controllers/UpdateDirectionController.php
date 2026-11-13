@@ -7,7 +7,6 @@ use App\Modules\Direction\Application\Commands\UpdateDirection\UpdateDirectionCo
 use App\Modules\Direction\Application\Results\DirectionResult;
 use App\Modules\Direction\Infrastructure\Http\Requests\UpdateDirectionRequest;
 use App\Modules\Direction\Infrastructure\Http\Resources\DirectionResource;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 
 /**
@@ -24,12 +23,10 @@ final class UpdateDirectionController extends Controller
      */
     public function __invoke(UpdateDirectionRequest $request, int $direction): DirectionResource
     {
-        /** @var User $user */
-        $user = $request->user();
 
         /** @var DirectionResult $result */
         $result = $this->bus->dispatch(
-            UpdateDirectionCommand::fromArray((int) $user->getKey(), $direction, $request->toCommandPayload()),
+            UpdateDirectionCommand::fromArray((int) $request->user()->getKey(), $direction, $request->toCommandPayload()),
         );
 
         return new DirectionResource($result);

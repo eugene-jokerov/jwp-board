@@ -9,7 +9,7 @@ use App\Filament\Resources\Tasks\Pages\ViewTask;
 use App\Filament\Resources\Tasks\Schemas\TaskForm;
 use App\Filament\Resources\Tasks\Schemas\TaskInfolist;
 use App\Filament\Resources\Tasks\Tables\TasksTable;
-use App\Modules\Task\Domain\Task;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -27,7 +27,7 @@ use UnitEnum;
  */
 class TaskResource extends Resource
 {
-    protected static ?string $model = Task::class;
+    protected static ?string $model = EloquentTaskModel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;
 

@@ -14,23 +14,23 @@ final class EloquentUserRepository implements UserRepository
 {
     public function findByEmail(Email $email): ?User
     {
-        return User::query()->where('email', $email->value())->first();
+        return EloquentUserModel::query()->where('email', $email->value())->first();
     }
 
     public function findById(int $id): User
     {
-        return User::query()->findOrFail($id);
+        return EloquentUserModel::query()->findOrFail($id);
     }
 
     public function emailExists(Email $email): bool
     {
-        return User::query()->where('email', $email->value())->exists();
+        return EloquentUserModel::query()->where('email', $email->value())->exists();
     }
 
     public function create(Email $email, Password $password, bool $verified = false): User
     {
         // Пароль хешируется кастом `hashed` модели User.
-        return User::query()->create([
+        return EloquentUserModel::query()->create([
             'email' => $email->value(),
             'password' => $password->value(),
             'email_verified_at' => $verified ? now() : null,

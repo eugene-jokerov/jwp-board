@@ -8,6 +8,7 @@ use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -93,7 +94,7 @@ class TaskInfolist
                             ->dateTime('d.m.Y H:i'),
                         TextEntry::make('children_count')
                             ->label('Дочерних карточек')
-                            ->state(fn (Task $record): int => Task::query()
+                            ->state(fn (Task $record): int => EloquentTaskModel::query()
                                 ->where('initiative_id', $record->id)
                                 ->orWhere('project_id', $record->id)
                                 ->count()),

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Direction\Domain\Services;
 
+use App\Modules\Direction\Domain\Contracts\DirectionLimits;
 use App\Modules\Direction\Domain\Contracts\DirectionRepository;
 use App\Modules\Direction\Domain\Direction;
 use App\Modules\Direction\Domain\Exceptions\DirectionHasCards;
@@ -12,37 +13,39 @@ use App\Modules\Direction\Domain\ValueObjects\DirectionTitle;
 /**
  * Доменный сервис направлений: правила, которым подчиняется изменение направлений.
  *
- * Здесь живут инварианты: направлений у пользователя не больше $maxPerUser
- * (проверка при создании) и направление удаляется только пустым. Цвет и название
+ * Здесь живут инварианты: направлений у пользователя не больше лимита порта
+ * DirectionLimits (проверка при создании) и направление удаляется только пустым. Цвет и название
  * проверяют value object'ы, поэтому сервис остаётся тонким и работает через порт
  * репозитория, не зная про Eloquent.
  *
- * Лимит приходит снаружи (config('direction.max_per_user') через провайдер
- * модуля): домен не читает конфиг сам, а число остаётся в одном месте — его же
- * API отдаёт клиенту в meta списка направлений.
+ * Лимит приходит через доменный порт DirectionLimits (значение —
+ * config('direction.max_per_user')): домен не читает конфиг сам, а число
+ * остаётся в одном месте — его же API отдаёт клиенту в meta списка направлений.
  */
 final readonly class DirectionManager
 {
     /**
-     * @param  int  $maxPerUser  максимум направлений на пользователя (положительное число)
+     * @param  DirectionLimits  $limits  максимум направлений на пользователя
      */
     public function __construct(
         private DirectionRepository $directions,
-        private int $maxPerUser,
+        private DirectionLimits $limits,
     ) {}
 
     /**
      * Создать направление пользователя.
      *
-     * @throws DirectionLimitReached если у пользователя уже $maxPerUser направлений
+     * @throws DirectionLimitReached если у пользователя уже максимум направлений
      */
     public function create(int $userId, DirectionTitle $title, DirectionColor $color): Direction
     {
         // Лимит проверяется здесь, а не в валидации запроса: это правило
         // предметной области, и оно должно действовать на любом пути создания
         // направления, а не только через HTTP.
-        if ($this->directions->countForUser($userId) >= $this->maxPerUser) {
-            throw DirectionLimitReached::withLimit($this->maxPerUser);
+        $limit = $this->limits->maxPerUser();
+
+        if ($this->directions->countForUser($userId) >= $limit) {
+            throw DirectionLimitReached::withLimit($limit);
         }
 
         return $this->directions->create($userId, $title, $color);

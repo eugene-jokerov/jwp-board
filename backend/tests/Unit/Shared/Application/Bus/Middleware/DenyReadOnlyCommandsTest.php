@@ -3,7 +3,7 @@
 namespace Tests\Unit\Shared\Application\Bus\Middleware;
 
 use App\Modules\User\Domain\Exceptions\ReadOnlyMode;
-use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use App\Shared\Application\Bus\Middleware\DenyReadOnlyCommands;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
@@ -45,7 +45,7 @@ final class DenyReadOnlyCommandsTest extends TestCase
 
     public function test_regular_user_is_passed_through(): void
     {
-        Auth::login(User::factory()->make(['readonly' => false]));
+        Auth::login(EloquentUserModel::factory()->make(['readonly' => false]));
 
         self::assertTrue($this->passes(new DenyReadOnlyCommandsTestCommand));
     }
@@ -56,7 +56,7 @@ final class DenyReadOnlyCommandsTest extends TestCase
      */
     public function test_handler_is_not_called_for_readonly_user(): void
     {
-        Auth::login(User::factory()->make(['readonly' => true]));
+        Auth::login(EloquentUserModel::factory()->make(['readonly' => true]));
 
         $called = false;
 
@@ -82,7 +82,7 @@ final class DenyReadOnlyCommandsTest extends TestCase
      */
     public function test_pipe_does_not_check_admin_flag(): void
     {
-        Auth::login(User::factory()->make(['readonly' => true, 'is_admin' => true]));
+        Auth::login(EloquentUserModel::factory()->make(['readonly' => true, 'is_admin' => true]));
 
         $this->expectException(ReadOnlyMode::class);
 

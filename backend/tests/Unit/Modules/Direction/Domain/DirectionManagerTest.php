@@ -7,11 +7,13 @@ use App\Modules\Direction\Domain\Services\DirectionManager;
 use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
 use App\Modules\Direction\Domain\ValueObjects\DirectionTitle;
 use PHPUnit\Framework\TestCase;
+use Tests\Unit\Modules\Direction\Support\FixedDirectionLimits;
 use Tests\Unit\Modules\Direction\Support\InMemoryDirectionRepository;
 
 /**
  * Инвариант количества направлений: у пользователя их не больше лимита,
- * переданного сервису (в приложении — config('direction.max_per_user')).
+ * который сервис получает из порта DirectionLimits (в приложении —
+ * config('direction.max_per_user')).
  */
 final class DirectionManagerTest extends TestCase
 {
@@ -19,7 +21,7 @@ final class DirectionManagerTest extends TestCase
 
     /**
      * Лимит для тестов: число произвольное — важно, что сервис берёт его из
-     * конструктора, а не из константы или конфига.
+     * порта, а не из константы или конфига.
      */
     private const int LIMIT = 3;
 
@@ -39,7 +41,7 @@ final class DirectionManagerTest extends TestCase
 
     private function manager(InMemoryDirectionRepository $repository, int $limit = self::LIMIT): DirectionManager
     {
-        return new DirectionManager($repository, $limit);
+        return new DirectionManager($repository, new FixedDirectionLimits($limit));
     }
 
     public function test_create_is_allowed_below_limit(): void

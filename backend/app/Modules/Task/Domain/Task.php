@@ -2,16 +2,11 @@
 
 namespace App\Modules\Task\Domain;
 
-use App\Modules\Direction\Domain\Direction;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardLevel;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
-use App\Modules\User\Domain\User;
-use Database\Factories\TaskFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
@@ -43,9 +38,6 @@ use Illuminate\Support\Carbon;
  */
 class Task extends Model
 {
-    /** @use HasFactory<TaskFactory> */
-    use HasFactory;
-
     /**
      * Массово заполняемые атрибуты.
      *
@@ -86,60 +78,6 @@ class Task extends Model
             'idea' => 'boolean',
             'deadline' => 'datetime',
         ];
-    }
-
-    /**
-     * Связанная фабрика.
-     *
-     * Модель живёт в доменном слое модуля, поэтому путь к фабрике задаётся явно.
-     */
-    protected static function newFactory(): TaskFactory
-    {
-        return TaskFactory::new();
-    }
-
-    /**
-     * Владелец карточки.
-     *
-     * Связи объявлены для админки: Filament строит по ним поля выбора и колонки
-     * таблицы. Домен по-прежнему работает с идентификаторами (порты, value
-     * objects), поэтому связи не используются в прикладных сценариях.
-     *
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Направление карточки (у проекта и задачи — унаследованное от родителя).
-     *
-     * @return BelongsTo<Direction, $this>
-     */
-    public function direction(): BelongsTo
-    {
-        return $this->belongsTo(Direction::class);
-    }
-
-    /**
-     * Инициатива проекта (для карточки стратегического уровня — не заполнена).
-     *
-     * @return BelongsTo<Task, $this>
-     */
-    public function initiative(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'initiative_id');
-    }
-
-    /**
-     * Проект задачи (для инициативы и карточек без проекта — не заполнен).
-     *
-     * @return BelongsTo<Task, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'project_id');
     }
 
     /**

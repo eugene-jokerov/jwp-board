@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Pages;
 
 use Illuminate\Contracts\View\View;
 use InvalidArgumentException;

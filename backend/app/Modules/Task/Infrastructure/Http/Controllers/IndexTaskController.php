@@ -9,7 +9,6 @@ use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Infrastructure\Http\Requests\IndexTaskRequest;
 use App\Modules\Task\Infrastructure\Http\Resources\TaskSummaryResource;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\QueryBus;
 use Illuminate\Http\JsonResponse;
 
@@ -49,8 +48,6 @@ final class IndexTaskController extends Controller
      */
     public function __invoke(IndexTaskRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
 
         /** @var CardType|null $type */
         $type = $request->enumValue('type', CardType::class);
@@ -60,7 +57,7 @@ final class IndexTaskController extends Controller
 
         /** @var ListTasksResult $result */
         $result = $this->queries->ask(new ListTasksQuery(
-            (int) $user->getKey(),
+            (int) $request->user()->getKey(),
             $type,
             $column,
             $request->intValue('direction_id'),

@@ -3,14 +3,17 @@
 namespace Tests\Feature\Api;
 
 use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Infrastructure\Persistence\EloquentDirectionModel;
 use App\Modules\Task\Application\Commands\CreateTask\CreateTaskCommand;
 use App\Modules\Task\Application\Commands\CreateTaskForAdmin\CreateTaskForAdminCommand;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardType;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\Exceptions\ReadOnlyMode;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use App\Shared\Application\Bus\CommandBus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\JsonResponse;
@@ -112,8 +115,8 @@ final class ReadOnlyModeTest extends TestCase
      */
     private function boardOf(User $user): array
     {
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
-        $task = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
+        $task = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
 
         return ['direction' => $direction, 'task' => $task];
     }
@@ -125,11 +128,11 @@ final class ReadOnlyModeTest extends TestCase
      */
     private function hierarchyOf(User $user): array
     {
-        $direction = Direction::factory()->create(['user_id' => $user->id]);
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $user->id]);
 
-        $initiative = Task::factory()->initiative($direction)->create(['user_id' => $user->id]);
-        $project = Task::factory()->project($initiative)->create(['user_id' => $user->id]);
-        $task = Task::factory()->task($project)->create(['user_id' => $user->id]);
+        $initiative = EloquentTaskModel::factory()->initiative($direction)->create(['user_id' => $user->id]);
+        $project = EloquentTaskModel::factory()->project($initiative)->create(['user_id' => $user->id]);
+        $task = EloquentTaskModel::factory()->task($project)->create(['user_id' => $user->id]);
 
         return ['initiative' => $initiative, 'project' => $project, 'task' => $task];
     }
@@ -177,7 +180,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_cannot_create_direction(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         $this->actingAsUser($user)
             ->postJson('/api/v1/directions', ['title' => 'Здоровье', 'color' => 'c3'])
@@ -189,7 +192,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_cannot_change_or_delete_direction(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $this->actingAsUser($user)
@@ -208,7 +211,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_cannot_create_change_or_delete_task(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $this->actingAsUser($user)
@@ -235,7 +238,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_cannot_change_settings(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         $this->actingAsUser($user)
             ->putJson('/api/v1/user/settings', [
@@ -259,7 +262,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_every_write_endpoint_is_forbidden_for_readonly_user(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $directionState = ['id' => $board['direction']->id, 'title' => $board['direction']->title];
@@ -285,7 +288,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_read_before_write_does_not_weaken_the_guard(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $this->actingAsUser($user);
@@ -321,7 +324,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_forbidden_wins_over_validation_error(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         // Обязательные поля отсутствуют — без режима был бы 422.
@@ -346,8 +349,8 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_forbidden_wins_over_not_found(): void
     {
-        $user = User::factory()->readonly()->create();
-        $foreign = $this->boardOf(User::factory()->create());
+        $user = EloquentUserModel::factory()->readonly()->create();
+        $foreign = $this->boardOf(EloquentUserModel::factory()->create());
 
         $this->actingAsUser($user)
             ->patchJson('/api/v1/directions/'.$foreign['direction']->id, ['title' => 'Чужое'])
@@ -375,7 +378,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_forbidden_wins_over_conflict(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $tree = $this->hierarchyOf($user);
         $board = $this->boardOf($user);
 
@@ -404,7 +407,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_put_on_patch_only_route_is_method_not_allowed(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $this->actingAsUser($user)
@@ -427,7 +430,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_keeps_read_access(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $board = $this->boardOf($user);
 
         $this->actingAsUser($user)
@@ -451,7 +454,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_user_can_log_out(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $token = $user->createToken('phpunit');
 
         $this->withHeader('Authorization', 'Bearer '.$token->plainTextToken)
@@ -468,7 +471,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_read_methods_other_than_get_are_allowed(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
         $this->boardOf($user);
 
         $this->actingAsUser($user)->head('/api/v1/tasks')->assertOk();
@@ -489,7 +492,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_guest_mutations_get_unauthorized_not_forbidden(): void
     {
-        $foreign = $this->boardOf(User::factory()->create());
+        $foreign = $this->boardOf(EloquentUserModel::factory()->create());
 
         foreach ($this->writeRequests($foreign['direction']->id, $foreign['task']->id) as $name => [$method, $uri, $payload]) {
             $this->json($method, $uri, $payload)
@@ -507,7 +510,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_forbidden_response_has_account_error_and_no_payload(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         $response = $this->actingAsUser($user)
             ->postJson('/api/v1/directions', ['title' => 'Здоровье', 'color' => 'c3']);
@@ -528,7 +531,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_repeated_forbidden_requests_stay_forbidden(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         $this->actingAsUser($user);
 
@@ -550,7 +553,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_readonly_flag_is_exposed_in_current_user(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         $this->actingAsUser($user)
             ->getJson('/api/v1/auth/me')
@@ -561,7 +564,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_flag_is_returned_on_mobile_login(): void
     {
-        $user = User::factory()->readonly()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->readonly()->create(['password' => 'secret-password']);
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -574,7 +577,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_readonly_flag_is_false_for_regular_user(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
 
         $this->postJson('/api/v1/auth/login', [
             'email' => $user->email,
@@ -630,7 +633,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_readonly_flag_is_not_mass_assignable(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $user->update(['readonly' => true]);
         self::assertFalse($user->fresh()->isReadonly());
@@ -645,7 +648,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_web_channel_exposes_readonly_flag_and_keeps_read_access(): void
     {
-        $user = User::factory()->readonly()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->readonly()->create(['password' => 'secret-password']);
         $session = $this->webSessionCookie($user);
 
         $this->withHeader('Origin', self::ORIGIN)
@@ -673,7 +676,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_web_channel_write_is_forbidden_with_csrf_header(): void
     {
-        $user = User::factory()->readonly()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->readonly()->create(['password' => 'secret-password']);
         $session = $this->webSessionCookie($user);
 
         // Сервер сверяет значение cookie XSRF-TOKEN с заголовком X-XSRF-TOKEN.
@@ -697,7 +700,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_web_channel_logout_is_allowed_for_readonly_user(): void
     {
-        $user = User::factory()->readonly()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->readonly()->create(['password' => 'secret-password']);
         $session = $this->webSessionCookie($user);
 
         $this->withHeader('Origin', self::ORIGIN)
@@ -714,7 +717,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_command_bus_denies_writes_inside_http_request(): void
     {
-        $user = User::factory()->readonly()->create();
+        $user = EloquentUserModel::factory()->readonly()->create();
 
         // Точка входа — обычный запрос: внутри него Auth::user() известен
         // (гвард sanctum), и пайп шины видит read-only пользователя.
@@ -739,9 +742,9 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_admin_commands_are_not_blocked_by_readonly_flag(): void
     {
-        $admin = User::factory()->admin()->create();
-        $readonlyOwner = User::factory()->readonly()->create();
-        $direction = Direction::factory()->create(['user_id' => $readonlyOwner->id]);
+        $admin = EloquentUserModel::factory()->admin()->create();
+        $readonlyOwner = EloquentUserModel::factory()->readonly()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $readonlyOwner->id]);
 
         Route::middleware('auth:sanctum')->post('/__test/admin-dispatch', function (Request $request): JsonResponse {
             app(CommandBus::class)->dispatch(new CreateTaskForAdminCommand(
@@ -777,9 +780,9 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_admin_with_readonly_flag_can_use_admin_commands_but_not_api_writes(): void
     {
-        $readonlyAdmin = User::factory()->admin()->readonly()->create();
-        $owner = User::factory()->create();
-        $direction = Direction::factory()->create(['user_id' => $owner->id]);
+        $readonlyAdmin = EloquentUserModel::factory()->admin()->readonly()->create();
+        $owner = EloquentUserModel::factory()->create();
+        $direction = EloquentDirectionModel::factory()->create(['user_id' => $owner->id]);
 
         Route::middleware('auth:sanctum')->post('/__test/admin-readonly-dispatch', function (Request $request): JsonResponse {
             app(CommandBus::class)->dispatch(new CreateTaskForAdminCommand(
@@ -815,7 +818,7 @@ final class ReadOnlyModeTest extends TestCase
 
     public function test_regular_user_is_not_affected(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->actingAsUser($user)
             ->postJson('/api/v1/directions', ['title' => 'Здоровье', 'color' => 'c3'])
@@ -834,7 +837,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_flag_changes_take_effect_on_existing_token(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
         $token = $user->createToken('phpunit')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token);
@@ -866,7 +869,7 @@ final class ReadOnlyModeTest extends TestCase
      */
     public function test_logout_and_login_keep_the_flag(): void
     {
-        $user = User::factory()->readonly()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->readonly()->create(['password' => 'secret-password']);
 
         $token = $user->createToken('phpunit')->plainTextToken;
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -897,7 +900,7 @@ final class ReadOnlyModeTest extends TestCase
             $this->get($uri)->assertOk();
         }
 
-        $this->actingAsUser(User::factory()->readonly()->create());
+        $this->actingAsUser(EloquentUserModel::factory()->readonly()->create());
 
         foreach (['/', '/privacy', '/terms', '/cookies'] as $uri) {
             $this->get($uri)->assertOk();
@@ -917,7 +920,7 @@ final class ReadOnlyModeTest extends TestCase
                 ->assertStatus(Response::HTTP_METHOD_NOT_ALLOWED);
         }
 
-        $this->actingAsUser(User::factory()->readonly()->create());
+        $this->actingAsUser(EloquentUserModel::factory()->readonly()->create());
 
         foreach ($cases as [$method, $uri]) {
             $this->call($method, $uri)
@@ -934,7 +937,7 @@ final class ReadOnlyModeTest extends TestCase
 
         $this->call('GET', '/up')->assertOk();
 
-        $this->actingAsUser(User::factory()->readonly()->create())
+        $this->actingAsUser(EloquentUserModel::factory()->readonly()->create())
             ->getJson('/api/v1/health')
             ->assertOk();
     }

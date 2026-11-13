@@ -13,7 +13,6 @@ use App\Modules\Task\Domain\ValueObjects\TaskSlug;
 use App\Modules\Task\Domain\ValueObjects\TaskTitle;
 use App\Modules\Task\Infrastructure\Http\Requests\UpdateTaskRequest;
 use App\Modules\Task\Infrastructure\Http\Resources\TaskResource;
-use App\Modules\User\Domain\User;
 use App\Shared\Application\Bus\CommandBus;
 
 /**
@@ -33,8 +32,6 @@ final class UpdateTaskController extends Controller
      */
     public function __invoke(UpdateTaskRequest $request, int $task): TaskResource
     {
-        /** @var User $user */
-        $user = $request->user();
 
         $fields = $request->toFieldPayload();
         $changes = [];
@@ -73,7 +70,7 @@ final class UpdateTaskController extends Controller
 
         /** @var TaskResult $result */
         $result = $this->bus->dispatch(new UpdateTaskCommand(
-            (int) $user->getKey(),
+            (int) $request->user()->getKey(),
             $task,
             $request->toLinkPayload(),
             $changes,

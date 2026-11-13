@@ -5,6 +5,7 @@ namespace Tests\Unit\Http\Middleware;
 use App\Http\Middleware\DenyReadOnlyWrites;
 use App\Modules\User\Domain\Exceptions\ReadOnlyMode;
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpFoundation\Response;
@@ -83,7 +84,7 @@ final class DenyReadOnlyWritesTest extends TestCase
         self::assertTrue($this->passes($this->requestWith(
             $method,
             '/api/v1/tasks',
-            User::factory()->make(['readonly' => true]),
+            EloquentUserModel::factory()->make(['readonly' => true]),
         )));
     }
 
@@ -98,7 +99,7 @@ final class DenyReadOnlyWritesTest extends TestCase
         $this->passes($this->requestWith(
             $method,
             '/api/v1/tasks',
-            User::factory()->make(['readonly' => true]),
+            EloquentUserModel::factory()->make(['readonly' => true]),
         ));
     }
 
@@ -111,7 +112,7 @@ final class DenyReadOnlyWritesTest extends TestCase
         self::assertTrue($this->passes($this->requestWith(
             $method,
             '/api/v1/tasks',
-            User::factory()->make(['readonly' => false]),
+            EloquentUserModel::factory()->make(['readonly' => false]),
         )));
     }
 
@@ -131,7 +132,7 @@ final class DenyReadOnlyWritesTest extends TestCase
      */
     public function test_logout_paths_are_allowed(): void
     {
-        $user = User::factory()->make(['readonly' => true]);
+        $user = EloquentUserModel::factory()->make(['readonly' => true]);
 
         self::assertTrue($this->passes($this->requestWith('POST', '/api/v1/auth/logout', $user)));
         self::assertTrue($this->passes($this->requestWith('POST', '/api/v1/auth/web/logout', $user)));
@@ -146,7 +147,7 @@ final class DenyReadOnlyWritesTest extends TestCase
     {
         $this->expectException(ReadOnlyMode::class);
 
-        $this->passes($this->requestWith('POST', $uri, User::factory()->make(['readonly' => true])));
+        $this->passes($this->requestWith('POST', $uri, EloquentUserModel::factory()->make(['readonly' => true])));
     }
 
     /**
@@ -183,7 +184,7 @@ final class DenyReadOnlyWritesTest extends TestCase
     #[DataProvider('flagProvider')]
     public function test_flag_values_are_cast_to_boolean(mixed $flag, bool $expectsDenial): void
     {
-        $request = $this->requestWith('POST', '/api/v1/directions', User::factory()->make(['readonly' => $flag]));
+        $request = $this->requestWith('POST', '/api/v1/directions', EloquentUserModel::factory()->make(['readonly' => $flag]));
 
         if (! $expectsDenial) {
             self::assertTrue($this->passes($request));

@@ -1,14 +1,19 @@
 <?php
 
-namespace Database\Factories;
+namespace App\Modules\Task\Infrastructure\Persistence\Factories;
 
+use App\Modules\Direction\Domain\Contracts\DirectionRepository;
 use App\Modules\Direction\Domain\Direction;
+use App\Modules\Direction\Domain\ValueObjects\DirectionColor;
+use App\Modules\Direction\Domain\ValueObjects\DirectionTitle;
 use App\Modules\Task\Domain\Task;
 use App\Modules\Task\Domain\ValueObjects\CardColumn;
 use App\Modules\Task\Domain\ValueObjects\CardPriority;
 use App\Modules\Task\Domain\ValueObjects\CardType;
+use App\Modules\Task\Infrastructure\Persistence\EloquentTaskModel;
 use App\Modules\User\Domain\User;
 use Carbon\CarbonInterface;
+use Database\Factories\FactoryOwners;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,14 +23,14 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  * и task() собирают непротиворечивую иерархию и корректную денормализацию
  * direction_id — так же, как это делает доменный сервис.
  *
- * @extends Factory<Task>
+ * @extends Factory<EloquentTaskModel>
  */
 class TaskFactory extends Factory
 {
     /**
-     * @var class-string<Task>
+     * @var class-string<EloquentTaskModel>
      */
-    protected $model = Task::class;
+    protected $model = EloquentTaskModel::class;
 
     /**
      * Счётчик заголовков: даёт уникальное имя карточке без генератора случайных чисел.
@@ -46,7 +51,7 @@ class TaskFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => User::factory(),
+            'user_id' => FactoryOwners::user(),
             'direction_id' => null,
             'initiative_id' => null,
             'project_id' => null,
@@ -97,6 +102,23 @@ class TaskFactory extends Factory
     }
 
     /**
+     * Направление для карточки, у которой своё не передано.
+     *
+     * Направление создаётся через доменный порт: фабрика соседнего модуля
+     * не видна, а репозиторий кладёт строку в ту же таблицу.
+     */
+    private static function createDirection(int $userId): int
+    {
+        $directions = app(DirectionRepository::class);
+
+        return (int) $directions->create(
+            $userId,
+            DirectionTitle::fromString('Направление '.self::nextTitleNumber()),
+            DirectionColor::Blue,
+        )->id;
+    }
+
+    /**
      * Карточка-идея: степень проработки «ещё идея», а не «на реализацию».
      */
     public function idea(): static
@@ -120,7 +142,7 @@ class TaskFactory extends Factory
 
             $directionId = $direction !== null
                 ? (int) $direction->id
-                : (int) Direction::factory()->create(['user_id' => $userId])->id;
+                : self::createDirection($userId);
 
             return [
                 'type' => CardType::Initiative->value,

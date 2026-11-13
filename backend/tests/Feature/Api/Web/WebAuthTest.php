@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api\Web;
 
 use App\Modules\User\Domain\User;
+use App\Modules\User\Infrastructure\Persistence\EloquentUserModel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
@@ -56,7 +57,7 @@ final class WebAuthTest extends TestCase
 
     public function test_web_login_returns_user_without_token_and_sets_httponly_cookie(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
 
         $response = $this->webLogin($user->email, 'secret-password');
 
@@ -77,7 +78,7 @@ final class WebAuthTest extends TestCase
 
     public function test_web_login_with_wrong_password_returns_unauthorized(): void
     {
-        $user = User::factory()->create();
+        $user = EloquentUserModel::factory()->create();
 
         $this->webLogin($user->email, 'wrong-password')->assertUnauthorized();
     }
@@ -106,7 +107,7 @@ final class WebAuthTest extends TestCase
 
     public function test_session_cookie_authorizes_web_and_shared_routes(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
         $session = $this->sessionCookieValue($this->webLogin($user->email, 'secret-password'));
 
         // Восстановление сессии после перезагрузки страницы.
@@ -124,7 +125,7 @@ final class WebAuthTest extends TestCase
 
     public function test_web_logout_destroys_session(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
         $session = $this->sessionCookieValue($this->webLogin($user->email, 'secret-password'));
 
         $this->withUnencryptedCookie(self::SESSION_COOKIE, $session)
@@ -144,7 +145,7 @@ final class WebAuthTest extends TestCase
 
     public function test_mobile_bearer_login_still_returns_token(): void
     {
-        $user = User::factory()->create(['password' => 'secret-password']);
+        $user = EloquentUserModel::factory()->create(['password' => 'secret-password']);
 
         // Мобильный клиент не присылает Origin: сессия не стартует, только токен.
         $response = $this->postJson('/api/v1/auth/login', [

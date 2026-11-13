@@ -26,7 +26,7 @@ cmd_node ?=
 .PHONY: help init-envs dirs build rebuild up start stop down restart ps logs \
         install install-backend install-mobile \
         sh php-shell artisan composer migrate migrate-fresh seed test test-filter \
-        pint pint-test phpstan phpstan-baseline phpstan-clear check route-list \
+        pint pint-test phpstan phpstan-baseline phpstan-clear deptrac deptrac-graph check route-list \
         node-shell npm npx expo-start expo-web expo-install typecheck \
         web-build \
         lint lint-fix format format-check check-mobile \
@@ -60,7 +60,9 @@ help:
 	@echo "  make phpstan          статический анализ (PHPStan + Larastan)"
 	@echo "  make phpstan-baseline перегенерировать phpstan-baseline.neon"
 	@echo "  make phpstan-clear    очистить кэш PHPStan"
-	@echo "  make check            всё вместе: test + pint-test + phpstan"
+	@echo "  make deptrac          правила зависимостей слоёв (Deptrac, гексагон)"
+	@echo "  make deptrac-graph    граф правил: docs/deptrac.dot"
+	@echo "  make check            всё вместе: test + pint-test + phpstan + deptrac"
 	@echo "  make route-list       список маршрутов API"
 	@echo ""
 	@echo "  make node-shell       sh в контейнере node"
@@ -172,6 +174,12 @@ phpstan-baseline:
 
 phpstan-clear:
 	$(COMPOSE) exec -T $(php_service) ./vendor/bin/phpstan clear-result-cache
+
+deptrac:
+	$(COMPOSE) exec -T $(php_service) ./vendor/bin/deptrac analyse --no-progress --cache-file=storage/framework/cache/deptrac.cache
+
+deptrac-graph:
+	$(COMPOSE) exec -T $(php_service) ./vendor/bin/deptrac analyse --no-progress --cache-file=storage/framework/cache/deptrac.cache --formatter=graphviz-dot --output=docs/deptrac.dot
 
 check:
 	$(COMPOSE) exec -T $(php_service) composer check
