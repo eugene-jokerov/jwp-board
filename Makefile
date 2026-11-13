@@ -18,6 +18,8 @@ mysql_test_service = mysql-test
 
 # Произвольная команда: make php cmd="php artisan about"
 cmd ?=
+# Исполнитель для artisan-as (id или email): make artisan-as who=42
+who ?=
 # Произвольная команда в контейнере node: make npm cmd="install"
 cmd_node ?=
 
@@ -25,7 +27,7 @@ cmd_node ?=
 
 .PHONY: help init-envs dirs build rebuild up start stop down restart ps logs \
         install install-backend install-mobile \
-        sh php-shell artisan composer migrate migrate-fresh seed test test-filter \
+        sh php-shell artisan artisan-as composer migrate migrate-fresh seed test test-filter \
         pint pint-test phpstan phpstan-baseline phpstan-clear deptrac deptrac-graph check route-list \
         node-shell npm npx expo-start expo-web expo-install typecheck \
         web-build \
@@ -47,6 +49,7 @@ help:
 	@echo "  make sh               bash в контейнере php"
 	@echo "  make php cmd=\"...\"     произвольная команда в php"
 	@echo "  make artisan cmd=\"...\" php artisan <cmd>"
+	@echo "  make artisan-as who=42  tinker от имени пользователя (учитывает readonly)"
 	@echo "  make composer cmd=\"...\"  composer <cmd>"
 	@echo "  make migrate          миграции основной БД"
 	@echo "  make migrate-test     миграции тестовой БД"
@@ -141,6 +144,12 @@ php:
 
 artisan:
 	$(COMPOSE) exec $(php_service) php artisan $(cmd)
+
+# Tinker от имени пользователя: пайп шины видит его флаг readonly и отказывает
+# в записи (см. routes/console.php). who — id или email.
+artisan-as:
+	@test -n "$(who)" || (echo "Укажите пользователя: make artisan-as who=<id|email>"; exit 1)
+	$(COMPOSE) exec $(php_service) php artisan tinker-as $(who)
 
 composer:
 	$(COMPOSE) exec $(php_service) composer $(cmd)

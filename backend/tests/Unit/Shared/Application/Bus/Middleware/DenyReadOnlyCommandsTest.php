@@ -11,10 +11,12 @@ use Tests\TestCase;
 /**
  * Unit-тест пайпа шины `DenyReadOnlyCommands`.
  *
- * Пайп читает пользователя из Auth, поэтому HTTP-контекст ему не нужен:
- * достаточно Auth::login(). Feature-тест ReadOnlyCommandPipesTest проверяет
- * поведение через настоящую шину, а здесь изолированно — ровно два решения:
- * вызвать следующий слой или бросить ReadOnlyMode.
+ * Пайп читает пользователя из Auth: в HTTP его ставит auth:sanctum, вне HTTP —
+ * консольный вход (tinker-as, см. routes/console.php). Без входа Auth::user()
+ * возвращает null, и пайп пропускает команду (test_guest_is_passed_through
+ * фиксирует это как границу правила). Feature-тест ReadOnlyCommandPipesTest
+ * проверяет поведение через настоящую шину, а здесь изолированно — ровно два
+ * решения: вызвать следующий слой или бросить ReadOnlyMode.
  */
 final class DenyReadOnlyCommandsTest extends TestCase
 {
