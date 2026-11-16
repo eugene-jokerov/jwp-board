@@ -25,12 +25,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libjpeg-dev \
         libfreetype6-dev \
         libonig-dev \
+        libsqlite3-dev \
         default-mysql-client \
         rsync \
     && docker-php-ext-configure gd --with-jpeg --with-freetype \
     && docker-php-ext-install -j"$(nproc)" \
         pdo \
         pdo_mysql \
+        pdo_sqlite \
         bcmath \
         intl \
         zip \

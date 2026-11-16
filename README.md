@@ -92,6 +92,7 @@ make down               # остановить и удалить контейн�
 make sh                 # bash в контейнере php
 make phpmyadmin         # phpMyAdmin на http://localhost:8082 (основная и тестовая БД)
 make artisan cmd="migrate:status"
+make sqlite-init        # создать файл БД SQLite (опционально, вместо MySQL)
 make test               # PHPUnit
 make pint-test          # проверка стиля (Laravel Pint)
 make phpstan            # статический анализ (PHPStan + Larastan)
@@ -195,6 +196,28 @@ PHP_XDEBUG_MODE=debug
 ```
 
 и перезапустить: `make restart`.
+
+### БД: MySQL по умолчанию, SQLite опционально
+
+По умолчанию проект работает на MySQL (сервис `mysql` из compose). Для локальной
+работы без MySQL можно переключиться на SQLite — расширение `pdo_sqlite` уже в образе `php`:
+
+```bash
+make sqlite-init         # создать файл backend/database/database.sqlite
+```
+
+Затем в `backend/.env` замените блок MySQL на:
+
+```env
+DB_CONNECTION=sqlite
+DB_DATABASE=/var/www/html/database/database.sqlite
+```
+
+Путь должен быть абсолютным внутри контейнера: относительный резолвится от текущего
+каталога, а у php-fpm и CLI он разный. Схему поднимет `make migrate`. Драйверы сессий
+(`database`), очереди (`sync`) и кэша (`file`) работают с SQLite без изменений, сервис
+`mysql` при этом просто простаивает. Чтобы вернуться на MySQL — верните исходный блок
+`DB_*` в `backend/.env` и выполните `make migrate`.
 
 ## Структура репозитория
 

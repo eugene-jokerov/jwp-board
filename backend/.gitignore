@@ -1,3 +1,5 @@
+# Локальная БД SQLite (make sqlite-init): файл данных, не исходник.
+/database/*.sqlite
 *.log
 .DS_Store
 .env

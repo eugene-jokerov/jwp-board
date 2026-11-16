@@ -32,7 +32,7 @@ cmd_node ?=
         node-shell npm npx expo-start expo-web expo-install typecheck \
         web-build \
         lint lint-fix format format-check check-mobile \
-        db-shell db-test-shell phpmyadmin phpmyadmin-stop clean
+        db-shell db-test-shell sqlite-init phpmyadmin phpmyadmin-stop clean
 
 help:
 	@echo "JWP Board — команды разработки"
@@ -55,6 +55,7 @@ help:
 	@echo "  make migrate-test     миграции тестовой БД"
 	@echo "  make migrate-fresh    откатить и заново применить миграции + сиды (dev)"
 	@echo "  make seed             сиды основной БД"
+	@echo "  make sqlite-init      создать файл БД SQLite (backend/database/database.sqlite)"
 	@echo ""
 	@echo "  make test             PHPUnit (sqlite :memory:, окружение testing)"
 	@echo "  make test-filter filter=HealthTest  один тест"
@@ -100,6 +101,11 @@ dirs:
 	          backend/storage/framework/views \
 	          backend/storage/logs
 	@echo "Каталоги Laravel готовы (bootstrap/cache, storage/*)."
+
+# Файл SQLite создаётся только по явному запросу: по умолчанию БД — MySQL.
+sqlite-init:
+	@touch backend/database/database.sqlite
+	@echo "SQLite: backend/database/database.sqlite готов."
 
 build: init-envs dirs
 	$(COMPOSE) build $(build_args)
