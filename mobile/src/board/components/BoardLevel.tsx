@@ -942,6 +942,17 @@ export function BoardLevel({
                             className={[LANE_COLUMN_CELL, COLUMN_PANEL].join(' ')}
                             style={{ width: columnWidth }}
                           >
+                            {/* Пустая «В работе» в свимлайне получает ту же плашку,
+                                что и пустые закрытые колонки: без неё ячейка
+                                выглядела просто продолжением подложки и не было
+                                видно, что в колонке ничего нет. Беклог оставляем
+                                как есть — требование только про «В работе». */}
+                            {column.id === 'in_progress' && laneCards.length === 0 ? (
+                              <View className="items-center rounded border border-dashed border-card-line px-2 py-3">
+                                <Text className="text-xs text-subtle">Пусто</Text>
+                              </View>
+                            ) : null}
+
                             {laneCards.map((card) => (
                               <BoardCard
                                 key={card.id}
